@@ -110,27 +110,21 @@ curl --request POST \
 - Session cookie
 - CI/CD job tokens
 >[!important]
->Токены можно вставлять как в url, так и в headers
+>Токены при обращении к GitHub API вставляются только в headers в рамках >RepoPulse
 
 #### OAuth 2.0 tokens
 Его можно использовать как header
 ```http
 --header "Authorization: Bearer OAUTH-TOKEN"
 ```
-Либо прям в URL
-```http
---url "https://gitlab.example.com/api/v4/projects?access_token=OAUTH-TOKEN"
-```
+
 
 #### Personal, project, and group access tokens
 Их уже можно использовать только в headers, но несколькими способами
 ```http
 --header "PRIVATE-TOKEN: <your_access_token>"
 ```
-Либо
-```http
---header "Authorization: Bearer <your_access_token>"
-```
+
 ### Параметры
 #### Path параметры
 Если endpoint содержит в себе path параметры, то они в пути обозначаются как `:id` или `:group_id` .Данные параметры должны быть заменены на соответствующие им реальные значения.
