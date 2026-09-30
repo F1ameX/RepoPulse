@@ -1,0 +1,41 @@
+name: Backend
+
+on:
+  push:
+    paths:
+      - 'project/backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'project/backend/**'
+      - '.github/workflows/backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: project/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: project/backend/go.mod
+          cache: false # Only the standard library; no go.sum yet.
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+      - name: Lint (go vet)
+        run: go vet ./...
+      - name: Test
+        run: go test -race -coverprofile=coverage.out ./...
+      - name: Build
+        run: go build ./...
