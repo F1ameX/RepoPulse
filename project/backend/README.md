@@ -78,6 +78,14 @@ HTTP_ADDR=127.0.0.1:9090 LOG_LEVEL=debug go run ./cmd/api
 для каждого запроса и возвращается в `X-Request-ID`; входящий ID не используется.
 Тела запросов и query-параметры не логируются.
 
+Логгер передаётся через контекст: `logger.With(ctx, log)` сохраняет его,
+`logger.From(ctx)` извлекает. Утилита находится в `libs/logger` и использует
+закрытый тип ключа. Если логгер отсутствует или равен `nil`, возвращается
+`slog.Default()`, чтобы отсутствие логгера в контексте не прерывало запрос.
+В HTTP-обработчиках контекст содержит логгер с `request_id` текущего запроса.
+`http.Server.BaseContext` наследует значения контекста приложения, сохраняя
+возможность завершить активные запросы при graceful shutdown.
+
 ## API
 
 | Метод | Путь | Текущее поведение |
@@ -105,26 +113,49 @@ GET-маршруты также поддерживают HEAD. Неизвест�
 не возвращают демонстрационные отчёты. Их `501` сохраняет этот факт явным для
 frontend до подключения доменных сервисов и проверки JWT.
 
-- [OpenAPI текущего каркаса](api/openapi.json)
+- [OpenAPI текущего каркаса](docs/openapi.json)
 - [Контракт backend API для согласования](../../docs/api/backend-integration.md)
 
 ## Структура
 
 ```text
-cmd/api/                   Точка входа и обработка сигналов
-internal/app/              Сборка приложения и жизненный цикл HTTP-сервера
-internal/api/              HTTP-маршруты, ответы, request ID и журнал запросов
-internal/config/           Чтение и валидация переменных окружения
-internal/models/           Базовые модели и статусы анализа
-internal/services/         Место для прикладных контрактов и сценариев
-internal/adapters/github/  Место для адаптера GitHub API Service
-internal/analyzers/        Место для модулей Analysis Service
-api/openapi.json           Машиночитаемое описание доступных маршрутов
+cmd/api/
+  main.go                               Точка входа и обработка сигналов
+  k8s/                                  Место для конфигураций развёртывания
+database/                               Место для схем, пользователей и миграций
+docs/openapi.json                       HTTP-контракт
+internal/
+  api/
+    adapter/in/http/                    HTTP-обработчики и request logging
+    adapter/out/{auth,orchestrator,report}/  Место для gRPC-клиентов BFF
+    app/
+      app.go                            Запуск и остановка HTTP-сервера
+      config.go                         Чтение и валидация окружения
+      init.go                           Инициализация HTTP-сервера
+    model/                              Место для прикладных моделей API
+    service/ports.go                    Место для портов и сценариев API
+  orchestrator/model/                   Модели и статусы анализа
+  github/adapter/out/github/            Место для клиента GitHub API
+  analysis/service/analyzers/           Место для модулей анализа
+  pkg/adapter/
+    in/kafka/                           Место для общих Kafka consumers
+    out/{kafka,repository}/             Место для общих producers и хранилищ
+libs/logger/                            Работа с логгером в контексте
+proto/                                  Место для исходных .proto-контрактов
+pkg/proto/                              Место для сгенерированного Go-кода
 ```
 
-Пакеты `services`, `adapters/github` и `analyzers` пока содержат документацию
-об их ответственности. Они не подключены к API Service. Схема дальнейшего
-развития описана в [архитектурной заметке](../../docs/architecture/backend-foundation.md).
+Код группируется по сервису: `internal/<service>/{adapter,app,model,service}`.
+Входящие адаптеры HTTP, gRPC и Kafka размещаются в `adapter/in`, исходящие
+клиенты, Kafka producers и репозитории — в `adapter/out` по мере реализации
+соответствующего транспорта. Порты объявляются в `service/ports.go`, а
+реализации сценариев — в `service/<name>`.
+
+Будущие адаптеры, порты, анализаторы и инфраструктурные каталоги пока содержат
+документацию или `.gitkeep`. Они не подключены к API Service. Доменные модели
+анализа принадлежат Orchestrator, клиент GitHub — GitHub API Service,
+анализаторы — Analysis Service. Схема дальнейшего развития описана в
+[архитектурной заметке](../../docs/architecture/backend-foundation.md).
 
 ## Проверки и сборка
 
@@ -138,10 +169,13 @@ go build ./...
 ```
 
 `gofmt -l .` должен вывести пустой список. Исправление форматирования:
-`gofmt -w cmd internal`. `go vet` используется как базовый статический анализатор.
+`gofmt -w cmd internal libs`. `go vet` используется как базовый статический анализатор.
 
 Тесты проверяют HTTP-контракт, совпадение request ID в ответе и логах,
 параметры окружения, реальный HTTP-сокет, HEAD, остановку сервера и занятый порт.
+Отдельно проверяется сохранение логгера в дочерних контекстах, возврат
+`slog.Default()` при его отсутствии, передача логгера в HTTP-запрос и изоляция
+`request_id` от родительского контекста.
 В CI дополнительно выполняется `go test -race -coverprofile=coverage.out ./...`
 на Ubuntu. Для локального `-race` нужен доступный C-компилятор; обычные тесты
 и сборка его не требуют.

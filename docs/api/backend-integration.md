@@ -45,7 +45,7 @@ curl http://127.0.0.1:8080/health
 
 `request_id` совпадает с заголовком `X-Request-ID` и записью в логах backend.
 Машиночитаемый контракт текущего поведения:
-[OpenAPI](../../project/backend/api/openapi.json).
+[OpenAPI](../../project/backend/docs/openapi.json).
 
 ## Следующий этап: успешные ответы
 
