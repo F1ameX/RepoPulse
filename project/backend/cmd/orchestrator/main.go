@@ -8,5 +8,5 @@ import (
 )
 
 func main() {
-	os.Exit(command.Execute(app.Name, app.LoadConfig, app.Run))
+	os.Exit(command.Execute(app.Name, app.Run))
 }

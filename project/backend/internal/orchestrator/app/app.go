@@ -4,11 +4,15 @@ package app
 import (
 	"context"
 
-	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/httpserver"
+	"github.com/F1ameX/RepoPulse/project/backend/libs/logger"
 )
 
 const Name = "analysis-orchestrator"
 
-func Run(ctx context.Context, cfg Config) error {
-	return httpserver.Run(ctx, newHTTPServer(ctx, cfg), cfg.ShutdownTimeout)
+// Run currently initializes only logging and waits for shutdown.
+func Run(ctx context.Context) error {
+	logger.From(ctx).InfoContext(ctx, "Service scaffold started")
+	<-ctx.Done()
+	logger.From(ctx).InfoContext(ctx, "Service stopped")
+	return nil
 }
