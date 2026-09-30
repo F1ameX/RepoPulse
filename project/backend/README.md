@@ -4,10 +4,10 @@ Backend-каркас задачи `task-17661` на Go 1.26.0+. Использу
 библиотеку: `net/http`, `log/slog`, `testing`. Внешних Go-зависимостей пока нет,
 поэтому `go.sum` не требуется.
 
-Сейчас запускается один процесс API Service / BFF. Он предоставляет `/health`
-и резервирует три маршрута API v1. Анализ, авторизация, gRPC-клиенты и хранилища
-будут реализованы отдельными задачами. PostgreSQL, Redis и Kafka для запуска
-этого каркаса не нужны.
+Подготовлены девять независимо запускаемых процессов. Каждый предоставляет
+служебный `/health`; API Service / BFF также резервирует три маршрута API v1.
+Анализ, авторизация, gRPC/Kafka и хранилища будут реализованы отдельными задачами.
+PostgreSQL, Redis и Kafka для запуска каркасов не нужны.
 
 ## Быстрый старт
 
@@ -39,6 +39,37 @@ Invoke-RestMethod http://127.0.0.1:8080/health
 и ждёт завершения активных запросов до `SHUTDOWN_TIMEOUT`. Если срок истёк,
 соединения закрываются, процесс завершается с ошибкой.
 
+## Девять сервисов
+
+Команды выполняются из `project/backend`, каждый сервис — в своём терминале:
+
+| Сервис | Команда | HTTP-адрес по умолчанию |
+| --- | --- | --- |
+| API Service / BFF | `go run ./cmd/api` | `127.0.0.1:8080` |
+| Auth Service | `go run ./cmd/auth` | `127.0.0.1:8081` |
+| Analysis Orchestrator | `go run ./cmd/orchestrator` | `127.0.0.1:8082` |
+| GitHub API Service | `go run ./cmd/github` | `127.0.0.1:8083` |
+| Repository Sandbox Service | `go run ./cmd/sandbox` | `127.0.0.1:8084` |
+| Analysis Service | `go run ./cmd/analysis` | `127.0.0.1:8085` |
+| Scoring Service | `go run ./cmd/scoring` | `127.0.0.1:8086` |
+| Recommendation Service | `go run ./cmd/recommendation` | `127.0.0.1:8087` |
+| Report Service | `go run ./cmd/report` | `127.0.0.1:8088` |
+
+Порты различаются, поэтому сервисы можно запускать одновременно без настройки
+окружения. Общий `HTTP_ADDR` переопределяет адрес только текущего процесса;
+задавайте разные адреса для процессов, если используете эту переменную.
+
+Например, после запуска Auth Service:
+
+```sh
+curl http://127.0.0.1:8081/health
+```
+
+У восьми внутренних сервисов HTTP-интерфейс содержит только технический
+`GET /health` (также HEAD). `/api/v1/*` там возвращает `404`. Это служебный
+HTTP-порт для контроля процесса; межсервисные gRPC/Kafka-порты ещё не открываются.
+Назначение сервисов и будущие адаптеры описаны в [матрице сервисов](docs/services.md).
+
 ## Конфигурация
 
 Приложение читает переменные окружения процесса. `.env.example` — справочник
@@ -48,7 +79,7 @@ Invoke-RestMethod http://127.0.0.1:8080/health
 
 | Переменная | По умолчанию | Назначение |
 | --- | --- | --- |
-| `HTTP_ADDR` | `127.0.0.1:8080` | Адрес и порт HTTP, порт от 1 до 65535 |
+| `HTTP_ADDR` | Из таблицы сервисов | Адрес и порт HTTP, порт от 1 до 65535 |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `HTTP_READ_HEADER_TIMEOUT` | `5s` | Время чтения заголовков |
 | `HTTP_READ_TIMEOUT` | `15s` | Время чтения запроса |
@@ -88,6 +119,8 @@ HTTP_ADDR=127.0.0.1:9090 LOG_LEVEL=debug go run ./cmd/api
 
 ## API
 
+Пути API v1 ниже доступны только у API Service / BFF на порту `8080`.
+
 | Метод | Путь | Текущее поведение |
 | --- | --- | --- |
 | `GET` | `/health` | `200`, `{"status":"ok"}` |
@@ -119,25 +152,28 @@ frontend до подключения доменных сервисов и про
 ## Структура
 
 ```text
-cmd/api/
-  main.go                               Точка входа и обработка сигналов
+cmd/<service>/                         api, auth, orchestrator, github, sandbox,
+                                       analysis, scoring, recommendation, report
+  main.go                               Отдельная точка входа каждого процесса
   k8s/                                  Место для конфигураций развёртывания
 database/                               Место для схем, пользователей и миграций
 docs/openapi.json                       HTTP-контракт
-internal/
-  api/
-    adapter/in/http/                    HTTP-обработчики и request logging
-    adapter/out/{auth,orchestrator,report}/  Место для gRPC-клиентов BFF
+internal/<service>/                    Девять каталогов сервисов
+    adapter/in/http/                    Health; у api также внешние маршруты
+    adapter/in/{grpc,kafka}/            Будущие входящие доменные адаптеры
+    adapter/out/<name>/                 Будущие клиенты и хранилища сервиса
     app/
       app.go                            Запуск и остановка HTTP-сервера
       config.go                         Чтение и валидация окружения
       init.go                           Инициализация HTTP-сервера
-    model/                              Место для прикладных моделей API
-    service/ports.go                    Место для портов и сценариев API
-  orchestrator/model/                   Модели и статусы анализа
-  github/adapter/out/github/            Место для клиента GitHub API
-  analysis/service/analyzers/           Место для модулей анализа
-  pkg/adapter/
+    model/                              Модели сервиса
+    service/ports.go                    Место для портов и сценариев сервиса
+internal/pkg/
+  command/                              Общие сигналы и инициализация логгера
+  config/                               Общие настройки процесса и валидация
+  httpserver/                           Жизненный цикл HTTP-сервера
+  adapter/
+    in/http/                            Общие health и request logging
     in/kafka/                           Место для общих Kafka consumers
     out/{kafka,repository}/             Место для общих producers и хранилищ
 libs/logger/                            Работа с логгером в контексте
@@ -145,14 +181,18 @@ proto/                                  Место для исходных .prot
 pkg/proto/                              Место для сгенерированного Go-кода
 ```
 
-Код группируется по сервису: `internal/<service>/{adapter,app,model,service}`.
+Во всех девяти сервисах есть `adapter`, `app`, `model` и `service`.
 Входящие адаптеры HTTP, gRPC и Kafka размещаются в `adapter/in`, исходящие
 клиенты, Kafka producers и репозитории — в `adapter/out` по мере реализации
-соответствующего транспорта. Порты объявляются в `service/ports.go`, а
+соответствующего транспорта. Зарезервированы только адаптеры, соответствующие
+роли сервиса; например, у Auth нет Kafka, у BFF нет репозитория БД.
+Порты объявляются в `service/ports.go`, а
 реализации сценариев — в `service/<name>`.
 
-Будущие адаптеры, порты, анализаторы и инфраструктурные каталоги пока содержат
-документацию или `.gitkeep`. Они не подключены к API Service. Доменные модели
+Общая техническая реализация находится в `internal/pkg`, каждый `app`
+задаёт имя, адрес по умолчанию и подключает свой входящий HTTP-адаптер.
+Будущие доменные адаптеры, порты, анализаторы и инфраструктурные каталоги
+пока содержат документацию или `.gitkeep`. Доменные модели
 анализа принадлежат Orchestrator, клиент GitHub — GitHub API Service,
 анализаторы — Analysis Service. Схема дальнейшего развития описана в
 [архитектурной заметке](../../docs/architecture/backend-foundation.md).
@@ -166,6 +206,7 @@ gofmt -l .
 go vet ./...
 go test ./...
 go build ./...
+go build -o bin/ ./cmd/...
 ```
 
 `gofmt -l .` должен вывести пустой список. Исправление форматирования:
@@ -176,6 +217,9 @@ go build ./...
 Отдельно проверяется сохранение логгера в дочерних контекстах, возврат
 `slog.Default()` при его отсутствии, передача логгера в HTTP-запрос и изоляция
 `request_id` от родительского контекста.
+Интеграционный тест одновременно запускает все девять приложений на реальных
+локальных сокетах, проверяет их настройки, `/health`, изоляцию внешнего API
+и остановку по отмене контекста. Во время теста используются свободные порты.
 В CI дополнительно выполняется `go test -race -coverprofile=coverage.out ./...`
 на Ubuntu. Для локального `-race` нужен доступный C-компилятор; обычные тесты
 и сборка его не требуют.
@@ -193,6 +237,10 @@ go build -o bin/repopulse-api.exe ./cmd/api
 go build -o bin/repopulse-api ./cmd/api
 ./bin/repopulse-api
 ```
+
+Команда `go build -o bin/ ./cmd/...` собирает сразу девять исполняемых файлов
+(`api`, `auth`, `orchestrator`, `github`, `sandbox`, `analysis`, `scoring`,
+`recommendation`, `report`; в Windows — с суффиксом `.exe`).
 
 Workflow [Backend](../../.github/workflows/backend.yml) запускается на push и
 pull request при изменениях backend или самого workflow; доступен ручной запуск.

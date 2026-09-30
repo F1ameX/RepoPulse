@@ -1,4 +1,4 @@
-package app
+package httpserver
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/config"
 	"github.com/F1ameX/RepoPulse/project/backend/libs/logger"
 )
 
@@ -22,7 +23,7 @@ func TestRequestContextKeepsLoggerWithoutProcessCancellation(t *testing.T) {
 	}
 	observed := make(chan observation, 1)
 	server := httptest.NewUnstartedServer(nil)
-	server.Config = newHTTPServer(ctx, Config{})
+	server.Config = New(ctx, config.Config{}, nil)
 	server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		observed <- observation{logger.From(r.Context()), r.Context().Err()}
 		w.WriteHeader(http.StatusNoContent)

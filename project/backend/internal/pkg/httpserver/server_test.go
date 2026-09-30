@@ -1,4 +1,4 @@
-package app
+package httpserver
 
 import (
 	"bytes"
@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	httptransport "github.com/F1ameX/RepoPulse/project/backend/internal/pkg/adapter/in/http"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/config"
 	"github.com/F1ameX/RepoPulse/project/backend/libs/logger"
 )
 
@@ -28,7 +30,8 @@ func TestServerHealthAndShutdown(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- serve(ctx, listener, Config{ShutdownTimeout: time.Second})
+		server := New(ctx, config.Config{}, httptransport.NewHealthHandler())
+		done <- serve(ctx, listener, server, time.Second)
 	}()
 
 	client := &http.Client{Timeout: 3 * time.Second}
@@ -97,7 +100,9 @@ func TestRunReportsOccupiedPort(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	err = Run(context.Background(), Config{HTTPAddr: listener.Addr().String()})
+	ctx := context.Background()
+	server := New(ctx, config.Config{HTTPAddr: listener.Addr().String()}, httptransport.NewHealthHandler())
+	err = Run(ctx, server, time.Second)
 	if err == nil || !strings.Contains(err.Error(), "listen") {
 		t.Fatalf("expected listen error, got %v", err)
 	}

@@ -1,4 +1,4 @@
-package app
+package config
 
 import (
 	"log/slog"
@@ -15,7 +15,7 @@ func fromMap(values map[string]string) func(string) (string, bool) {
 }
 
 func TestDefaults(t *testing.T) {
-	cfg, err := loadConfig(fromMap(nil))
+	cfg, err := loadConfig("127.0.0.1:8080", fromMap(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestDefaults(t *testing.T) {
 }
 
 func TestEnvironmentOverrides(t *testing.T) {
-	cfg, err := loadConfig(fromMap(map[string]string{
+	cfg, err := loadConfig("127.0.0.1:8080", fromMap(map[string]string{
 		"HTTP_ADDR": "[::1]:9000", "LOG_LEVEL": " DEBUG ",
 		"HTTP_READ_HEADER_TIMEOUT": "1s", "HTTP_READ_TIMEOUT": "2s",
 		"HTTP_WRITE_TIMEOUT": "3s", "HTTP_IDLE_TIMEOUT": "4s", "SHUTDOWN_TIMEOUT": "500ms",
@@ -66,7 +66,7 @@ func TestInvalidEnvironmentFailsEarly(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
-			_, err := loadConfig(fromMap(map[string]string{tc.key: tc.value}))
+			_, err := loadConfig("127.0.0.1:8080", fromMap(map[string]string{tc.key: tc.value}))
 			if err == nil || !strings.Contains(err.Error(), tc.key) {
 				t.Fatalf("expected error naming %s, got %v", tc.key, err)
 			}

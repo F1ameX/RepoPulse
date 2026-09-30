@@ -2,12 +2,10 @@
 package httpapi
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"net/http"
-	"time"
 
-	"github.com/F1ameX/RepoPulse/project/backend/libs/logger"
+	httptransport "github.com/F1ameX/RepoPulse/project/backend/internal/pkg/adapter/in/http"
 )
 
 type errorResponse struct {
@@ -37,11 +35,7 @@ func NewHandler() http.Handler {
 		})
 	}
 
-	route("/health", http.MethodGet, func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, struct {
-			Status string `json:"status"`
-		}{Status: "ok"})
-	})
+	route("/health", http.MethodGet, httptransport.Health)
 	route("/api/v1/analyses", http.MethodPost, notImplemented)
 	route("/api/v1/analyses/{analysis_id}", http.MethodGet, notImplemented)
 	route("/api/v1/reports/{report_id}", http.MethodGet, notImplemented)
@@ -49,25 +43,7 @@ func NewHandler() http.Handler {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "Route not found")
 	})
 
-	return withRequestLogging(mux)
-}
-
-func withRequestLogging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		requestID := rand.Text()
-		log := logger.From(r.Context()).With("request_id", requestID)
-		r = r.WithContext(logger.With(r.Context(), log))
-		w.Header().Set("X-Request-ID", requestID)
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Cache-Control", "no-store")
-		response := &responseWriter{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(response, r)
-		logger.From(r.Context()).InfoContext(r.Context(), "HTTP request",
-			"method", r.Method,
-			"path", r.URL.Path, "status", response.status,
-			"duration_ms", time.Since(start).Milliseconds())
-	})
+	return httptransport.WithRequestLogging(mux)
 }
 
 func notImplemented(w http.ResponseWriter, _ *http.Request) {
@@ -86,30 +62,4 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	// All response values are JSON-safe structs. A write failure means the client
 	// disconnected; the response headers have already been sent.
 	_ = json.NewEncoder(w).Encode(value)
-}
-
-type responseWriter struct {
-	http.ResponseWriter
-	status      int
-	wroteHeader bool
-}
-
-func (w *responseWriter) WriteHeader(status int) {
-	if w.wroteHeader {
-		return
-	}
-	w.status = status
-	w.wroteHeader = true
-	w.ResponseWriter.WriteHeader(status)
-}
-
-func (w *responseWriter) Write(body []byte) (int, error) {
-	if !w.wroteHeader {
-		w.WriteHeader(http.StatusOK)
-	}
-	return w.ResponseWriter.Write(body)
-}
-
-func (w *responseWriter) Unwrap() http.ResponseWriter {
-	return w.ResponseWriter
 }

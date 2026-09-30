@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	httptransport "github.com/F1ameX/RepoPulse/project/backend/internal/pkg/adapter/in/http"
 	"github.com/F1ameX/RepoPulse/project/backend/libs/logger"
 )
 
@@ -101,7 +102,7 @@ func TestRequestLoggerIsAvailableToHandlersAndDoesNotLeak(t *testing.T) {
 	var logs bytes.Buffer
 	baseLog := slog.New(slog.NewJSONHandler(&logs, nil)).With("service", "api-service")
 	ctx := logger.With(context.Background(), baseLog)
-	handler := withRequestLogging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := httptransport.WithRequestLogging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger.From(r.Context()).InfoContext(r.Context(), "handler log")
 		w.WriteHeader(http.StatusNoContent)
 	}))
