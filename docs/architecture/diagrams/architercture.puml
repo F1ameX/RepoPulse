@@ -1,0 +1,288 @@
+@startuml RepoPulse_C4_Level2
+
+title RepoPulse — C4 Level 2: Container Diagram
+
+left to right direction
+
+skinparam shadowing false
+skinparam roundcorner 0
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+
+skinparam nodesep 140
+skinparam ranksep 220
+skinparam ArrowFontSize 11
+skinparam ArrowThickness 1
+skinparam ArrowFontBackgroundColor #FFFFFF
+
+skinparam rectangle {
+    BackgroundColor #438DD5
+    BorderColor #2E6295
+    FontColor white
+}
+
+skinparam database {
+    BackgroundColor #438DD5
+    BorderColor #2E6295
+    FontColor white
+}
+
+skinparam queue {
+    BackgroundColor #438DD5
+    BorderColor #2E6295
+    FontColor white
+}
+
+skinparam actor {
+    BackgroundColor #08427B
+    BorderColor #052E56
+    FontColor #08427B
+}
+
+skinparam ArrowColor #666666
+skinparam ArrowFontColor #333333
+
+
+actor "Гость" as guest
+actor "Авторизованный\nпользователь" as user
+
+
+rectangle "<color:#08427B>RepoPulse — Software System</color>" as repopulse #FFFFFF {
+
+    rectangle "Web Frontend\n\n[SPA]\n\nГостевой анализ и просмотр;\nистория и PDF после входа" as frontend
+
+    rectangle "API Service / BFF\n\n[Go, HTTP, gRPC]\n\nUser JWT / guest cookie,\nRequester и права доступа" as api
+
+    rectangle "Analysis Orchestrator\n\n[Go, gRPC, Kafka]\n\nPipeline и владелец анализа;\nпроверка доступа к статусу" as orchestrator
+
+    queue "Kafka\n\nCommands / Events\n\nanalysis_id\nsnapshot_id\nresult_id" as kafka
+
+
+    rectangle "Auth Service\n\n[Go, gRPC]\n\nLogin, refresh sessions, JWT;\nгостевые сессии и cookie token" as auth
+
+    rectangle "GitHub API Service\n\n[Go, gRPC, Kafka]\n\nПолучение и нормализация\nGitHub API данных" as githubService
+
+    rectangle "Repository Sandbox Service\n\n[Go, containerd, gVisor]\n\nИзолированный git clone\nи lifecycle sandbox" as sandbox
+
+    rectangle "Analysis Service\n\n[Go, gRPC, Kafka]\n\nТехнический анализ,\nRepoPulse analyzers,\nSonarScanner" as analysis
+
+    rectangle "Scoring Service\n\n[Go, gRPC, Kafka]\n\nРасчёт category scores\nи Repo Health Score" as scoring
+
+    rectangle "Recommendation Service\n\n[Go, gRPC, Kafka]\n\nГенерация рекомендаций" as recommendation
+
+    rectangle "Report Service\n\n[Go, gRPC, Kafka]\n\nОтчёты и проверка владельца;\nистория аккаунта и PDF" as report
+}
+
+
+' =====================================================
+' External / Infrastructure
+' =====================================================
+
+rectangle "GitHub\n\nGit repositories\nGitHub REST API" as github #999999
+
+rectangle "SonarQube Server\n\nСтатический анализ\nисходного кода" as sonarqube #999999
+
+rectangle "AI / LLM Provider\n\nScoring и генерация\nрекомендаций" as llm #999999
+
+database "PostgreSQL\n\nОдин instance\n\nОтдельная database\nдля каждого сервиса" as postgres #999999
+
+database "Redis\n\nstatus / progress\nreports cache" as redis #999999
+
+rectangle "ELK Stack\n\nLogstash / Elasticsearch / Kibana\n\nJSON-логи всех backend-сервисов" as elk #999999
+
+rectangle "Monitoring\n\nPrometheus / Grafana\n\nМетрики всех backend-сервисов" as monitoring #999999
+
+
+' =====================================================
+' Layout: только скрытые связи задают колонки и порядок сверху вниз.
+' Видимые связи используют norank и не меняют расположение контейнеров.
+' В LR-компоновке left внутри границы системы и right снаружи
+' выстраивают соответствующие колонки сверху вниз.
+' На двунаправленных связях Kafka: → команда, ← событие.
+' Не оборачивать колонки в together: это меняет порядок элементов Graphviz.
+' =====================================================
+
+guest -right[hidden]-> user
+guest -[hidden]-> frontend
+user -[hidden]-> frontend
+frontend -[hidden]-> api
+api -[hidden]-> orchestrator
+orchestrator -[hidden]-> kafka
+kafka -[hidden]-> auth
+
+auth -left[hidden]-> githubService
+githubService -left[hidden]-> sandbox
+sandbox -left[hidden]-> analysis
+analysis -left[hidden]-> scoring
+scoring -left[hidden]-> recommendation
+recommendation -left[hidden]-> report
+
+auth -[hidden]-> postgres
+
+postgres -right[hidden]-> github
+github -right[hidden]-> sonarqube
+sonarqube -right[hidden]-> llm
+llm -right[hidden]-> redis
+redis -right[hidden]-> elk
+elk -right[hidden]-> monitoring
+
+
+' =====================================================
+' User / Frontend
+' =====================================================
+
+guest -[norank]-> frontend : Анализ и просмотр своего отчёта\nHTTPS
+user -[norank]-> frontend : Анализ, история и PDF\nHTTPS
+
+frontend -[norank]-> api : Backend API\nHTTPS / JSON
+
+
+' =====================================================
+' API
+' =====================================================
+
+api -[norank]-> auth : CreateGuestSession\nRegister / Login / Refresh · gRPC
+
+api -[norank]-> orchestrator : StartAnalysis\nGetAnalysisStatus\nRequester · gRPC
+
+api -[norank]-> report : GetReport (Requester)\nGetUserReports / GetRepositoryReports\nGetReportPdf (user only) · gRPC
+
+
+' =====================================================
+' PREPARING
+' =====================================================
+
+orchestrator -[norank]-> githubService : ResolveRepositoryState\ngRPC
+
+orchestrator -[norank]-> report : FindReusableReport\nRequester · gRPC
+
+
+' =====================================================
+' Kafka orchestration
+' =====================================================
+
+orchestrator <-[norank]-> kafka : → Commands\n← Events
+
+
+kafka <-[norank]-> githubService : → CollectGitHubData\n← GitHubDataCollected
+
+kafka <-[norank]-> sandbox : → PrepareRepository\n← RepositoryPrepared
+
+kafka <-[norank]-> analysis : → AnalyzeRepository\n← AnalysisCompleted
+
+kafka <-[norank]-> scoring : → CalculateScore\n← ScoringCompleted
+
+kafka <-[norank]-> recommendation : → GenerateRecommendations\n← RecommendationsGenerated
+
+kafka <-[norank]-> report : → GenerateReport (owner + IDs)\n← ReportGenerated
+
+
+' =====================================================
+' GitHub
+' =====================================================
+
+githubService -[norank]-> github : GitHub REST API\nHTTPS
+
+sandbox -[norank]-> github : git clone\nHTTPS
+
+
+' =====================================================
+' Reference-based data flow
+' =====================================================
+
+analysis -[norank]-> githubService : GetGitHubDataSnapshot\ngRPC
+
+
+scoring -[norank]-> analysis : GetAnalysisSnapshot\ngRPC
+
+
+recommendation -[norank]-> analysis : GetAnalysisSnapshot\ngRPC
+
+
+recommendation -[norank]-> scoring : GetScoringResult\ngRPC
+
+
+report -[norank]-> githubService : GetGitHubDataSnapshot\ngRPC
+
+
+report -[norank]-> analysis : GetAnalysisSnapshot\ngRPC
+
+
+report -[norank]-> scoring : GetScoringResult\ngRPC
+
+
+report -[norank]-> recommendation : GetRecommendationResult\ngRPC
+
+
+' =====================================================
+' Sandbox / Analysis
+' =====================================================
+
+analysis -[norank]-> sandbox : Repository\nsandbox_id
+
+
+analysis -[norank]-> sonarqube : SonarScanner\nHTTP
+
+
+' =====================================================
+' AI / LLM
+' =====================================================
+
+scoring -[norank]-> llm : Calculate score\nHTTPS
+
+
+recommendation -[norank]-> llm : Generate recommendations\nHTTPS
+
+
+' =====================================================
+' PostgreSQL
+' =====================================================
+
+auth -[norank]-> postgres : auth_db\nSQL
+
+
+orchestrator -[norank]-> postgres : orchestrator_db\nSQL
+
+
+githubService -[norank]-> postgres : github_db\nSQL
+
+
+analysis -[norank]-> postgres : analysis_db\nSQL
+
+
+scoring -[norank]-> postgres : scoring_db\nSQL
+
+
+recommendation -[norank]-> postgres : recommendation_db\nSQL
+
+
+report -[norank]-> postgres : report_db\nSQL
+
+
+' =====================================================
+' Redis
+' =====================================================
+
+orchestrator -[norank]-> redis : status / progress\nRedis protocol
+
+
+report -[norank]-> redis : reports cache\nRedis protocol
+
+
+' =====================================================
+' Logging
+' =====================================================
+
+orchestrator -[norank]-> elk : Structured JSON logs
+' Аналогичный поток логов есть у всех backend-сервисов.
+
+
+' =====================================================
+' Metrics
+' =====================================================
+
+monitoring -[norank]-> orchestrator : Сбор метрик\nHTTP /metrics
+' Prometheus аналогично опрашивает все backend-сервисы.
+
+
+@enduml
