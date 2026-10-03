@@ -1,0 +1,7 @@
+# Local configuration and backend build artifacts
+project/backend/.env
+project/backend/.env.*
+!project/backend/.env.example
+project/backend/bin/
+project/backend/coverage.out
+project/backend/*.test
