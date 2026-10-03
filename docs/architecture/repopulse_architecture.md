@@ -55,6 +55,16 @@ FAILED
 
 # Общая архитектура
 
+## Контекстная диаграмма — C4 Level 1
+
+Диаграмма показывает RepoPulse как единую систему, две роли пользователей и взаимодействие с GitHub, SonarQube Server и AI/LLM Provider. Внутренние сервисы, Kafka, базы данных, кэш и инфраструктура наблюдаемости раскрываются на уровне контейнеров.
+
+![RepoPulse — C4 Level 1: System Context Diagram](diagrams/RepoPulse_C4_Level1.png)
+
+[Исходник PlantUML](diagrams/context.puml).
+
+## Диаграмма контейнеров — C4 Level 2
+
 Основные сервисы RepoPulse:
 
 - API Service / BFF;
@@ -122,7 +132,7 @@ Scoring Service ────────→ AI/LLM Provider
 Recommendation Service ─→ AI/LLM Provider
 ```
 
-Диаграмма контейнеров C4 Level 2: [SVG](diagrams/RepoPulse_C4_Level2.svg), [PNG](diagrams/RepoPulse_C4_Level2.png), [PlantUML](diagrams/architercture.puml).
+Диаграмма контейнеров C4 Level 2: [PNG](diagrams/RepoPulse_C4_Level2.png), [PlantUML](diagrams/architecture.puml).
 
 Хранение и инфраструктура для MVP:
 
