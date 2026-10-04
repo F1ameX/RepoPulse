@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/F1ameX/RepoPulse/project/backend/libs/logger"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
 func TestHTTPContract(t *testing.T) {

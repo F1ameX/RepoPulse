@@ -13,7 +13,7 @@ internal/<service>/
   app/                      инициализация и запуск
   domain/                   модели и бизнес-логика
 internal/pkg/command/       общая настройка логирования и обработки сигналов
-libs/logger/                With/From для логгера в context.Context
+internal/pkg/logger/        With/From для логгера в context.Context
 ```
 
 | Каталог сервиса | Назначение |

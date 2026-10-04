@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/F1ameX/RepoPulse/project/backend/libs/logger"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
 func withRequestLogging(next http.Handler) http.Handler {

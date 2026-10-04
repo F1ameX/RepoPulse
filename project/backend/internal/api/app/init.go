@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	httpapi "github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter"
-	"github.com/F1ameX/RepoPulse/project/backend/libs/logger"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
 func newHTTPServer(ctx context.Context, cfg Config) *http.Server {
