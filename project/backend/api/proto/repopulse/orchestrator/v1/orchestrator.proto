@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package repopulse.orchestrator.v1;
+
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/internal/gen/repopulse/orchestrator/v1;orchestratorv1";
+
+import "repopulse/common/v1/common.proto";
+
+service AnalysisOrchestrator {
+  rpc StartAnalysis(StartAnalysisRequest) returns (StartAnalysisResponse);
+  rpc GetAnalysisStatus(GetAnalysisStatusRequest) returns (GetAnalysisStatusResponse);
+}
+
+message StartAnalysisRequest {
+  repopulse.common.v1.Requester requester = 1;
+  string repository_url = 2;
+}
+
+message StartAnalysisResponse {
+  oneof result {
+    AnalysisCreated created = 1;
+    ExistingReport existing_report = 2;
+  }
+}
+
+message AnalysisCreated { string analysis_id = 1; }
+message ExistingReport { string report_id = 1; }
+
+message GetAnalysisStatusRequest {
+  repopulse.common.v1.Requester requester = 1;
+  string analysis_id = 2;
+}
+
+message GetAnalysisStatusResponse {
+  string analysis_id = 1;
+  repopulse.common.v1.AnalysisStatus status = 2;
+  repopulse.common.v1.AnalysisStage current_stage = 3;
+  repeated StageState stages = 4;
+  optional string report_id = 5;
+  AnalysisError error = 6;
+}
+
+message StageState {
+  repopulse.common.v1.AnalysisStage name = 1;
+  repopulse.common.v1.StepStatus status = 2;
+  uint32 attempt = 3;
+  optional uint32 progress_percent = 4; // 0..100, только при подтверждённом прогрессе.
+}
+
+message AnalysisError {
+  string code = 1;
+  string message = 2;
+}

@@ -1,0 +1,27 @@
+{
+  "original_message": {
+    "message_id": "477c157c-fcc8-5e45-901e-d372fab183be",
+    "analysis_id": "A123",
+    "type": "AnalyzeRepository",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "github_snapshot_id": "GS123",
+      "sandbox_id": "S123",
+      "sandbox_collection_id": "RC123",
+      "revision": "0123456789abcdef0123456789abcdef01234567",
+      "profile_version": "mvp-v1",
+      "window": {
+        "from": "2026-09-03T00:00:00Z",
+        "until": "2026-10-03T00:00:00Z"
+      }
+    }
+  },
+  "source_topic": "repopulse.analysis.commands",
+  "source_partition": 0,
+  "source_offset": 42,
+  "service": "analysis",
+  "attempts": 3,
+  "failed_at": "2026-10-03T10:00:00Z",
+  "error_code": "UPSTREAM_TIMEOUT",
+  "error_message": "SonarQube task did not finish in time"
+}

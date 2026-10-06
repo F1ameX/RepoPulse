@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package repopulse.recommendation.v1;
+
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/internal/gen/repopulse/recommendation/v1;recommendationv1";
+
+import "google/protobuf/timestamp.proto";
+import "repopulse/common/v1/common.proto";
+
+service RecommendationService {
+  rpc GetRecommendationResult(GetRecommendationResultRequest) returns (RecommendationResult);
+}
+message GetRecommendationResultRequest { string recommendation_result_id = 1; }
+
+message RecommendationResult {
+  string id = 1;
+  string analysis_id = 2;
+  string analysis_snapshot_id = 3;
+  string scoring_result_id = 4;
+  repeated Recommendation recommendations = 5;
+  string model_version = 6;
+  string prompt_version = 7;
+  string schema_version = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message Recommendation {
+  string id = 1;
+  repopulse.common.v1.Priority priority = 2;
+  string action = 3;
+  string expected_effect = 4;
+  repopulse.common.v1.Complexity complexity = 5;
+  repeated string related_finding_ids = 6;
+}

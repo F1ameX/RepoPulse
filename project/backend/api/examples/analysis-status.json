@@ -1,0 +1,37 @@
+{
+  "analysis_id": "A123",
+  "status": "running",
+  "current_stage": "ANALYZING",
+  "stages": [
+    {
+      "name": "PREPARING",
+      "status": "completed",
+      "attempt": 1
+    },
+    {
+      "name": "COLLECTING",
+      "status": "completed",
+      "attempt": 1
+    },
+    {
+      "name": "ANALYZING",
+      "status": "running",
+      "attempt": 1
+    },
+    {
+      "name": "SCORING",
+      "status": "pending",
+      "attempt": 0
+    },
+    {
+      "name": "RECOMMENDING",
+      "status": "pending",
+      "attempt": 0
+    },
+    {
+      "name": "REPORTING",
+      "status": "pending",
+      "attempt": 0
+    }
+  ]
+}

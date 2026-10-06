@@ -122,7 +122,7 @@ Repository Sandbox Service
    └── gVisor sandbox
           ├── git clone
           ├── local repository
-          ├── RepoPulse analyzers
+          ├── RepoPulse collector: Git/files
           └── SonarScanner
                  │
                  ▼
@@ -201,6 +201,8 @@ API Service → gRPC → Report Service
 
 Общий внутренний контекст для запуска анализа, чтения статуса, чтения отчёта и поиска reusable report:
 
+Тип определён в [common.proto](../../project/backend/api/proto/repopulse/common/v1/common.proto). Получатель проверяет наличие выбранной идентичности и непустой ID: `oneof` запрещает одновременное заполнение двух полей, но допускает отсутствие обоих.
+
 ```protobuf
 message Requester {
   oneof identity {
@@ -217,6 +219,8 @@ API Service получает идентификаторы только из пр
 Для истории и PDF обязательно наличие действующего пользовательского access JWT: одной гостевой cookie недостаточно. Проверка владельца конкретного анализа выполняется в Orchestrator, а конкретного отчёта — в Report Service. Чужой ресурс возвращает `404`, включая запросы с известным `analysis_id` или `report_id`.
 
 ## OpenAPI-контракты
+
+Полная спецификация: [openapi.json](../../project/backend/api/openapi/openapi.json). Общий указатель gRPC, Kafka и HTTP-контрактов: [mvp-contracts.md](mvp-contracts.md). HTTP использует `snake_case`; API явно преобразует внутренние protobuf-модели в DTO. Создание анализа возвращает `202`, существующий отчёт — `200`, регистрация и создание гостевой сессии — `201`.
 
 ### POST `/api/v1/auth/guest-session`
 
@@ -364,11 +368,11 @@ Response:
 }
 ```
 
-Процент прогресса возвращается только там, где backend действительно может его подтвердить.
+Необязательное поле `stages[].progress_percent` (`0..100`) возвращается только там, где backend действительно может подтвердить процент прогресса.
 
 ### GET `/api/v1/reports/{report_id}`
 
-Возвращает отчёт, принадлежащий текущему `Requester`. Для гостя проверяется совпадение `guest_session_id`, для пользователя — `user_id`. Гостевой доступ действует до истечения гостевой сессии.
+Возвращает компактный [Report DTO](../../project/backend/api/openapi/openapi.json) по [примеру](../../project/backend/api/examples/report.json), принадлежащий текущему `Requester`. Для гостя проверяется совпадение `guest_session_id`, для пользователя — `user_id`. Гостевой доступ действует до истечения гостевой сессии.
 
 ### GET `/api/v1/reports/{report_id}/pdf`
 
@@ -387,6 +391,8 @@ Cache-Control: private, no-store
 ### GET `/api/v1/reports`
 
 Доступен только с пользовательским access JWT. Возвращает историю отчётов текущего `user_id`; гостевые отчёты в неё не включаются.
+
+Оба маршрута истории возвращают `reports`, `total_count`, `limit`, `offset`. `limit` по умолчанию `20`, допустимый диапазон `1..100`; `offset` начинается с нуля. Фильтр `repository` имеет формат `owner/name`. Порядок: `generated_at DESC, report_id DESC`.
 
 Возможные query-параметры:
 
@@ -447,6 +453,8 @@ Report Service:
 
 ## gRPC-контракт
 
+Полный контракт с сообщениями запросов и ответов: [auth.proto](../../project/backend/api/proto/repopulse/auth/v1/auth.proto).
+
 ```protobuf
 service AuthService {
   rpc CreateGuestSession(CreateGuestSessionRequest)
@@ -485,6 +493,10 @@ Refresh {
     refresh_token
 }
 ```
+
+`RegisterResponse` содержит `user_id`. `LoginResponse` и `RefreshResponse` содержат `access_token` и `refresh_token`, как в HTTP-контрактах API Service. `CreateGuestSessionRequest` не содержит параметров; срок сессии определяет сервер. `expires_at` в ответе обязателен и совпадает с `exp` гостевого JWT.
+
+Ошибки передаются через стандартный gRPC status: `INVALID_ARGUMENT` для некорректных параметров, `ALREADY_EXISTS` для занятого login, `UNAUTHENTICATED` для неверных учётных данных или недействительной refresh-сессии. Ошибка входа не различает неизвестный login и неверный пароль. См. [gRPC status codes](https://grpc.io/docs/guides/status-codes/).
 
 ## Хранилище
 
@@ -545,7 +557,7 @@ Analysis Orchestrator является владельцем workflow анали�
 - ставит тяжёлые задачи через Kafka;
 - принимает события о завершении этапов;
 - отслеживает progress;
-- обрабатывает retry;
+- выполняет локальный retry собственных синхронных gRPC-вызовов;
 - обрабатывает timeout;
 - хранит ошибки;
 - обеспечивает idempotency;
@@ -605,7 +617,11 @@ GET /repos/{owner}/{repo}
 
 Если `updated_at` совпадает со значением в последнем отчёте того же владельца, новый анализ не запускается. `FindReusableReport` получает проверенный `Requester`; поиск не выдаёт отчёты других пользователей или других гостевых сессий.
 
+Если требуется новый анализ, `ResolveRepositoryState` также получает основную ветку и её полный head SHA. Orchestrator фиксирует `repository_revision`, `analysis_window` и `collector_profile_version` в AnalysisRun до отправки команд `COLLECTING`. Обе команды получают одинаковые SHA и окно, поэтому GitHub API Service и Repository Sandbox Service собирают данные параллельно без зависимости друг от друга. Orchestrator ожидает `GitHubDataCollected` и `RepositoryDataCollected`, сохраняет `github_snapshot_id`, `sandbox_id` и `sandbox_collection_id` и проверяет SHA результата sandbox. Только после обоих событий он отправляет `AnalyzeRepository` в Analysis Service. Событие sandbox означает готовность локальных фактов и загрузку отчёта SonarScanner; серверную обработку SonarQube ожидает Analysis Service.
+
 ## gRPC-контракт
+
+Полный контракт с сообщениями запросов и ответов: [orchestrator.proto](../../project/backend/api/proto/repopulse/orchestrator/v1/orchestrator.proto).
 
 ```protobuf
 service AnalysisOrchestrator {
@@ -653,7 +669,7 @@ Orchestrator является producer команд:
 
 ```text
 CollectGitHubData
-PrepareRepository
+CollectRepositoryData
 AnalyzeRepository
 CalculateScore
 GenerateRecommendations
@@ -679,7 +695,7 @@ Kafka key:
 analysis_id
 ```
 
-Общий envelope:
+Общий envelope задаётся [messages.schema.json](../../project/backend/api/kafka/messages.schema.json). Топики и допустимые типы сообщений перечислены в [topics.json](../../project/backend/api/kafka/topics.json). Ниже показана форма envelope; payload выбирается по `type`. Примеры в разделах сервисов сокращены; полные сообщения находятся в [kafka-messages.json](../../project/backend/api/examples/kafka-messages.json).
 
 ```json
 {
@@ -700,9 +716,9 @@ GitHubDataCollectionStarted
 GitHubDataCollected
 GitHubDataCollectionFailed
 
-RepositoryPreparationStarted
-RepositoryPrepared
-RepositoryPreparationFailed
+RepositoryDataCollectionStarted
+RepositoryDataCollected
+RepositoryDataCollectionFailed
 
 AnalysisStarted
 AnalysisCompleted
@@ -725,7 +741,7 @@ ReportGenerationFailed
 
 ```text
 GitHubDataCollectionProgress
-RepositoryPreparationProgress
+RepositoryDataCollectionProgress
 AnalysisProgress
 ```
 
@@ -748,17 +764,65 @@ repopulse.report.commands
 repopulse.analysis.events
 ```
 
-Retry topics:
-
-```text
-repopulse.<service>.commands.retry
-```
-
-DLQ:
+DLQ topics:
 
 ```text
 repopulse.<service>.commands.dlq
 ```
+
+Отдельные Kafka topics для retry не используются. Каждый сервис выполняет повторные попытки обработки команды локально. DLQ хранит команды, обработка которых окончательно завершилась ошибкой; отдельного consumer или автоматического обработчика DLQ в MVP нет.
+
+## Локальный retry и DLQ
+
+Формат DLQ: [dlq.schema.json](../../project/backend/api/kafka/dlq.schema.json), [пример](../../project/backend/api/examples/dlq.json). Неразбираемое исходное сообщение хранится как Base64 исходных bytes.
+
+Общий порядок обработки Kafka-команды сервисом:
+
+```text
+Command topic → сервис
+    ↓
+попытка выполнения
+    ├── успех → сохранить результат → событие Completed / Generated
+    │
+    ├── временная ошибка → локальная задержка → следующая попытка
+    │
+    └── попытки исчерпаны / неповторяемая ошибка
+           ├── исходная команда + сведения об ошибке → DLQ сервиса
+           └── событие Failed → repopulse.analysis.events → Orchestrator
+                                                               ↓
+                                                             FAILED
+```
+
+Повторные попытки выполняет сервис, которому адресована команда: GitHub API Service, Repository Sandbox Service, Analysis Service, Scoring Service, Recommendation Service или Report Service. Orchestrator не переотправляет команды тяжёлых этапов для retry и не читает DLQ. Его локальный retry относится только к собственным синхронным gRPC-вызовам, например на этапе `PREPARING`.
+
+Для каждого сервиса конфигурация задаёт максимальное число попыток, timeout отдельной операции и общий предел времени обработки команды с учётом задержек. Число попыток включает первый вызов. Временные ошибки повторяются с ограниченным exponential backoff и jitter; неповторяемые ошибки сразу завершают обработку. Retry внешних HTTP/gRPC-вызовов входит в тот же общий предел, чтобы вложенные retry не приводили к неограниченному числу запросов.
+
+После окончательной ошибки сервис публикует соответствующее событие `Failed` из списка Kafka events с `analysis_id`, `attempts`, `error_code` и `error_message`. Orchestrator сохраняет ошибку этапа, число попыток в `analysis_steps.attempt`, переводит анализ в `FAILED` и прекращает запуск следующих этапов. Помещение команды в DLQ само по себе не заменяет событие об ошибке. Поздние события уже выполнявшихся параллельных этапов не возвращают завершённый с ошибкой анализ в `RUNNING` или `COMPLETED`.
+
+DLQ-запись содержит исходное сообщение и данные для ручного разбора:
+
+```text
+original_message (исходный envelope команды, включая message_id и analysis_id)
+source_topic
+source_partition
+source_offset
+service
+attempts
+failed_at
+error_code
+error_message
+```
+
+Результаты анализа и credentials в DLQ не добавляются. Для команды, которую нельзя разобрать, сохраняются исходные данные и координаты Kafka-записи; событие `Failed` публикуется только если можно достоверно определить `analysis_id`. В противном случае Orchestrator завершает ожидающий этап по timeout.
+
+Сервис подтверждает обработку Kafka-записи только после успешного сохранения результата и надёжной публикации события, а при окончательной ошибке — после подтверждённой публикации DLQ-записи и события `Failed`. При недоступности Kafka сообщение не считается обработанным. Повторная доставка после сбоя возможна; операции и обработка событий должны быть идемпотентными по `message_id`. Такая доставка не является отдельным механизмом retry через Kafka topics.
+
+
+### Ответственность администраторов
+
+Администраторы контролируют накопление сообщений в DLQ, изучают исходные команды и связанные логи по `analysis_id`, устраняют причины ошибок и принимают решение о дальнейших действиях. Retention DLQ задаётся конфигурацией Kafka так, чтобы оставалось время на ручной разбор.
+
+Автоматическое чтение DLQ, автоматический replay и отдельный DLQ-сервис не планируются. Если после устранения причины нужен повторный анализ, он запускается как новый `AnalysisRun` обычным способом. Запись в DLQ не является очередью автоматического продолжения старого анализа.
 
 ## Хранилище
 
@@ -778,6 +842,11 @@ analysis_runs
 ├── repository_owner
 ├── repository_name
 ├── repository_url
+├── repository_revision
+├── analysis_window
+├── collector_profile_version
+├── sandbox_id
+├── sandbox_collection_id
 ├── status
 ├── current_stage
 ├── github_snapshot_id
@@ -864,12 +933,14 @@ GitHub API Service отвечает только за platform-specific данн
 - получает repository metadata;
 - получает Pull Requests;
 - получает Reviews;
-- получает Issues;
-- получает Comments;
+- получает участников и доступную статистику их вклада;
+- получает Tags;
 - получает Workflows;
 - получает Workflow Runs;
 - получает Jobs;
 - получает Checks;
+- получает правила защиты основной ветки и обязательные checks;
+- получает Releases и release notes;
 - обрабатывает pagination;
 - обрабатывает GitHub rate limits;
 - выполняет retry временных HTTP-ошибок;
@@ -886,14 +957,18 @@ GitHub API Service отвечает только за platform-specific данн
 ```text
 GitHubDataSnapshot
 ├── Repository
+├── RepositoryRevision
+├── AnalysisWindow
 ├── PullRequests
 ├── Reviews
-├── Issues
-├── Comments
+├── ContributorActivity
+├── Tags
 ├── Workflows
 ├── WorkflowRuns
 ├── Jobs
 ├── Checks
+├── BranchPolicies
+├── Releases
 ├── CollectionMetadata
 └── CollectedAt
 ```
@@ -942,6 +1017,8 @@ is_complete = false
 
 Используется на стадии `PREPARING` и для чтения сохранённого snapshot.
 
+Полный контракт с сообщениями запросов и ответов: [github.proto](../../project/backend/api/proto/repopulse/github/v1/github.proto).
+
 ```protobuf
 service GitHubAPIService {
   rpc ResolveRepositoryState(ResolveRepositoryStateRequest)
@@ -958,7 +1035,11 @@ service GitHubAPIService {
 owner
 repository
 updated_at
+default_branch
+head_sha
 ```
+
+Для head SHA выполняется дополнительное чтение основной ветки через API платформы; одного `repository.updated_at` недостаточно, чтобы закрепить checkout.
 
 `GetGitHubDataSnapshot` принимает:
 
@@ -985,7 +1066,13 @@ CollectGitHubData
   "type": "CollectGitHubData",
   "payload": {
     "owner": "example",
-    "repository": "project"
+    "repository": "project",
+    "branch": "main",
+    "revision": "0123456789abcdef0123456789abcdef01234567",
+    "window": {
+      "from": "2026-09-03T00:00:00Z",
+      "until": "2026-10-03T00:00:00Z"
+    }
   }
 }
 ```
@@ -1037,6 +1124,8 @@ github_snapshots
 ├── id
 ├── analysis_id
 ├── repository_id
+├── repository_revision
+├── analysis_window
 ├── collected_at
 └── status
 ```
@@ -1046,15 +1135,21 @@ github_snapshots
 ```text
 pull_requests
 reviews
-issues
-comments
+contributor_activity
+tags
 workflows
 workflow_runs
 jobs
 checks
+branch_policies
+releases
 ```
 
 Каждая сущность связана с `github_snapshot_id`.
+
+Для MVP сохраняются автор PR, пользователь, выполнивший merge, даты создания/слияния, авторы, состояния и даты reviews, результаты CI-запусков, эффективные требования review/checks для основной ветки, теги и тексты release notes. Участники и статистика вклада нормализуются в `ContributorActivity` с количеством коммитов, additions/deletions, периодом и статусом полноты. Источник — GitHub commits/statistics API; статистика с другим периодом или неполными данными не выдаётся за точную выборку окна AnalysisRun. См. [GitHub repository statistics](https://docs.github.com/en/rest/metrics/statistics). `BranchPolicies` учитывает доступные branch protection и rulesets. Недостаток прав API или неполный сбор правил означает `unavailable`/`partial`, а не отсутствие защиты. См. [GitHub branch protection API](https://docs.github.com/en/rest/branches/branch-protection) и [rules API](https://docs.github.com/en/rest/repos/rules).
+
+Все временные выборки используют то же окно UTC, что и сбор данных из sandbox. Snapshot сохраняет имя основной ветки и SHA, зафиксированные Orchestrator на этапе `PREPARING`. Данные PR/reviews/CI и текущие правила платформы не являются атомарным Git-снимком: сохраняются их период и время сбора. Источник данных платформы — GitHub API Service.
 
 Таблица `collection_states`:
 
@@ -1090,175 +1185,321 @@ collection_errors
 
 ## Ответственность
 
-Repository Sandbox Service отвечает за безопасное получение и временное размещение Git-репозитория.
+Repository Sandbox Service получает `CollectRepositoryData` от Orchestrator через Kafka, создаёт временную изолированную среду, клонирует репозиторий на зафиксированный SHA, выполняет локальный сбор и запускает SonarScanner. Готовые структурированные данные Analysis Service получает через gRPC; код и полный checkout между сервисами не передаются.
 
-Он:
-
-- получает задачу от Orchestrator через Kafka;
-- создаёт sandbox;
-- клонирует Git-репозиторий непосредственно внутрь sandbox;
-- ограничивает ресурсы;
-- ограничивает сеть;
-- запускает процессы от non-root;
-- предоставляет локальный checkout для анализа;
-- уничтожает sandbox после завершения анализа.
-
-Исходный код репозитория не хранится постоянно и не передаётся целиком между сервисами.
-
-## Изоляция
-
-Используется:
+Внутри sandbox находятся:
 
 ```text
-Docker/containerd
-      ↓
-gVisor (runsc)
-      ↓
-isolated sandbox
+Sandbox S123
+├── Git и checkout /workspace/repository
+├── RepoPulse collector: файлы, конфигурации и git log
+├── SonarScanner CLI
+└── временные результаты и рабочие каталоги инструментов
 ```
 
-Ограничения:
+Сервис ограничивает CPU, RAM, disk, PID и время выполнения, запускает процессы от non-root и контролирует сеть. Sandbox сохраняется до получения и сохранения результатов Analysis Service, затем удаляется по `ReleaseSandbox`; забытые среды удаляются по TTL. Итоговые метрики, интерпретацию проблем и Repo Health Score внутри sandbox не рассчитывают.
+
+## Изоляция и сеть
 
 ```text
-CPU limit
-RAM limit
-disk limit
-PID limit
-non-root
-drop capabilities
-read-only root filesystem
-hard timeout
-restricted network
+containerd → gVisor (runsc) → isolated sandbox
+
+COLLECTING, clone/fetch: Sandbox → GitHub
+COLLECTING, scanner:     Sandbox → SonarQube Server (HTTPS)
+                        остальной исходящий доступ запрещён
 ```
 
-## Network policy
+Используются read-only root filesystem, отдельные writable-каталоги для checkout/результатов/кэша scanner, drop capabilities и hard timeout. Git-история для выбранного периода загружается при подготовке; сбор не делает повторный pull и не меняет SHA. SonarScanner и необходимые runtime-компоненты установлены в доверенном образе заранее.
 
-Во время `COLLECTING`:
+Сборщик читает файлы и Git-историю. Он не выполняет код репозитория, build, тесты, package scripts или CI-конфигурацию и не устанавливает зависимости репозитория. Статический анализ выполняет SonarScanner с параметрами, сформированными RepoPulse. Настройки из репозитория не должны переопределять адрес сервера, токен, scope или включать выполнение сторонних команд.
+
+## Данные sandbox для MVP
+
+Локальный сбор ограничен следующими проверками. Дополнительные сведения о работе команды и платформы поступают через GitHub API Service, а результаты статического анализа — из SonarQube Server.
+
+| Проверка | Что возвращает sandbox | Что делает Analysis Service |
+|---|---|---|
+| Наличие документации | Признаки README, папки/файлов docs и основных supporting-файлов с относительными путями | Фиксирует наличие документации; полнота, качество текста и актуальность по датам не оцениваются |
+| Наличие тестов | Распознаваемые файлы тестов и конфигурации тестовых инструментов | Фиксирует наличие; тесты не запускаются, coverage не рассчитывается |
+| Наличие CI/CD | Пути конфигураций, например `.github/workflows`, и факт их обнаружения | Фиксирует наличие конфигурации; успешность запусков и обязательность checks берёт из GitHub API |
+| `.gitignore` и его структура | Наличие файла, число активных ignore-правил и локальная проверка исключения `.env` по правилам Git | Показывает наличие/непустой набор правил и исключение `.env`; не утверждает, что все необходимые файлы исключены |
+| Отсутствие `.env` | Пути отслеживаемых файлов с точным basename `.env` в текущем checkout | При обнаружении формирует finding. `.env.example`/`.env.sample` не считаются `.env`; содержимое файлов не возвращается |
+| Частота коммитов | Дневные количества коммитов из `git log` за заданный период UTC | Рассчитывает commits/day и commits/week; нулевые дни достраивает только при полном сборе периода |
+| Статический анализ | Результат запуска SonarScanner: project key, идентификатор серверной задачи, версия scanner | Дожидается обработки на SonarQube Server и получает метрики/issues через его API |
+
+`mvp-v1` задаёт поддерживаемые экосистемы и правила обнаружения файлов. Документация проверяется по README, docs, LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY и issue/PR templates; возвращается наличие, а не оценка содержания. Отсутствие `.env` проверяется только в текущем tracked checkout, не во всей истории. Проверка ignore-правил использует Git semantics для корневого `.env` и обнаруженных путей; наличие ignore-правила не отменяет finding, если `.env` уже tracked.
+
+SonarQube — инструмент статического анализа MVP. Сведения об участниках, review, результатах CI, защите ветки, тегах и релизах получает GitHub API Service.
+
+## gRPC-контракт с Analysis Service
+
+Отдельный файл контракта: [sandbox.proto](../../project/backend/api/proto/repopulse/sandbox/v1/sandbox.proto). Порядок фиксации контрактов MVP: [mvp-contracts.md](mvp-contracts.md).
+
+На этапе `COLLECTING` Orchestrator параллельно отправляет `CollectGitHubData` и `CollectRepositoryData` через Kafka. Sandbox Service выполняет clone, локальные проверки и SonarScanner, сохраняет результат и публикует `RepositoryDataCollected`. Analysis Service получает задание только после готовности обоих источников.
 
 ```text
-Sandbox → GitHub
+Orchestrator
+  ├── Kafka → GitHub API Service: CollectGitHubData
+  └── Kafka → Sandbox Service: CollectRepositoryData
+               clone → локальный collector → SonarScanner
+                         ↓
+               RepositoryDataCollected(S123, RC123)
+
+Orchestrator: GitHubDataCollected + RepositoryDataCollected
+                         ↓
+                 Kafka: AnalyzeRepository
+                         ↓
+Analysis Service
+  ├── gRPC → GitHub API Service.GetGitHubDataSnapshot(GS123)
+  ├── gRPC → Sandbox Service.GetRepositoryData(S123, RC123)
+  └── SonarQube API: дождаться задачи и получить результаты
+                         ↓
+                  AnalysisSnapshot
+                         ↓
+          gRPC → Sandbox Service.ReleaseSandbox(S123)
 ```
 
-После clone:
+Sandbox Service запускает установленные инструменты через containerd внутри нужной sandbox. gRPC между Analysis Service и Sandbox Service используется для чтения готовых данных и освобождения среды:
 
-```text
-Internet access → denied
-Sandbox → SonarQube Server → allowed
+```protobuf
+syntax = "proto3";
+package repopulse.sandbox.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "repopulse/common/v1/common.proto";
+
+service RepositorySandboxService {
+  rpc GetRepositoryData(RepositoryCollectionRef)
+      returns (stream RepositoryDataChunk);
+  rpc ReleaseSandbox(ReleaseSandboxRequest)
+      returns (google.protobuf.Empty);
+}
+
+message RepositoryCollectionRef {
+  string analysis_id = 1;
+  string sandbox_id = 2;
+  string collection_id = 3;
+}
+
+message ReleaseSandboxRequest {
+  string analysis_id = 1;
+  string sandbox_id = 2;
+}
+
+message RepositoryDataChunk {
+  uint64 sequence = 1;
+  oneof payload {
+    RepositoryDataHeader header = 2;
+    CommitActivity activity = 3;
+    RepositoryFileFacts file_facts = 4;
+    GitignoreFacts gitignore = 6;
+    SonarScanResult sonar_scan = 7;
+    CollectionSummary summary = 8;
+  }
+}
+
+message RepositoryDataHeader {
+  string collection_id = 1;
+  string analysis_id = 2;
+  string sandbox_id = 3;
+  string revision = 4;
+  string branch = 5;
+  string profile_version = 6;
+  string collector_version = 7;
+  repopulse.common.v1.AnalysisWindow window = 8;
+  google.protobuf.Timestamp collected_at = 9;
+  bool shallow = 10;
+}
+
+message CommitActivity {
+  string date_utc = 1; // YYYY-MM-DD.
+  uint64 commit_count = 2;
+}
+
+enum DetectionState {
+  DETECTION_STATE_UNSPECIFIED = 0;
+  DETECTION_STATE_DETECTED = 1;
+  DETECTION_STATE_NOT_DETECTED = 2;
+  DETECTION_STATE_UNKNOWN = 3;
+  DETECTION_STATE_NOT_APPLICABLE = 4;
+}
+
+message RepositoryFileFacts {
+  optional bool has_readme = 1;
+  optional bool has_docs = 2;
+  optional bool has_supporting_docs = 3;
+  optional bool has_tests = 4; // Найдены тестовые файлы.
+  optional bool has_test_config = 5;
+  optional bool has_ci_config = 6;
+  repeated string documentation_paths = 7;
+  repeated string test_paths = 8;
+  repeated string ci_config_paths = 9;
+  repeated string tracked_env_paths = 10;
+}
+
+message GitignoreFacts {
+  DetectionState file_presence = 1;
+  optional uint64 active_rule_count = 2; // Без пустых строк/комментариев.
+  DetectionState env_ignore_rule = 3; // Семантика Git, не поиск подстроки.
+  repeated string paths = 4; // Проверенные .gitignore относительно корня checkout.
+}
+
+message SonarScanResult {
+  repopulse.common.v1.DataStatus status = 1;
+  string project_key = 2;
+  string ce_task_id = 3; // Идентификатор фоновой задачи SonarQube.
+  string scanner_version = 4;
+  string error_code = 5;
+}
+
+message SectionState {
+  string section = 1;
+  repopulse.common.v1.DataStatus status = 2;
+  uint64 items_examined = 3;
+  uint64 items_skipped = 4;
+  repeated string reason_codes = 5;
+}
+
+message CollectionSummary {
+  repeated SectionState sections = 1;
+  uint64 chunks_before_summary = 2;
+}
 ```
 
-## Локальное хранилище
+### Секции и значения
 
-Репозиторий хранится только временно:
+| Секция | Поля результата |
+|---|---|
+| `documentation` | `RepositoryFileFacts`: `has_readme`, `has_docs`, `has_supporting_docs`, `documentation_paths` |
+| `tests` | `RepositoryFileFacts`: `has_tests`, `has_test_config`, `test_paths` |
+| `ci` | `RepositoryFileFacts`: `has_ci_config`, `ci_config_paths`; фактическое выполнение приходит из GitHub API |
+| `gitignore` | `GitignoreFacts`: наличие, число активных правил, исключение `.env` |
+| `env_files` | `RepositoryFileFacts.tracked_env_paths`: пути найденных tracked `.env` |
+| `git_activity` | `CommitActivity`: дневные счётчики из `git log` |
+| `sonar_scan` | `SonarScanResult`: результат CLI и ссылка на серверную обработку |
 
-```text
-/workspace/repository
-```
+`RepositoryFileFacts` содержит фиксированный набор полей MVP и передаётся одним chunk после header. Списки путей ограничиваются бюджетом chunk; при усечении соответствующая секция помечается `PARTIAL`. `has_supporting_docs` означает наличие хотя бы одного LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY или issue/PR template; обнаруженные пути включаются в `documentation_paths`. `has_tests` означает наличие распознанных тестовых файлов, `has_test_config` — конфигурации тестового инструмента.
 
-После завершения анализа sandbox уничтожается.
+Для `optional bool` значение `true` означает обнаруженный признак, `false` — подтверждённое отсутствие, отсутствие значения — невозможность определить результат. `false` допустим только после полной проверки scope этого признака; ограничения секции отражаются в `CollectionSummary`. Например, найденный README даёт `has_readme = true`, даже если остальные supporting-файлы удалось проверить лишь частично. Наличие README определяется существованием файла; его содержательность и качество не оцениваются.
+
+Пути во всех полях относительны корню checkout. Непустой `tracked_env_paths` означает найденный tracked `.env`; пустой список подтверждает отсутствие только при `COMPLETE` секции `env_files`. Аналогично пустой список остальных путей при неполном сборе не доказывает отсутствие файлов. Содержимое `.env` не читается локальным сборщиком и исключается из отправки scanner. SHA всего checkout передаётся один раз в header. `DetectionState` используется для конкретных проверок `GitignoreFacts`; `NOT_DETECTED` допустим только после полной проверки соответствующего scope, неизвестный результат обозначается `UNKNOWN`.
+
+### Окно и полнота
+
+`from < until`; длительность выбирается конфигурацией, например 30 дней. Окно фиксируется в AnalysisRun и передаётся GitHub API Service и sandbox. История относится к коммитам, достижимым из `revision` основной ветки, с committer timestamp в `[from, until)` UTC; для частоты учитываются все коммиты, включая merge, каждый SHA один раз.
+
+`git log` исполняется с фиксированными аргументами без shell-команд пользователя; даты и счётчики возвращаются без patch и содержимого файлов. Возможности Git описаны в [git log](https://git-scm.com/docs/git-log). Shallow history, лимит коммитов/файлов/размеров или timeout дают `PARTIAL` соответствующей секции. Полнота периода не выводится из одного старого видимого коммита: [git clone](https://git-scm.com/docs/git-clone).
+
+Пустой результат при `COMPLETE` означает «не найдено в scope», при `PARTIAL`/`UNAVAILABLE` — «данных недостаточно». Summary содержит состояния всех семи секций.
+
+### Выполнение, retry и освобождение
+
+Получив `CollectRepositoryData`, Sandbox Service публикует `RepositoryDataCollectionStarted` и выполняет работу в своей sandbox. После локального сбора и успешной загрузки отчёта SonarScanner он сохраняет неизменяемые факты, метаданные scanner и `collection_id`, затем надёжно публикует `RepositoryDataCollected`. Это событие означает доступность данных по gRPC; серверная обработка SonarQube ещё может продолжаться. Частичные проверки отражаются в summary. Неподдерживаемый язык даёт `UNAVAILABLE`/`NOT_APPLICABLE` секции scanner, а не подтверждение успешного статического анализа.
+
+Sandbox Service обрабатывает повторную доставку Kafka-команды идемпотентно по `message_id`: готовый результат и событие используются повторно. Ключ с другими параметрами отклоняется. Локальный retry clone/collector/scanner принадлежит Sandbox Service и ограничен общим бюджетом команды. Если отчёт scanner уже загружен и его `ce_task_id` сохранён, повторная публикация события не запускает scanner заново. Для новой попытки scanner сервис создаёт отдельный Sonar-проект, чтобы поздняя обработка предыдущего отчёта не перезаписала выбранный результат.
+
+После окончательной ошибки Sandbox Service отправляет исходную команду в `repopulse.sandbox.commands.dlq` и публикует `RepositoryDataCollectionFailed`. Orchestrator переводит AnalysisRun в `FAILED` и не запускает Analysis Service. Недоступные вспомогательные проверки могут дать частичный готовый результат; техническая ошибка clone или scanner для поддерживаемого проекта завершает сбор ошибкой. Состояние серверной задачи после получения данных повторно проверяет Analysis Service без запуска инструментов sandbox.
+
+`GetRepositoryData` сверяет связь `analysis_id`/`sandbox_id`/`collection_id` и полномочия внутреннего клиента. Ошибки контракта: `INVALID_ARGUMENT` для параметров, `NOT_FOUND` для неизвестной/истёкшей среды или результата, `FAILED_PRECONDITION` при чтении незавершённого сбора. После `RepositoryDataCollected` результат должен быть доступен; кратковременная ошибка transport обрабатывается локальным retry чтения Analysis Service и не создаёт новую задачу сбора.
+
+Первый chunk — header, последний — summary, `sequence` начинается с 0; факты идут в стабильном порядке. Максимум chunk — 256 KiB, общий лимит задаёт профиль. При обрыве клиент перечитывает неизменяемый результат с начала и дедуплицирует `(collection_id, sequence)`. Без summary поток не считается полным. При достижении лимита сохраняются целые факты и `PARTIAL`; header, summary и состояния секций резервируются в бюджете.
+
+Состояние обработки команды, ключи идемпотентности и результаты хранятся временно вне checkout, без постоянной database. TTL покрывает сбор, ожидание второго источника, очередь Analysis Service, обработку SonarQube и retry; hard timeout предотвращает бесконечное удержание среды. Потеря sandbox после рестарта даёт `NOT_FOUND` и ошибку этапа, без скрытого повторного clone из Analysis Service.
+
+Analysis Service сохраняет локальные факты и результаты SonarQube в `AnalysisSnapshot`, затем вызывает идемпотентный `ReleaseSandbox`. Он останавливает оставшиеся процессы и удаляет checkout/временные результаты; повторное освобождение возвращает успех. При терминальной ошибке агрегации Analysis Service также освобождает среду. Если Analysis Service не запущен из-за ошибки параллельного GitHub-сбора, Sandbox Service удаляет среду по TTL. Неудачная очистка не отменяет сохранённый snapshot.
 
 ## Kafka-контракт
 
-Команда:
-
-```text
-PrepareRepository
-```
-
-Пример:
+Команда `CollectRepositoryData`:
 
 ```json
 {
   "message_id": "uuid",
   "analysis_id": "A123",
-  "type": "PrepareRepository",
+  "type": "CollectRepositoryData",
   "payload": {
     "owner": "example",
-    "repository": "project"
+    "repository": "project",
+    "branch": "main",
+    "revision": "0123456789abcdef0123456789abcdef01234567",
+    "profile_version": "mvp-v1",
+    "window": {
+      "from": "2026-09-03T00:00:00Z",
+      "until": "2026-10-03T00:00:00Z"
+    }
   }
 }
 ```
 
-Событие:
-
-```text
-RepositoryPrepared
-```
-
-Пример:
+Событие `RepositoryDataCollected`:
 
 ```json
 {
   "analysis_id": "A123",
-  "type": "RepositoryPrepared",
+  "type": "RepositoryDataCollected",
   "payload": {
-    "sandbox_id": "S123"
+    "sandbox_id": "S123",
+    "revision": "0123456789abcdef0123456789abcdef01234567",
+    "branch": "main",
+    "expires_at": "2026-10-03T12:00:00Z",
+    "collection_id": "RC123"
   }
 }
 ```
 
-Repository Sandbox Service не имеет постоянной собственной database.
-
 ---
+
 
 # 6. Analysis Service
 
 ## Ответственность
 
-Analysis Service выполняет технический анализ уже собранных данных.
-
-Он получает:
+Analysis Service агрегирует результаты из трёх источников:
 
 ```text
-local Git repository
-+
-GitHubDataSnapshot
+RepositoryData (Git/файлы из sandbox)
+             +
+GitHubDataSnapshot (данные платформы)
+             +
+SonarQube results (статический анализ)
+             ↓
+       AnalysisSnapshot
 ```
 
-и формирует:
+Он получает готовые данные GitHub и sandbox по gRPC, ждёт серверной обработки SonarQube, нормализует результаты и формирует metrics, findings, observations и completeness. Запуск clone, локального collector и SonarScanner выполняет Sandbox Service по Kafka-команде Orchestrator. Repo Health Score рассчитывает следующий Scoring Service.
 
-```text
-AnalysisSnapshot
-```
+## Обработка данных MVP
 
-Analysis Service:
+1. Получает `AnalyzeRepository` от Orchestrator после событий готовности GitHub и sandbox. Команда содержит `github_snapshot_id`, `sandbox_id`, `sandbox_collection_id`, SHA, профиль и окно анализа.
+2. Получает `GitHubDataSnapshot` и готовый поток `GetRepositoryData` через gRPC. Сверяет AnalysisRun, SHA, профиль, окно, header и summary; локальные проверки и scanner к этому моменту выполнены Sandbox Service.
+3. Из дневных счётчиков рассчитывает среднюю частоту за период: `commit_count / duration_days` и `commit_count / duration_weeks`. Признаки файлов превращает в наблюдения; найденный tracked `.env` — в finding с путём, без содержимого.
+4. По `ce_task_id` ждёт именно соответствующую задачу SonarQube. После её успешного завершения получает метрики и issues через API с привязкой к project/analysis и сохраняет идентификатор Sonar-анализа. CLI success до завершения серверной задачи не означает готовность результатов. Неуспешный Quality Gate сам по себе не является технической ошибкой RepoPulse: низкое качество кода — результат анализа.
+5. Агрегирует остальные доступные факты из GitHub API Service: метаданные, участников и статистику вклада, PR/reviews, независимое review и self-merge, даты review, правила защиты/обязательные checks, фактические результаты CI, теги и releases/release notes. Для каждого показателя сохраняются период, источник и ограничения полноты.
+6. Сохраняет единый `AnalysisSnapshot` в `analysis_db`, освобождает sandbox и публикует `AnalysisCompleted(analysis_snapshot_id)`. Дальше Orchestrator запускает `Scoring → Recommendation → Report` как раньше.
 
-- анализирует структуру репозитория;
-- анализирует документацию;
-- анализирует тесты;
-- анализирует CI/CD;
-- анализирует историю и технические характеристики;
-- запускает собственные RepoPulse analyzers;
-- запускает SonarScanner внутри sandbox;
-- получает результаты SonarQube;
-- формирует metrics;
-- формирует findings;
-- формирует observations;
-- формирует evidence;
-- отслеживает completeness анализа.
-
-Он не рассчитывает Repo Health Score.
+Недоступные данные платформы, неподдерживаемые языки или неполный локальный сбор отражаются в completeness и не превращаются в нули/ложное отсутствие. Ошибка серверной задачи SonarQube или агрегации после локального retry приводит к `AnalysisFailed` и DLQ Analysis Service по прежнему правилу. Ошибку запуска scanner обрабатывает Sandbox Service до события готовности. API-данные платформы имеют собственное время сбора и не образуют атомарный snapshot с Git checkout.
 
 ## SonarQube
 
-Сам SonarQube Server является отдельным постоянным инфраструктурным компонентом.
-
-В sandbox запускается только:
+SonarQube Server — постоянный внешний компонент; SonarScanner CLI запускает Sandbox Service в рамках Kafka-команды `CollectRepositoryData` от Orchestrator.
 
 ```text
-SonarScanner
+Orchestrator → Kafka → Sandbox Service
+                              ↓ containerd exec
+                         SonarScanner
+                              ↓ отчёт анализа
+                         SonarQube Server
+                              ↑ API: task status, metrics, issues
+                         Analysis Service
 ```
 
-Схема:
+Адрес SonarQube, credentials и разрешённые параметры принадлежат конфигурации RepoPulse. Sandbox Service подготавливает Sonar-проект с key, уникальным для AnalysisRun и попытки scanner; использует внутренний технический токен с необходимыми правами создания проекта/анализа и не пишет его в логи. Рабочие файлы scanner находятся вне checkout. Сборщик возвращает идентификатор server task из метаданных scanner, а не произвольный URL для обращения Analysis Service.
 
-```text
-Sandbox
-├── repository
-├── RepoPulse analyzers
-└── SonarScanner
-       │
-       ▼
-  SonarQube Server
-```
+Завершение CLI означает загрузку отчёта; сервер обрабатывает его асинхронно. См. [SonarScanner CLI](https://docs.sonarsource.com/sonarqube-server/analyzing-source-code/scanners/sonarscanner) и [Background tasks](https://docs.sonarsource.com/sonarqube-server/analyzing-source-code/background-tasks). Возвращённый `ce_task_id` используется для ожидания и сопоставления результатов текущему запуску.
+
+MVP не выполняет build/тесты и не генерирует coverage. Анализируются языки и проекты, которые поддерживает настроенный SonarQube без выполнения кода репозитория; необходимость артефактов сборки или неподдерживаемый язык отражается как недоступная часть анализа. Успешный scanner не означает полную проверку всех языков репозитория; фактические ограничения сохраняются в completeness.
+
 
 ## AnalysisSnapshot
 
@@ -1303,6 +1544,8 @@ AnalysisSnapshot
 
 Analysis Service предоставляет read-метод для получения сохранённого snapshot:
 
+Полный контракт с сообщениями запросов и ответов: [analysis.proto](../../project/backend/api/proto/repopulse/analysis/v1/analysis.proto).
+
 ```protobuf
 service AnalysisService {
   rpc GetAnalysisSnapshot(GetAnalysisSnapshotRequest)
@@ -1332,12 +1575,21 @@ AnalyzeRepository
   "type": "AnalyzeRepository",
   "payload": {
     "sandbox_id": "S123",
-    "github_snapshot_id": "GS123"
+    "github_snapshot_id": "GS123",
+    "revision": "0123456789abcdef0123456789abcdef01234567",
+    "profile_version": "mvp-v1",
+    "window": {
+      "from": "2026-09-03T00:00:00Z",
+      "until": "2026-10-03T00:00:00Z"
+    },
+    "sandbox_collection_id": "RC123"
   }
 }
 ```
 
 После получения команды Analysis Service запрашивает `GitHubDataSnapshot` у GitHub API Service через gRPC по `github_snapshot_id`.
+
+Для sandbox он вызывает только `GetRepositoryData`, используя `sandbox_collection_id` из команды. Запуск сбора уже выполнен по Kafka-команде Orchestrator. Полный `RepositoryData` по Kafka не передаётся. После сохранения `AnalysisSnapshot` Analysis Service освобождает sandbox через `ReleaseSandbox` и публикует `AnalysisCompleted`.
 
 Событие:
 
@@ -1374,6 +1626,9 @@ analysis_snapshots
 ├── id
 ├── analysis_id
 ├── repository_revision
+├── sandbox_collection_id
+├── collector_profile_version
+├── analysis_window
 ├── completeness
 └── created_at
 ```
@@ -1415,6 +1670,8 @@ observations
 ├── source
 └── description
 ```
+
+Дополнительно сохраняются `source_collection_states` и собранные `repository_facts`, связанные с `analysis_snapshot_id`. Сохраняются структурированные факты и результаты SonarQube; для локальных фактов достаточно списка путей и общего SHA snapshot. Итоговый отчёт MVP содержит оценки, краткие выводы, рекомендации и ограничения полноты данных. Sandbox не служит постоянным хранилищем результатов.
 
 ---
 
@@ -1481,7 +1738,11 @@ ScoringResult
 
 ## gRPC-контракт
 
+Схема структурированного ответа LLM: [scoring-result.schema.json](../../project/backend/api/llm/scoring-result.schema.json). Идентификаторы и версии результата добавляет сервис после проверки ответа; методика оценки согласуется при реализации.
+
 Scoring Service предоставляет read-метод:
+
+Полный контракт с сообщениями запросов и ответов: [scoring.proto](../../project/backend/api/proto/repopulse/scoring/v1/scoring.proto).
 
 ```protobuf
 service ScoringService {
@@ -1637,7 +1898,11 @@ RecommendationResult
 
 ## gRPC-контракт
 
+Схема структурированного ответа LLM: [recommendations.schema.json](../../project/backend/api/llm/recommendations.schema.json). Сервис проверяет ссылки на исходные findings и сам назначает ID рекомендаций.
+
 Recommendation Service предоставляет read-метод:
+
+Полный контракт с сообщениями запросов и ответов: [recommendation.proto](../../project/backend/api/proto/repopulse/recommendation/v1/recommendation.proto).
 
 ```protobuf
 service RecommendationService {
@@ -1777,6 +2042,9 @@ Report
 ├── GuestSessionID (nullable)
 ├── Repository
 ├── RepositoryUpdatedAt
+├── RepositoryRevision
+├── AnalysisWindow
+├── CollectorProfileVersion
 ├── OverallScore
 ├── CategoryScores
 ├── Findings
@@ -1785,6 +2053,8 @@ Report
 ├── GeneratedAt
 └── SchemaVersion
 ```
+
+`RepositoryRevision`, `AnalysisWindow` и `CollectorProfileVersion` переносятся из AnalysisSnapshot и описывают, какой checkout и период анализировались. Недоступная оценка передаётся как `null` в HTTP и отсутствие optional-поля в gRPC; неизвестный результат не равен нулю.
 
 Отчёт является immutable:
 
@@ -1796,6 +2066,8 @@ Report
 Отчёт принадлежит ровно одному владельцу: пользователю или гостевой сессии. Владелец фиксируется при создании; вход и регистрация гостя его не меняют. Гостевой отчёт не включается в историю аккаунта и не предоставляется этому аккаунту для скачивания PDF.
 
 ## gRPC-контракт
+
+Полный контракт с сообщениями запросов и ответов: [report.proto](../../project/backend/api/proto/repopulse/report/v1/report.proto).
 
 ```protobuf
 service ReportService {
@@ -1929,6 +2201,7 @@ GET /api/v1/analyses/{analysis_id}
 {
   "analysis_id": "A123",
   "status": "completed",
+  "stages": [],
   "report_id": "R123"
 }
 ```
@@ -2018,6 +2291,9 @@ reports
 ├── repository_name
 ├── repository_url
 ├── repository_updated_at
+├── repository_revision
+├── analysis_window
+├── collector_profile_version
 ├── overall_score
 ├── scoring_result_id
 ├── recommendation_result_id
@@ -2241,6 +2517,8 @@ analysis_duration_seconds
 kafka_consumer_lag
 kafka_messages_processed_total
 kafka_messages_failed_total
+kafka_messages_dlq_total
+service_retry_attempts_total
 
 sandbox_active
 sandbox_creation_duration_seconds
@@ -2324,24 +2602,30 @@ COLLECTING
  │            CollectGitHubData
  │
  └── Kafka → Repository Sandbox Service
-              PrepareRepository
+              CollectRepositoryData
               ↓
               gVisor
               ↓
-              git clone
+              git clone → local collector → SonarScanner
+              сохранить RepositoryData
+              Kafka: RepositoryDataCollected
 
-оба завершены
+GitHubDataCollected + RepositoryDataCollected
         ↓
 
 ANALYZING
         ↓
 Analysis Service
- ├── local repository
  ├── gRPC → GitHub API Service.GetGitHubDataSnapshot(...)
- ├── RepoPulse analyzers
- └── SonarScanner → SonarQube
+ ├── gRPC → Repository Sandbox Service
+ │            GetRepositoryData(sandbox_collection_id)
+ │            → stream Git/file facts + Sonar task
+ ├── SonarQube API → task status, metrics, issues
+ └── metrics + findings + observations + completeness
         ↓
 AnalysisSnapshot → analysis_db
+        ↓
+gRPC: ReleaseSandbox
         ↓
 Kafka: AnalysisCompleted(analysis_snapshot_id)
 

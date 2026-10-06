@@ -1,0 +1,94 @@
+syntax = "proto3";
+
+package repopulse.report.v1;
+
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/internal/gen/repopulse/report/v1;reportv1";
+
+import "google/protobuf/timestamp.proto";
+import "repopulse/common/v1/common.proto";
+import "repopulse/analysis/v1/analysis.proto";
+import "repopulse/scoring/v1/scoring.proto";
+import "repopulse/recommendation/v1/recommendation.proto";
+
+service ReportService {
+  rpc GetReport(GetReportRequest) returns (GetReportResponse);
+  rpc GetReportPdf(GetReportPdfRequest) returns (stream ReportPdfChunk);
+  rpc GetUserReports(GetUserReportsRequest) returns (GetUserReportsResponse);
+  rpc GetRepositoryReports(GetRepositoryReportsRequest) returns (GetRepositoryReportsResponse);
+  rpc FindReusableReport(FindReusableReportRequest) returns (FindReusableReportResponse);
+}
+
+message GetReportRequest {
+  repopulse.common.v1.Requester requester = 1;
+  string report_id = 2;
+}
+message GetReportResponse { Report report = 1; }
+
+// user_id формируется API только из проверенного пользовательского JWT.
+message GetReportPdfRequest {
+  string user_id = 1;
+  string report_id = 2;
+}
+message ReportPdfChunk { bytes data = 1; }
+
+message GetUserReportsRequest {
+  string user_id = 1;
+  uint32 limit = 2; // 0: серверный default; явное значение 1..100.
+  uint32 offset = 3;
+  repopulse.common.v1.RepositoryRef repository = 4; // Необязательный фильтр.
+}
+message GetUserReportsResponse {
+  repeated ReportSummary reports = 1;
+  uint64 total_count = 2;
+  uint32 limit = 3;
+  uint32 offset = 4;
+}
+
+message GetRepositoryReportsRequest {
+  string user_id = 1;
+  repopulse.common.v1.RepositoryRef repository = 2;
+  uint32 limit = 3;
+  uint32 offset = 4;
+}
+message GetRepositoryReportsResponse {
+  repeated ReportSummary reports = 1;
+  uint64 total_count = 2;
+  uint32 limit = 3;
+  uint32 offset = 4;
+}
+
+// Сохраняет согласованное правило updated_at; срок актуальности требует уточнения.
+message FindReusableReportRequest {
+  repopulse.common.v1.Requester requester = 1;
+  repopulse.common.v1.RepositoryRef repository = 2;
+  google.protobuf.Timestamp repository_updated_at = 3;
+}
+message FindReusableReportResponse {
+  optional string report_id = 1; // Поле отсутствует, если подходящего отчёта нет.
+}
+
+message Report {
+  string id = 1;
+  string analysis_id = 2;
+  repopulse.common.v1.Requester owner = 3;
+  repopulse.common.v1.Repository repository = 4;
+  google.protobuf.Timestamp repository_updated_at = 5;
+  optional double overall_score = 6;
+  repeated repopulse.scoring.v1.CategoryScore category_scores = 7;
+  repeated repopulse.analysis.v1.Finding findings = 8;
+  repeated repopulse.recommendation.v1.Recommendation recommendations = 9;
+  repopulse.common.v1.Completeness completeness = 10;
+  google.protobuf.Timestamp generated_at = 11;
+  string schema_version = 12;
+  string repository_revision = 13;
+  repopulse.common.v1.AnalysisWindow analysis_window = 14;
+  string collector_profile_version = 15;
+}
+
+message ReportSummary {
+  string report_id = 1;
+  string analysis_id = 2;
+  repopulse.common.v1.RepositoryRef repository = 3;
+  optional double overall_score = 4;
+  google.protobuf.Timestamp generated_at = 5;
+}

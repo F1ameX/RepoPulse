@@ -1,0 +1,294 @@
+[
+  {
+    "message_id": "a5a59974-921b-5f7b-a84c-4136dfd5f3f4",
+    "analysis_id": "A123",
+    "type": "CollectGitHubData",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "owner": "example",
+      "repository": "project",
+      "branch": "main",
+      "revision": "0123456789abcdef0123456789abcdef01234567",
+      "window": {
+        "from": "2026-09-03T00:00:00Z",
+        "until": "2026-10-03T00:00:00Z"
+      }
+    }
+  },
+  {
+    "message_id": "bb69b265-d981-5139-91d8-167d96e3bdb0",
+    "analysis_id": "A123",
+    "type": "CollectRepositoryData",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "owner": "example",
+      "repository": "project",
+      "branch": "main",
+      "revision": "0123456789abcdef0123456789abcdef01234567",
+      "window": {
+        "from": "2026-09-03T00:00:00Z",
+        "until": "2026-10-03T00:00:00Z"
+      },
+      "profile_version": "mvp-v1"
+    }
+  },
+  {
+    "message_id": "477c157c-fcc8-5e45-901e-d372fab183be",
+    "analysis_id": "A123",
+    "type": "AnalyzeRepository",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "github_snapshot_id": "GS123",
+      "sandbox_id": "S123",
+      "sandbox_collection_id": "RC123",
+      "revision": "0123456789abcdef0123456789abcdef01234567",
+      "profile_version": "mvp-v1",
+      "window": {
+        "from": "2026-09-03T00:00:00Z",
+        "until": "2026-10-03T00:00:00Z"
+      }
+    }
+  },
+  {
+    "message_id": "51c02e96-1114-5cb4-9ab4-6fb8a451c160",
+    "analysis_id": "A123",
+    "type": "CalculateScore",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "analysis_snapshot_id": "AS123"
+    }
+  },
+  {
+    "message_id": "39ed1743-b950-5ae4-b017-1fba6b74efed",
+    "analysis_id": "A123",
+    "type": "GenerateRecommendations",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "analysis_snapshot_id": "AS123",
+      "scoring_result_id": "SC123"
+    }
+  },
+  {
+    "message_id": "7c8669a8-4005-5745-80eb-0a0f392d71c8",
+    "analysis_id": "A123",
+    "type": "GenerateReport",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "requester": {
+        "user_id": "U123"
+      },
+      "github_snapshot_id": "GS123",
+      "analysis_snapshot_id": "AS123",
+      "scoring_result_id": "SC123",
+      "recommendation_result_id": "REC123"
+    }
+  },
+  {
+    "message_id": "79bd64c3-09d5-5916-8c36-f684ccc43788",
+    "analysis_id": "A123",
+    "type": "GitHubDataCollectionStarted",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {}
+  },
+  {
+    "message_id": "fe189714-0d2f-5b15-963c-e62c9d636cc8",
+    "analysis_id": "A123",
+    "type": "GitHubDataCollected",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "github_snapshot_id": "GS123"
+    }
+  },
+  {
+    "message_id": "fc79f8d0-c5c8-5e7b-b949-ee52c81dc65c",
+    "analysis_id": "A123",
+    "type": "GitHubDataCollectionFailed",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "attempts": 3,
+      "error_code": "UPSTREAM_TIMEOUT",
+      "error_message": "Stage time budget exceeded"
+    }
+  },
+  {
+    "message_id": "34c085b3-59b6-566d-a458-57442617acf9",
+    "analysis_id": "A123",
+    "type": "RepositoryDataCollectionStarted",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {}
+  },
+  {
+    "message_id": "70b1f9a3-2745-5f15-afd7-dffc391be41b",
+    "analysis_id": "A123",
+    "type": "RepositoryDataCollected",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "sandbox_id": "S123",
+      "collection_id": "RC123",
+      "revision": "0123456789abcdef0123456789abcdef01234567",
+      "branch": "main",
+      "expires_at": "2026-10-03T12:00:00Z"
+    }
+  },
+  {
+    "message_id": "f4a88b8a-d0eb-57e9-89f6-12743bac8108",
+    "analysis_id": "A123",
+    "type": "RepositoryDataCollectionFailed",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "attempts": 3,
+      "error_code": "UPSTREAM_TIMEOUT",
+      "error_message": "Stage time budget exceeded"
+    }
+  },
+  {
+    "message_id": "b85cdf18-1969-5e4f-b75e-99b2c9f04d29",
+    "analysis_id": "A123",
+    "type": "AnalysisStarted",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {}
+  },
+  {
+    "message_id": "1be93be1-674f-56fa-9e8b-b7cbe3acb1ac",
+    "analysis_id": "A123",
+    "type": "AnalysisCompleted",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "analysis_snapshot_id": "AS123"
+    }
+  },
+  {
+    "message_id": "49a35c35-20e3-580d-b4e7-ffe2ac05af2a",
+    "analysis_id": "A123",
+    "type": "AnalysisFailed",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "attempts": 3,
+      "error_code": "UPSTREAM_TIMEOUT",
+      "error_message": "Stage time budget exceeded"
+    }
+  },
+  {
+    "message_id": "012ff8e4-9404-52d8-926a-95b984cd9497",
+    "analysis_id": "A123",
+    "type": "ScoringStarted",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {}
+  },
+  {
+    "message_id": "543aef8e-ecbc-5aa0-be54-b9d05002f4a2",
+    "analysis_id": "A123",
+    "type": "ScoringCompleted",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "scoring_result_id": "SC123"
+    }
+  },
+  {
+    "message_id": "beefb117-fe87-5124-b1d0-8b5d49fe9691",
+    "analysis_id": "A123",
+    "type": "ScoringFailed",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "attempts": 3,
+      "error_code": "UPSTREAM_TIMEOUT",
+      "error_message": "Stage time budget exceeded"
+    }
+  },
+  {
+    "message_id": "8893875d-2da7-5509-a251-e0b184f6773e",
+    "analysis_id": "A123",
+    "type": "RecommendationsStarted",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {}
+  },
+  {
+    "message_id": "6c570dcb-b3f7-5856-8b88-5c2e02a7cc34",
+    "analysis_id": "A123",
+    "type": "RecommendationsGenerated",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "recommendation_result_id": "REC123"
+    }
+  },
+  {
+    "message_id": "5f7e0333-1318-578d-8086-8a048a1b0b11",
+    "analysis_id": "A123",
+    "type": "RecommendationsFailed",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "attempts": 3,
+      "error_code": "UPSTREAM_TIMEOUT",
+      "error_message": "Stage time budget exceeded"
+    }
+  },
+  {
+    "message_id": "7eac683e-110d-5a83-9436-72b3442645dc",
+    "analysis_id": "A123",
+    "type": "ReportGenerationStarted",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {}
+  },
+  {
+    "message_id": "c2d61ab0-af2c-55d4-8376-947925c9b0be",
+    "analysis_id": "A123",
+    "type": "ReportGenerated",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "report_id": "R123"
+    }
+  },
+  {
+    "message_id": "b7d17d0e-bf42-5686-89d1-bf892b2f95c8",
+    "analysis_id": "A123",
+    "type": "ReportGenerationFailed",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "attempts": 3,
+      "error_code": "UPSTREAM_TIMEOUT",
+      "error_message": "Stage time budget exceeded"
+    }
+  },
+  {
+    "message_id": "855b88de-d038-5182-9fd8-7c400eeaf4d7",
+    "analysis_id": "A123",
+    "type": "GitHubDataCollectionProgress",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "progress_percent": 50
+    }
+  },
+  {
+    "message_id": "db3306dd-df64-548d-9b24-2c29cb7b3c58",
+    "analysis_id": "A123",
+    "type": "RepositoryDataCollectionProgress",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "progress_percent": 50
+    }
+  },
+  {
+    "message_id": "97d1eb55-d7f7-5c5a-9d61-3bca58ec6693",
+    "analysis_id": "A123",
+    "type": "AnalysisProgress",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "progress_percent": 50
+    }
+  },
+  {
+    "message_id": "9c741bb5-4d48-53ad-be16-58233d0d7179",
+    "analysis_id": "A123",
+    "type": "GenerateReport",
+    "created_at": "2026-10-03T10:00:00Z",
+    "payload": {
+      "requester": {
+        "guest_session_id": "G123"
+      },
+      "github_snapshot_id": "GS123",
+      "analysis_snapshot_id": "AS123",
+      "scoring_result_id": "SC123",
+      "recommendation_result_id": "REC123"
+    }
+  }
+]

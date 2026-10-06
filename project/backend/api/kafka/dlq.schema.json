@@ -1,0 +1,170 @@
+{
+  "type": "object",
+  "properties": {
+    "original_message": {
+      "type": [
+        "object",
+        "string"
+      ],
+      "description": "Исходный JSON envelope; для неразбираемых сообщений — исходные bytes в base64-строке."
+    },
+    "source_topic": {
+      "enum": [
+        "repopulse.github.commands",
+        "repopulse.sandbox.commands",
+        "repopulse.analysis.commands",
+        "repopulse.scoring.commands",
+        "repopulse.recommendation.commands",
+        "repopulse.report.commands"
+      ]
+    },
+    "source_partition": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "source_offset": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "service": {
+      "enum": [
+        "github",
+        "sandbox",
+        "analysis",
+        "scoring",
+        "recommendation",
+        "report"
+      ]
+    },
+    "attempts": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "failed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(Z|\\+00:00)$"
+    },
+    "error_code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "error_message": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "original_message",
+    "source_topic",
+    "source_partition",
+    "source_offset",
+    "service",
+    "attempts",
+    "failed_at",
+    "error_code",
+    "error_message"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:repopulse:kafka:dlq:v1",
+  "title": "RepoPulse MVP DLQ record",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "service": {
+            "const": "github"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_topic": {
+            "const": "repopulse.github.commands"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "service": {
+            "const": "sandbox"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_topic": {
+            "const": "repopulse.sandbox.commands"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "service": {
+            "const": "analysis"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_topic": {
+            "const": "repopulse.analysis.commands"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "service": {
+            "const": "scoring"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_topic": {
+            "const": "repopulse.scoring.commands"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "service": {
+            "const": "recommendation"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_topic": {
+            "const": "repopulse.recommendation.commands"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "service": {
+            "const": "report"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_topic": {
+            "const": "repopulse.report.commands"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package repopulse.github.v1;
+
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/internal/gen/repopulse/github/v1;githubv1";
+
+import "google/protobuf/timestamp.proto";
+import "repopulse/common/v1/common.proto";
+
+service GitHubAPIService {
+  rpc ResolveRepositoryState(ResolveRepositoryStateRequest) returns (ResolveRepositoryStateResponse);
+  rpc GetGitHubDataSnapshot(GetGitHubDataSnapshotRequest) returns (GitHubDataSnapshot);
+}
+
+message ResolveRepositoryStateRequest { string repository_url = 1; }
+message ResolveRepositoryStateResponse {
+  repopulse.common.v1.Repository repository = 1;
+  string head_sha = 2;
+}
+message GetGitHubDataSnapshotRequest { string github_snapshot_id = 1; }
+
+message GitHubDataSnapshot {
+  string id = 1;
+  string analysis_id = 2;
+  repopulse.common.v1.Repository repository = 3;
+  string repository_revision = 4;
+  repopulse.common.v1.AnalysisWindow window = 5;
+  repeated PullRequest pull_requests = 6;
+  repeated Review reviews = 7;
+  repeated ContributorActivity contributor_activity = 8;
+  repeated Tag tags = 9;
+  repeated Workflow workflows = 10;
+  repeated WorkflowRun workflow_runs = 11;
+  repeated Job jobs = 12;
+  repeated Check checks = 13;
+  BranchPolicies branch_policies = 14;
+  repeated Release releases = 15;
+  repeated CollectionState collection_metadata = 16;
+  google.protobuf.Timestamp collected_at = 17;
+}
+
+message PullRequest {
+  string id = 1;
+  uint64 number = 2;
+  string author = 3;
+  optional string merged_by = 4;
+  string state = 5; // open / closed / merged.
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp merged_at = 7;
+}
+
+message Review {
+  string id = 1;
+  string pull_request_id = 2;
+  string author = 3;
+  string state = 4; // approved / changes_requested / commented / dismissed / pending.
+  google.protobuf.Timestamp submitted_at = 5;
+}
+
+message ContributorActivity {
+  string contributor = 1;
+  optional uint64 commit_count = 2;
+  optional uint64 additions = 3;
+  optional uint64 deletions = 4;
+  // Фактический период источника: он может отличаться от window snapshot.
+  repopulse.common.v1.AnalysisWindow period = 5;
+  repopulse.common.v1.DataStatus status = 6;
+}
+
+message Tag {
+  string name = 1;
+  string revision = 2;
+}
+
+message Workflow {
+  string id = 1;
+  string name = 2;
+  string path = 3;
+  string state = 4;
+}
+
+message WorkflowRun {
+  string id = 1;
+  string workflow_id = 2;
+  string head_sha = 3;
+  string branch = 4;
+  string status = 5;
+  optional string conclusion = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp completed_at = 8;
+}
+
+message Job {
+  string id = 1;
+  string workflow_run_id = 2;
+  string name = 3;
+  string status = 4;
+  optional string conclusion = 5;
+  repeated JobStep steps = 6;
+}
+
+message JobStep {
+  string name = 1;
+  string status = 2;
+  optional string conclusion = 3;
+}
+
+message Check {
+  string id = 1;
+  string name = 2;
+  string head_sha = 3;
+  string status = 4;
+  optional string conclusion = 5;
+}
+
+message BranchPolicies {
+  string branch = 1;
+  repopulse.common.v1.DataStatus status = 2;
+  optional bool require_pull_request = 3;
+  optional uint32 required_approvals = 4;
+  optional bool require_status_checks = 5;
+  repeated string required_checks = 6;
+}
+
+message Release {
+  string id = 1;
+  string tag_name = 2;
+  string name = 3;
+  optional string release_notes = 4;
+  google.protobuf.Timestamp published_at = 5;
+}
+
+message CollectionState {
+  string resource_type = 1;
+  repopulse.common.v1.DataStatus status = 2;
+  bool is_complete = 3;
+  uint64 pages_fetched = 4;
+  uint64 items_fetched = 5;
+  repeated CollectionError errors = 6;
+  google.protobuf.Timestamp collected_at = 7;
+}
+
+message CollectionError {
+  string resource = 1;
+  string endpoint = 2;
+  optional uint32 http_status = 3;
+  string error_code = 4;
+  string message = 5;
+}

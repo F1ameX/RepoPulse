@@ -1,0 +1,105 @@
+syntax = "proto3";
+package repopulse.sandbox.v1;
+
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/internal/gen/repopulse/sandbox/v1;sandboxv1";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "repopulse/common/v1/common.proto";
+
+service RepositorySandboxService {
+  rpc GetRepositoryData(RepositoryCollectionRef)
+      returns (stream RepositoryDataChunk);
+  rpc ReleaseSandbox(ReleaseSandboxRequest)
+      returns (google.protobuf.Empty);
+}
+
+message RepositoryCollectionRef {
+  string analysis_id = 1;
+  string sandbox_id = 2;
+  string collection_id = 3;
+}
+
+message ReleaseSandboxRequest {
+  string analysis_id = 1;
+  string sandbox_id = 2;
+}
+
+message RepositoryDataChunk {
+  uint64 sequence = 1;
+  oneof payload {
+    RepositoryDataHeader header = 2;
+    CommitActivity activity = 3;
+    RepositoryFileFacts file_facts = 4;
+    GitignoreFacts gitignore = 6;
+    SonarScanResult sonar_scan = 7;
+    CollectionSummary summary = 8;
+  }
+}
+
+message RepositoryDataHeader {
+  string collection_id = 1;
+  string analysis_id = 2;
+  string sandbox_id = 3;
+  string revision = 4;
+  string branch = 5;
+  string profile_version = 6;
+  string collector_version = 7;
+  repopulse.common.v1.AnalysisWindow window = 8;
+  google.protobuf.Timestamp collected_at = 9;
+  bool shallow = 10;
+}
+
+message CommitActivity {
+  string date_utc = 1; // YYYY-MM-DD.
+  uint64 commit_count = 2;
+}
+
+enum DetectionState {
+  DETECTION_STATE_UNSPECIFIED = 0;
+  DETECTION_STATE_DETECTED = 1;
+  DETECTION_STATE_NOT_DETECTED = 2;
+  DETECTION_STATE_UNKNOWN = 3;
+  DETECTION_STATE_NOT_APPLICABLE = 4;
+}
+
+message RepositoryFileFacts {
+  optional bool has_readme = 1;
+  optional bool has_docs = 2;
+  optional bool has_supporting_docs = 3;
+  optional bool has_tests = 4; // Найдены тестовые файлы.
+  optional bool has_test_config = 5;
+  optional bool has_ci_config = 6;
+  repeated string documentation_paths = 7;
+  repeated string test_paths = 8;
+  repeated string ci_config_paths = 9;
+  repeated string tracked_env_paths = 10;
+}
+
+message GitignoreFacts {
+  DetectionState file_presence = 1;
+  optional uint64 active_rule_count = 2; // Без пустых строк/комментариев.
+  DetectionState env_ignore_rule = 3; // Семантика Git, не поиск подстроки.
+  repeated string paths = 4; // Проверенные .gitignore относительно корня checkout.
+}
+
+message SonarScanResult {
+  repopulse.common.v1.DataStatus status = 1;
+  string project_key = 2;
+  string ce_task_id = 3; // Идентификатор фоновой задачи SonarQube.
+  string scanner_version = 4;
+  string error_code = 5;
+}
+
+message SectionState {
+  string section = 1;
+  repopulse.common.v1.DataStatus status = 2;
+  uint64 items_examined = 3;
+  uint64 items_skipped = 4;
+  repeated string reason_codes = 5;
+}
+
+message CollectionSummary {
+  repeated SectionState sections = 1;
+  uint64 chunks_before_summary = 2;
+}

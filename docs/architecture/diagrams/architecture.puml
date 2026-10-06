@@ -55,16 +55,16 @@ rectangle "<color:#08427B>RepoPulse — Software System</color>" as repopulse #F
 
     rectangle "Analysis Orchestrator\n\n[Go, gRPC, Kafka]\n\nPipeline и владелец анализа;\nпроверка доступа к статусу" as orchestrator
 
-    queue "Kafka\n\nCommands / Events\n\nanalysis_id\nsnapshot_id\nresult_id" as kafka
+    queue "Kafka\n\nCommands / Events / DLQ\n\nanalysis_id\nsnapshot_id\nresult_id" as kafka
 
 
     rectangle "Auth Service\n\n[Go, gRPC]\n\nLogin, refresh sessions, JWT;\nгостевые сессии и cookie token" as auth
 
     rectangle "GitHub API Service\n\n[Go, gRPC, Kafka]\n\nПолучение и нормализация\nGitHub API данных" as githubService
 
-    rectangle "Repository Sandbox Service\n\n[Go, containerd, gVisor]\n\nИзолированный git clone\nи lifecycle sandbox" as sandbox
+    rectangle "Repository Sandbox Service\n\n[Go, containerd, gVisor]\n\nGit/files collector, SonarScanner\nи lifecycle sandbox" as sandbox
 
-    rectangle "Analysis Service\n\n[Go, gRPC, Kafka]\n\nТехнический анализ,\nRepoPulse analyzers,\nSonarScanner" as analysis
+    rectangle "Analysis Service\n\n[Go, gRPC, Kafka]\n\nАгрегация GitHub, Git/files\nи результатов SonarQube" as analysis
 
     rectangle "Scoring Service\n\n[Go, gRPC, Kafka]\n\nРасчёт category scores\nи Repo Health Score" as scoring
 
@@ -166,7 +166,7 @@ orchestrator <-[norank]-> kafka : → Commands\n← Events
 
 kafka <-[norank]-> githubService : → CollectGitHubData\n← GitHubDataCollected
 
-kafka <-[norank]-> sandbox : → PrepareRepository\n← RepositoryPrepared
+kafka <-[norank]-> sandbox : → CollectRepositoryData\n← RepositoryDataCollected
 
 kafka <-[norank]-> analysis : → AnalyzeRepository\n← AnalysisCompleted
 
@@ -218,10 +218,12 @@ report -[norank]-> recommendation : GetRecommendationResult\ngRPC
 ' Sandbox / Analysis
 ' =====================================================
 
-analysis -[norank]-> sandbox : Repository\nsandbox_id
+analysis -[norank]-> sandbox : GetRepositoryData (collection_id)\nReleaseSandbox · gRPC
 
 
-analysis -[norank]-> sonarqube : SonarScanner\nHTTP
+sandbox -[norank]-> sonarqube : SonarScanner → analysis report\nHTTPS
+
+analysis -[norank]-> sonarqube : Task status / metrics / issues\nHTTPS API
 
 
 ' =====================================================
@@ -284,5 +286,7 @@ orchestrator -[norank]-> elk : Structured JSON logs
 monitoring -[norank]-> orchestrator : Сбор метрик\nHTTP /metrics
 ' Prometheus аналогично опрашивает все backend-сервисы.
 
+
+caption Retry выполняется внутри сервисов. После окончательной ошибки — DLQ и событие Failed.\nDLQ разбирают администраторы; автоматический обработчик и replay не предусмотрены.
 
 @enduml

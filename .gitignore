@@ -5,3 +5,4 @@ project/backend/.env.*
 project/backend/bin/
 project/backend/coverage.out
 project/backend/*.test
+.DS_Store

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package repopulse.scoring.v1;
+
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/internal/gen/repopulse/scoring/v1;scoringv1";
+
+import "google/protobuf/timestamp.proto";
+import "repopulse/common/v1/common.proto";
+
+service ScoringService {
+  rpc GetScoringResult(GetScoringResultRequest) returns (ScoringResult);
+}
+message GetScoringResultRequest { string scoring_result_id = 1; }
+
+message ScoringResult {
+  string id = 1;
+  string analysis_id = 2;
+  string analysis_snapshot_id = 3;
+  optional double overall_score = 4; // 0..100; отсутствует при недостатке данных.
+  repeated CategoryScore category_scores = 5;
+  string explanation = 6;
+  string model_version = 7;
+  string prompt_version = 8;
+  string schema_version = 9;
+  google.protobuf.Timestamp created_at = 10;
+}
+
+message CategoryScore {
+  string category = 1;
+  optional double score = 2; // 0..100; отсутствие не заменяется нулём.
+  string explanation = 3;
+  repopulse.common.v1.DataStatus status = 4;
+}
