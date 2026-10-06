@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package repopulse.auth.v1;
+
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/internal/gen/repopulse/auth/v1;authv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Внутренний gRPC-интерфейс для API Service.
+// Ошибки возвращаются стандартным gRPC status, а не полями response.
+service AuthService {
+  // Создаёт гостевую сессию. API устанавливает guest_token в HttpOnly cookie.
+  rpc CreateGuestSession(CreateGuestSessionRequest)
+      returns (CreateGuestSessionResponse);
+
+  // INVALID_ARGUMENT: некорректные login/password.
+  // ALREADY_EXISTS: login уже занят.
+  rpc Register(RegisterRequest)
+      returns (RegisterResponse);
+
+  // INVALID_ARGUMENT: некорректные login/password.
+  // UNAUTHENTICATED: неверные учётные данные.
+  rpc Login(LoginRequest)
+      returns (LoginResponse);
+
+  // INVALID_ARGUMENT: отсутствует refresh_token.
+  // UNAUTHENTICATED: токен неизвестен, истёк или его сессия отозвана.
+  rpc Refresh(RefreshRequest)
+      returns (RefreshResponse);
+}
+
+message CreateGuestSessionRequest {}
+
+message CreateGuestSessionResponse {
+  // Подписанный JWT с principal_type=guest; не возвращается frontend в JSON.
+  string guest_token = 1;
+  // Обязательное время UTC, совпадающее с exp гостевого JWT и сроком cookie.
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message RegisterRequest {
+  string login = 1;
+  string password = 2;
+}
+
+message RegisterResponse {
+  string user_id = 1;
+}
+
+message LoginRequest {
+  string login = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  // Пользовательский access JWT с principal_type=user.
+  string access_token = 1;
+  string refresh_token = 2;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message RefreshResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+}

@@ -1,0 +1,77 @@
+{
+  "key": "analysis_id",
+  "delivery": "at_least_once",
+  "commands": {
+    "repopulse.github.commands": [
+      "CollectGitHubData"
+    ],
+    "repopulse.sandbox.commands": [
+      "CollectRepositoryData"
+    ],
+    "repopulse.analysis.commands": [
+      "AnalyzeRepository"
+    ],
+    "repopulse.scoring.commands": [
+      "CalculateScore"
+    ],
+    "repopulse.recommendation.commands": [
+      "GenerateRecommendations"
+    ],
+    "repopulse.report.commands": [
+      "GenerateReport"
+    ]
+  },
+  "events": {
+    "repopulse.analysis.events": [
+      "GitHubDataCollectionStarted",
+      "GitHubDataCollected",
+      "GitHubDataCollectionFailed",
+      "RepositoryDataCollectionStarted",
+      "RepositoryDataCollected",
+      "RepositoryDataCollectionFailed",
+      "AnalysisStarted",
+      "AnalysisCompleted",
+      "AnalysisFailed",
+      "ScoringStarted",
+      "ScoringCompleted",
+      "ScoringFailed",
+      "RecommendationsStarted",
+      "RecommendationsGenerated",
+      "RecommendationsFailed",
+      "ReportGenerationStarted",
+      "ReportGenerated",
+      "ReportGenerationFailed",
+      "GitHubDataCollectionProgress",
+      "RepositoryDataCollectionProgress",
+      "AnalysisProgress"
+    ]
+  },
+  "dlq": {
+    "repopulse.github.commands.dlq": {
+      "service": "github",
+      "source_topic": "repopulse.github.commands"
+    },
+    "repopulse.sandbox.commands.dlq": {
+      "service": "sandbox",
+      "source_topic": "repopulse.sandbox.commands"
+    },
+    "repopulse.analysis.commands.dlq": {
+      "service": "analysis",
+      "source_topic": "repopulse.analysis.commands"
+    },
+    "repopulse.scoring.commands.dlq": {
+      "service": "scoring",
+      "source_topic": "repopulse.scoring.commands"
+    },
+    "repopulse.recommendation.commands.dlq": {
+      "service": "recommendation",
+      "source_topic": "repopulse.recommendation.commands"
+    },
+    "repopulse.report.commands.dlq": {
+      "service": "report",
+      "source_topic": "repopulse.report.commands"
+    }
+  },
+  "retry_topics": [],
+  "automatic_dlq_consumer": false
+}

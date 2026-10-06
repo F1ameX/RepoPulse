@@ -1,6 +1,3 @@
-Компактный отчёт MVP. Источник примера: [report.json](../../project/backend/api/examples/report.json).
-
-```json
 {
   "report_id": "R123",
   "analysis_id": "A123",
@@ -135,4 +132,3 @@
   "generated_at": "2026-10-03T10:03:00Z",
   "schema_version": "1.0.0"
 }
-```

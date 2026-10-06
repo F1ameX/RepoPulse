@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package repopulse.analysis.v1;
+
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/internal/gen/repopulse/analysis/v1;analysisv1";
+
+import "google/protobuf/timestamp.proto";
+import "repopulse/common/v1/common.proto";
+
+service AnalysisService {
+  rpc GetAnalysisSnapshot(GetAnalysisSnapshotRequest) returns (AnalysisSnapshot);
+}
+message GetAnalysisSnapshotRequest { string analysis_snapshot_id = 1; }
+
+message AnalysisSnapshot {
+  string id = 1;
+  string analysis_id = 2;
+  string github_snapshot_id = 3;
+  string sandbox_collection_id = 4;
+  string repository_revision = 5;
+  string collector_profile_version = 6;
+  repopulse.common.v1.AnalysisWindow window = 7;
+  repeated Metric metrics = 8;
+  repeated Finding findings = 9;
+  repeated Observation observations = 10;
+  repopulse.common.v1.Completeness completeness = 11;
+  google.protobuf.Timestamp created_at = 12;
+  optional string sonar_project_key = 13;
+  optional string sonar_analysis_id = 14;
+}
+
+message Metric {
+  string name = 1;
+  string category = 2;
+  string source = 3;
+  oneof value {
+    double numeric_value = 4;
+    string text_value = 5;
+    bool bool_value = 6;
+  }
+  repopulse.common.v1.DataStatus status = 7;
+}
+
+message Finding {
+  string id = 1;
+  string category = 2;
+  repopulse.common.v1.Severity severity = 3;
+  string source = 4;
+  string message = 5;
+  optional string file_path = 6;
+  optional uint32 line = 7;
+}
+
+message Observation {
+  string id = 1;
+  string category = 2;
+  string source = 3;
+  string description = 4;
+}

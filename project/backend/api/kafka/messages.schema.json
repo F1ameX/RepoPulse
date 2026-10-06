@@ -1,0 +1,1325 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:repopulse:kafka:messages:v1",
+  "title": "RepoPulse MVP Kafka messages",
+  "description": "Kafka key = analysis_id. Окно from < until проверяется обработчиком. Полные результаты и credentials не передаются.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Command"
+    },
+    {
+      "$ref": "#/$defs/Event"
+    }
+  ],
+  "$defs": {
+    "Requester": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "user_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "user_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "guest_session_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "guest_session_id"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AnalysisWindow": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        }
+      },
+      "required": [
+        "from",
+        "until"
+      ],
+      "additionalProperties": false
+    },
+    "FailurePayload": {
+      "type": "object",
+      "properties": {
+        "attempts": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "error_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "error_message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "attempts",
+        "error_code",
+        "error_message"
+      ],
+      "additionalProperties": false
+    },
+    "CollectGitHubData": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "CollectGitHubData"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1
+            },
+            "revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "window": {
+              "$ref": "#/$defs/AnalysisWindow"
+            }
+          },
+          "required": [
+            "owner",
+            "repository",
+            "branch",
+            "revision",
+            "window"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "CollectRepositoryData": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "CollectRepositoryData"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1
+            },
+            "revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "window": {
+              "$ref": "#/$defs/AnalysisWindow"
+            },
+            "profile_version": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "owner",
+            "repository",
+            "branch",
+            "revision",
+            "window",
+            "profile_version"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "AnalyzeRepository": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "AnalyzeRepository"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "github_snapshot_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sandbox_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sandbox_collection_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "profile_version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "window": {
+              "$ref": "#/$defs/AnalysisWindow"
+            }
+          },
+          "required": [
+            "github_snapshot_id",
+            "sandbox_id",
+            "sandbox_collection_id",
+            "revision",
+            "profile_version",
+            "window"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "CalculateScore": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "CalculateScore"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "analysis_snapshot_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "analysis_snapshot_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "GenerateRecommendations": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "GenerateRecommendations"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "analysis_snapshot_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scoring_result_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "analysis_snapshot_id",
+            "scoring_result_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "GenerateReport": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "GenerateReport"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "requester": {
+              "$ref": "#/$defs/Requester"
+            },
+            "github_snapshot_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "analysis_snapshot_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scoring_result_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "recommendation_result_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "requester",
+            "github_snapshot_id",
+            "analysis_snapshot_id",
+            "scoring_result_id",
+            "recommendation_result_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "GitHubDataCollectionStarted": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "GitHubDataCollectionStarted"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "GitHubDataCollected": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "GitHubDataCollected"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "github_snapshot_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "github_snapshot_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "GitHubDataCollectionFailed": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "GitHubDataCollectionFailed"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "$ref": "#/$defs/FailurePayload"
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RepositoryDataCollectionStarted": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "RepositoryDataCollectionStarted"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RepositoryDataCollected": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "RepositoryDataCollected"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "sandbox_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "collection_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expires_at": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(Z|\\+00:00)$"
+            }
+          },
+          "required": [
+            "sandbox_id",
+            "collection_id",
+            "revision",
+            "branch",
+            "expires_at"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RepositoryDataCollectionFailed": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "RepositoryDataCollectionFailed"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "$ref": "#/$defs/FailurePayload"
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisStarted": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "AnalysisStarted"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisCompleted": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "AnalysisCompleted"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "analysis_snapshot_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "analysis_snapshot_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisFailed": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "AnalysisFailed"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "$ref": "#/$defs/FailurePayload"
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "ScoringStarted": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "ScoringStarted"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "ScoringCompleted": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "ScoringCompleted"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "scoring_result_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "scoring_result_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "ScoringFailed": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "ScoringFailed"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "$ref": "#/$defs/FailurePayload"
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RecommendationsStarted": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "RecommendationsStarted"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RecommendationsGenerated": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "RecommendationsGenerated"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "recommendation_result_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "recommendation_result_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RecommendationsFailed": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "RecommendationsFailed"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "$ref": "#/$defs/FailurePayload"
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "ReportGenerationStarted": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "ReportGenerationStarted"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "ReportGenerated": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "ReportGenerated"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "report_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "report_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "ReportGenerationFailed": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "ReportGenerationFailed"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "$ref": "#/$defs/FailurePayload"
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "GitHubDataCollectionProgress": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "GitHubDataCollectionProgress"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "progress_percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "progress_percent"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "RepositoryDataCollectionProgress": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "RepositoryDataCollectionProgress"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "progress_percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "progress_percent"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisProgress": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "analysis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "AnalysisProgress"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "progress_percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "progress_percent"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "message_id",
+        "analysis_id",
+        "type",
+        "created_at",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    "Command": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CollectGitHubData"
+        },
+        {
+          "$ref": "#/$defs/CollectRepositoryData"
+        },
+        {
+          "$ref": "#/$defs/AnalyzeRepository"
+        },
+        {
+          "$ref": "#/$defs/CalculateScore"
+        },
+        {
+          "$ref": "#/$defs/GenerateRecommendations"
+        },
+        {
+          "$ref": "#/$defs/GenerateReport"
+        }
+      ]
+    },
+    "Event": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/GitHubDataCollectionStarted"
+        },
+        {
+          "$ref": "#/$defs/GitHubDataCollected"
+        },
+        {
+          "$ref": "#/$defs/GitHubDataCollectionFailed"
+        },
+        {
+          "$ref": "#/$defs/RepositoryDataCollectionStarted"
+        },
+        {
+          "$ref": "#/$defs/RepositoryDataCollected"
+        },
+        {
+          "$ref": "#/$defs/RepositoryDataCollectionFailed"
+        },
+        {
+          "$ref": "#/$defs/AnalysisStarted"
+        },
+        {
+          "$ref": "#/$defs/AnalysisCompleted"
+        },
+        {
+          "$ref": "#/$defs/AnalysisFailed"
+        },
+        {
+          "$ref": "#/$defs/ScoringStarted"
+        },
+        {
+          "$ref": "#/$defs/ScoringCompleted"
+        },
+        {
+          "$ref": "#/$defs/ScoringFailed"
+        },
+        {
+          "$ref": "#/$defs/RecommendationsStarted"
+        },
+        {
+          "$ref": "#/$defs/RecommendationsGenerated"
+        },
+        {
+          "$ref": "#/$defs/RecommendationsFailed"
+        },
+        {
+          "$ref": "#/$defs/ReportGenerationStarted"
+        },
+        {
+          "$ref": "#/$defs/ReportGenerated"
+        },
+        {
+          "$ref": "#/$defs/ReportGenerationFailed"
+        },
+        {
+          "$ref": "#/$defs/GitHubDataCollectionProgress"
+        },
+        {
+          "$ref": "#/$defs/RepositoryDataCollectionProgress"
+        },
+        {
+          "$ref": "#/$defs/AnalysisProgress"
+        }
+      ]
+    }
+  }
+}

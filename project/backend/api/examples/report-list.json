@@ -1,0 +1,17 @@
+{
+  "reports": [
+    {
+      "report_id": "R123",
+      "analysis_id": "A123",
+      "repository": {
+        "owner": "example",
+        "name": "project"
+      },
+      "overall_score": 75,
+      "generated_at": "2026-10-03T10:03:00Z"
+    }
+  ],
+  "total_count": 1,
+  "limit": 20,
+  "offset": 0
+}

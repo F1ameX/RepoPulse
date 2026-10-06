@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "$id": "urn:repopulse:llm:recommendations:v1",
+  "title": "Recommendations LLM output",
+  "properties": {
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "priority": {
+            "enum": [
+              "info",
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expected_effect": {
+            "type": "string",
+            "minLength": 1
+          },
+          "complexity": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ]
+          },
+          "related_finding_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "priority",
+          "action",
+          "expected_effect",
+          "complexity",
+          "related_finding_ids"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "recommendations"
+  ]
+}

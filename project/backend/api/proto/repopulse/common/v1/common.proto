@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package repopulse.common.v1;
+
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/internal/gen/repopulse/common/v1;commonv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Контекст инициатора, сформированный API из проверенных credentials.
+// Получатель проверяет, что выбрана ровно одна identity и её ID непустой:
+// protobuf oneof допускает отсутствие выбранного поля.
+message Requester {
+  oneof identity {
+    string user_id = 1;
+    string guest_session_id = 2;
+  }
+}
+
+// Окно UTC фиксируется Orchestrator один раз; from < until, until исключён.
+message AnalysisWindow {
+  google.protobuf.Timestamp from = 1;
+  google.protobuf.Timestamp until = 2;
+}
+
+message RepositoryRef {
+  string owner = 1;
+  string name = 2;
+}
+
+message Repository {
+  string owner = 1;
+  string name = 2;
+  string canonical_url = 3;
+  string default_branch = 4;
+  optional string description = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  google.protobuf.Timestamp pushed_at = 7;
+}
+
+enum DataStatus {
+  DATA_STATUS_UNSPECIFIED = 0;
+  DATA_STATUS_COMPLETE = 1;
+  DATA_STATUS_PARTIAL = 2;
+  DATA_STATUS_UNAVAILABLE = 3;
+  DATA_STATUS_NOT_APPLICABLE = 4;
+}
+
+message SourceCollectionState {
+  string source = 1; // github / sandbox / sonarqube.
+  string section = 2;
+  DataStatus status = 3;
+  repeated string reason_codes = 4;
+  google.protobuf.Timestamp collected_at = 5;
+}
+
+message Completeness {
+  repeated SourceCollectionState sections = 1;
+}
+
+enum AnalysisStatus {
+  ANALYSIS_STATUS_UNSPECIFIED = 0;
+  ANALYSIS_STATUS_QUEUED = 1;
+  ANALYSIS_STATUS_RUNNING = 2;
+  ANALYSIS_STATUS_COMPLETED = 3;
+  ANALYSIS_STATUS_FAILED = 4;
+}
+
+enum AnalysisStage {
+  ANALYSIS_STAGE_UNSPECIFIED = 0;
+  ANALYSIS_STAGE_PREPARING = 1;
+  ANALYSIS_STAGE_COLLECTING = 2;
+  ANALYSIS_STAGE_ANALYZING = 3;
+  ANALYSIS_STAGE_SCORING = 4;
+  ANALYSIS_STAGE_RECOMMENDING = 5;
+  ANALYSIS_STAGE_REPORTING = 6;
+}
+
+enum StepStatus {
+  STEP_STATUS_UNSPECIFIED = 0;
+  STEP_STATUS_PENDING = 1;
+  STEP_STATUS_RUNNING = 2;
+  STEP_STATUS_COMPLETED = 3;
+  STEP_STATUS_FAILED = 4;
+}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_INFO = 1;
+  SEVERITY_LOW = 2;
+  SEVERITY_MEDIUM = 3;
+  SEVERITY_HIGH = 4;
+  SEVERITY_CRITICAL = 5;
+}
+
+enum Priority {
+  PRIORITY_UNSPECIFIED = 0;
+  PRIORITY_INFO = 1;
+  PRIORITY_LOW = 2;
+  PRIORITY_MEDIUM = 3;
+  PRIORITY_HIGH = 4;
+  PRIORITY_CRITICAL = 5;
+}
+
+enum Complexity {
+  COMPLEXITY_UNSPECIFIED = 0;
+  COMPLEXITY_SMALL = 1;
+  COMPLEXITY_MEDIUM = 2;
+  COMPLEXITY_LARGE = 3;
+}
