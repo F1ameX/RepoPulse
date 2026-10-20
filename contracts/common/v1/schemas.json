@@ -1,0 +1,1102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RepoPulse common v1",
+  "$defs": {
+    "Owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Неизменяемый вид владельца.",
+          "enum": [
+            "account",
+            "guest"
+          ],
+          "x-storage": "auth.principals.kind"
+        },
+        "id": {
+          "type": "string",
+          "description": "Серверный principal_id; никогда не принимается от браузера.",
+          "format": "uuid",
+          "x-storage": "analyzer.analyses.owner_id"
+        }
+      },
+      "x-internal": true
+    },
+    "VerifiedContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Минимум один контекст действителен. Для нового запуска приоритет аккаунту; чтение допускает исходный guest при одновременном account. Только доверенные внутренние вызовы.",
+      "required": [
+        "user_id",
+        "guest_session_id",
+        "account_expires_at",
+        "guest_expires_at"
+      ],
+      "properties": {
+        "user_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Действующий аккаунт, проверен Auth.",
+          "format": "uuid"
+        },
+        "guest_session_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Одновременно действующий исходный гостевой контекст.",
+          "format": "uuid"
+        },
+        "account_expires_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Фиксированный срок аккаунта в UTC; отсутствует, если user_id отсутствует.",
+          "format": "date-time"
+        },
+        "guest_expires_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Срок исходной гостевой сессии в UTC; отсутствует, если guest_session_id отсутствует.",
+          "format": "date-time"
+        }
+      },
+      "x-internal": true,
+      "anyOf": [
+        {
+          "properties": {
+            "user_id": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "properties": {
+            "guest_session_id": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "user_id": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "account_expires_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "account_expires_at": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "guest_session_id": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "guest_expires_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "guest_expires_at": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "FieldError": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "field",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "repository_url/login/password/request_id"
+        },
+        "code": {
+          "type": "string",
+          "description": "Стабильный код первой ошибки поля."
+        },
+        "message": {
+          "type": "string",
+          "description": "Безопасное сообщение; не содержит введённый пароль."
+        }
+      }
+    },
+    "ApiError": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "code",
+        "message",
+        "trace_id",
+        "field_errors"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Стабильный UPPER_SNAKE_CASE код; см. errors.md.",
+          "enum": [
+            "VALIDATION_FAILED",
+            "URL_REQUIRED",
+            "URL_TOO_LONG",
+            "INVALID_REPOSITORY_URL",
+            "UNSUPPORTED_PLATFORM",
+            "REPOSITORY_NOT_FOUND_OR_PRIVATE",
+            "REPOSITORY_CHECK_FAILED",
+            "SUBMISSION_CHANGED",
+            "SUBMISSION_PENDING",
+            "SESSION_REQUIRED",
+            "SESSION_EXPIRED",
+            "LOGIN_REQUIRED",
+            "INVALID_CREDENTIALS",
+            "LOGIN_TAKEN",
+            "ANALYSIS_NOT_FOUND",
+            "REPORT_NOT_FOUND",
+            "UPSTREAM_RATE_LIMITED",
+            "UPSTREAM_TIMEOUT",
+            "BUDGET_EXCEEDED",
+            "ANALYSIS_FAILED",
+            "REPORT_SAVE_FAILED",
+            "CSRF_REJECTED",
+            "INTERNAL_ERROR",
+            "METHOD_NOT_ALLOWED",
+            "NOT_IMPLEMENTED",
+            "NOT_FOUND"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "Безопасное пользовательское сообщение."
+        },
+        "trace_id": {
+          "type": "string",
+          "description": "Диагностический идентификатор; не ключ идемпотентности."
+        },
+        "field_errors": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/FieldError"
+          },
+          "description": "Ошибки отдельных полей; пустой список при общей ошибке."
+        }
+      }
+    },
+    "ErrorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "$ref": "schemas.json#/$defs/ApiError",
+          "description": "Безопасная структурированная ошибка ApiError; null при отсутствии ошибки."
+        }
+      }
+    },
+    "Empty": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [],
+      "properties": {}
+    },
+    "Repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "platform",
+        "github_id",
+        "canonical_url",
+        "owner",
+        "name",
+        "default_branch",
+        "commit_sha"
+      ],
+      "properties": {
+        "platform": {
+          "type": "string",
+          "description": "Поддерживаемая платформа репозитория: github.",
+          "enum": [
+            "github"
+          ],
+          "x-storage": "analyzer.analyses.repository.platform"
+        },
+        "github_id": {
+          "type": "string",
+          "description": "Постоянный ID GitHub как строка.",
+          "x-storage": "analyzer.analyses.repository.github_id"
+        },
+        "canonical_url": {
+          "type": "string",
+          "description": "https://github.com/{owner}/{repository}, lowercase, без .git и / на конце.",
+          "format": "uri",
+          "x-storage": "analyzer.analyses.canonical_url"
+        },
+        "owner": {
+          "type": "string",
+          "description": "Подтверждённый владелец GitHub; не владелец анализа.",
+          "x-storage": "analyzer.analyses.repository / analyzer.snapshots.payload.repository / report.reports.payload.repository → owner"
+        },
+        "name": {
+          "type": "string",
+          "description": "Подтверждённое отображаемое имя GitHub.",
+          "x-storage": "analyzer.analyses.repository / analyzer.snapshots.payload.repository / report.reports.payload.repository → name"
+        },
+        "default_branch": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Неизвестная ветка = null.",
+          "x-storage": "analyzer.analyses.repository / analyzer.snapshots.payload.repository / report.reports.payload.repository → default_branch"
+        },
+        "commit_sha": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Зафиксированный SHA; неизвестный/пустой репозиторий=null.",
+          "pattern": "^[0-9a-f]{40}$",
+          "x-storage": "analyzer.analyses.repository / analyzer.snapshots.payload.repository / report.reports.payload.repository → commit_sha"
+        }
+      }
+    },
+    "Window": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "from",
+        "until"
+      ],
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "Включённая нижняя граница, t−140 дней.",
+          "format": "date-time",
+          "x-storage": "analyzer.analyses.window_from/window_until / analyzer.snapshots.payload.window / report.reports.payload.window → from"
+        },
+        "until": {
+          "type": "string",
+          "description": "Исключённая верхняя граница, t. UTC, from < until.",
+          "format": "date-time",
+          "x-storage": "analyzer.analyses.window_from/window_until / analyzer.snapshots.payload.window / report.reports.payload.window → until"
+        }
+      }
+    },
+    "Versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Версии фиксируются в момент принятия и сохраняются, не подставляются текущие при чтении.",
+      "required": [
+        "schema",
+        "methodology",
+        "scoring_config",
+        "collector_profile",
+        "secret_rules",
+        "recommendation_catalog",
+        "explanation_schema",
+        "prompt"
+      ],
+      "properties": {
+        "schema": {
+          "type": "string",
+          "description": "mvp-contract-1.1.0",
+          "x-storage": "analyzer.analyses.versions / analyzer.snapshots.payload.versions / report.reports.payload.versions → schema"
+        },
+        "methodology": {
+          "type": "string",
+          "description": "rhs-mvp-1.1.0",
+          "x-storage": "analyzer.analyses.versions / analyzer.snapshots.payload.versions / report.reports.payload.versions → methodology"
+        },
+        "scoring_config": {
+          "type": "string",
+          "description": "rhs-mvp-1.1.0",
+          "x-storage": "analyzer.analyses.versions / analyzer.snapshots.payload.versions / report.reports.payload.versions → scoring_config"
+        },
+        "collector_profile": {
+          "type": "string",
+          "description": "github-mvp-1.1.0",
+          "x-storage": "analyzer.analyses.versions / analyzer.snapshots.payload.versions / report.reports.payload.versions → collector_profile"
+        },
+        "secret_rules": {
+          "type": "string",
+          "description": "secrets-mvp-1.0.0",
+          "x-storage": "analyzer.analyses.versions / analyzer.snapshots.payload.versions / report.reports.payload.versions → secret_rules"
+        },
+        "recommendation_catalog": {
+          "type": "string",
+          "description": "recommendations-mvp-1.0.0",
+          "x-storage": "analyzer.analyses.versions / analyzer.snapshots.payload.versions / report.reports.payload.versions → recommendation_catalog"
+        },
+        "explanation_schema": {
+          "type": "string",
+          "description": "Версия конечной схемы выбора вариантов.",
+          "x-storage": "analyzer.analyses.versions / analyzer.snapshots.payload.versions / report.reports.payload.versions → explanation_schema"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Версия параметров выбора объяснений.",
+          "x-storage": "analyzer.analyses.versions / analyzer.snapshots.payload.versions / report.reports.payload.versions → prompt"
+        }
+      }
+    },
+    "Reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "code",
+        "message",
+        "cannot_conclude"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "rate_limited/timeout/insufficient_permissions/unsupported_format/volume_limit/incomplete_sample/empty_sample/not_applicable/unknown и конкретные budget codes.",
+          "x-storage": "analyzer.snapshots.payload / report.reports.payload (reason) → code"
+        },
+        "message": {
+          "type": "string",
+          "description": "Безопасное объяснение причины.",
+          "x-storage": "analyzer.snapshots.payload / report.reports.payload (reason) → message"
+        },
+        "cannot_conclude": {
+          "type": "string",
+          "description": "Какой вывод нельзя сделать при этом ограничении.",
+          "x-storage": "analyzer.snapshots.payload / report.reports.payload (reason) → cannot_conclude"
+        }
+      }
+    },
+    "Sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "collected",
+        "total",
+        "numerator",
+        "denominator",
+        "excluded",
+        "excluded_reason"
+      ],
+      "properties": {
+        "collected": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Известное число полученных объектов; неизвестно=null.",
+          "minimum": 0,
+          "x-storage": "analyzer.snapshots.payload.inputs[].sample / report.reports.payload.categories[].metrics[].input.sample → collected"
+        },
+        "total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Полный размер только если известен.",
+          "minimum": 0,
+          "x-storage": "analyzer.snapshots.payload.inputs[].sample / report.reports.payload.categories[].metrics[].input.sample → total"
+        },
+        "numerator": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Известный числитель доли; null при отсутствии данных.",
+          "minimum": 0,
+          "x-storage": "analyzer.snapshots.payload.inputs[].sample / report.reports.payload.categories[].metrics[].input.sample → numerator"
+        },
+        "denominator": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Известный знаменатель доли; null при отсутствии данных. Пустая выборка не равна успешной проверке.",
+          "minimum": 0,
+          "x-storage": "analyzer.snapshots.payload.inputs[].sample / report.reports.payload.categories[].metrics[].input.sample → denominator"
+        },
+        "excluded": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Число исключённых элементов; null, если число не установлено.",
+          "minimum": 0,
+          "x-storage": "analyzer.snapshots.payload.inputs[].sample / report.reports.payload.categories[].metrics[].input.sample → excluded"
+        },
+        "excluded_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Причина исключения элементов; null, если исключений нет или причина неприменима.",
+          "x-storage": "analyzer.snapshots.payload.inputs[].sample / report.reports.payload.categories[].metrics[].input.sample → excluded_reason"
+        }
+      }
+    },
+    "SourceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "partial/unavailable/not_applicable требуют reason; complete не означает применимость любой формулы.",
+      "required": [
+        "source",
+        "scope",
+        "status",
+        "reason",
+        "sample",
+        "obtained_at",
+        "fingerprint"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Идентификатор источника данных: Git, GitHub API, OSV либо соответствующий адаптер.",
+          "enum": [
+            "git",
+            "github",
+            "osv"
+          ],
+          "x-storage": "analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → source"
+        },
+        "scope": {
+          "type": "string",
+          "description": "tree/activity_history/secret_history/actions/branch_rules/dependencies/osv.",
+          "x-storage": "analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → scope"
+        },
+        "status": {
+          "type": "string",
+          "description": "Полнота данных источника: complete, partial, unavailable или not_applicable.",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_applicable"
+          ],
+          "x-storage": "analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → status"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "schemas.json#/$defs/Reason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-storage": "analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → reason",
+          "description": "Причина partial/unavailable/not_applicable и границы допустимых выводов; null, если не требуется."
+        },
+        "sample": {
+          "$ref": "schemas.json#/$defs/Sample",
+          "x-storage": "analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → sample",
+          "description": "Фактический объём и границы выборки, числитель, знаменатель и исключения."
+        },
+        "obtained_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Время получения этих данных от источника в UTC.",
+          "format": "date-time",
+          "x-storage": "analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → obtained_at"
+        },
+        "fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Отпечаток сохранённых входов. Сам по себе не доказывает актуальность внешнего источника.",
+          "x-storage": "analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → fingerprint"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "partial",
+                  "unavailable",
+                  "not_applicable"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "$ref": "schemas.json#/$defs/Reason"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "GitRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "name",
+        "object_sha"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Полный refs/heads/... либо refs/tags/...",
+          "x-storage": "analyzer.snapshots.payload.refs[] → name"
+        },
+        "object_sha": {
+          "type": "string",
+          "description": "Объявленный SHA объекта; для annotated tag хранится tag object.",
+          "pattern": "^[0-9a-f]{40}$",
+          "x-storage": "analyzer.snapshots.payload.refs[] → object_sha"
+        }
+      }
+    },
+    "DependencyOrigin": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "manifest_path",
+        "version_source"
+      ],
+      "properties": {
+        "manifest_path": {
+          "type": "string",
+          "description": "Путь корневого манифеста либо lock-файла.",
+          "x-storage": "analyzer.snapshot_dependencies.origins[] → manifest_path"
+        },
+        "version_source": {
+          "type": "string",
+          "description": "npm lock / Maven declaration либо dependencyManagement с локальными properties / Go require.",
+          "x-storage": "analyzer.snapshot_dependencies.origins[] → version_source"
+        }
+      }
+    },
+    "Dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Уникальность зависимости по (ecosystem, package, version). Общий лимит 20 на три экосистемы.",
+      "required": [
+        "ecosystem",
+        "package",
+        "version",
+        "manifest_path",
+        "version_source",
+        "origins"
+      ],
+      "properties": {
+        "ecosystem": {
+          "type": "string",
+          "description": "Экосистема пакета с точным регистром: npm, Maven или Go.",
+          "enum": [
+            "npm",
+            "Maven",
+            "Go"
+          ],
+          "x-storage": "analyzer.snapshot_dependencies.ecosystem"
+        },
+        "package": {
+          "type": "string",
+          "description": "npm: scope/name; Maven: groupId:artifactId; Go: полный module path.",
+          "x-storage": "analyzer.snapshot_dependencies.package"
+        },
+        "version": {
+          "type": "string",
+          "description": "Конкретная разрешённая либо объявленная версия.",
+          "x-storage": "analyzer.snapshot_dependencies.version"
+        },
+        "manifest_path": {
+          "type": "string",
+          "description": "Основное основание.",
+          "x-storage": "analyzer.snapshot_dependencies.origins"
+        },
+        "version_source": {
+          "type": "string",
+          "description": "Источник версии, декларация не означает разрешённый состав сборки.",
+          "x-storage": "analyzer.snapshot_dependencies.origins"
+        },
+        "origins": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/DependencyOrigin"
+          },
+          "description": "Все основания при дедупликации одного ecosystem/package/version.",
+          "minItems": 1,
+          "x-storage": "analyzer.snapshot_dependencies + analyzer.snapshots.payload.dependencies[] / report.reports.payload.dependencies[] → origins"
+        }
+      }
+    },
+    "Vulnerability": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Дедупликация по vulnerability_id/ecosystem/package/version; исходные подтверждённые находки сохраняются даже при неполном агрегате.",
+      "required": [
+        "vulnerability_id",
+        "ecosystem",
+        "package",
+        "version",
+        "severity",
+        "obtained_at",
+        "evidence_url"
+      ],
+      "properties": {
+        "vulnerability_id": {
+          "type": "string",
+          "description": "Стабильный идентификатор OSV.",
+          "x-storage": "analyzer.snapshot_vulnerabilities / analyzer.snapshots.payload.vulnerabilities[] / report.reports.payload.findings[].vulnerabilities[] → vulnerability_id"
+        },
+        "ecosystem": {
+          "type": "string",
+          "description": "Экосистема пакета с точным регистром: npm, Maven или Go.",
+          "enum": [
+            "npm",
+            "Maven",
+            "Go"
+          ],
+          "x-storage": "analyzer.snapshot_vulnerabilities / analyzer.snapshots.payload.vulnerabilities[] / report.reports.payload.findings[].vulnerabilities[] → ecosystem"
+        },
+        "package": {
+          "type": "string",
+          "description": "Идентификатор пакета в его экосистеме; Maven использует groupId:artifactId.",
+          "x-storage": "analyzer.snapshot_vulnerabilities / analyzer.snapshots.payload.vulnerabilities[] / report.reports.payload.findings[].vulnerabilities[] → package"
+        },
+        "version": {
+          "type": "string",
+          "description": "Конкретная версия пакета, используемая для запроса OSV и идентичности зависимости.",
+          "x-storage": "analyzer.snapshot_vulnerabilities / analyzer.snapshots.payload.vulnerabilities[] / report.reports.payload.findings[].vulnerabilities[] → version"
+        },
+        "severity": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Неизвестный уровень = null; полный SEC_VULN_RISK тогда N/A.",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            null
+          ],
+          "x-storage": "analyzer.snapshot_vulnerabilities / analyzer.snapshots.payload.vulnerabilities[] / report.reports.payload.findings[].vulnerabilities[] → severity"
+        },
+        "obtained_at": {
+          "type": "string",
+          "description": "Время получения этих данных от источника в UTC.",
+          "format": "date-time",
+          "x-storage": "analyzer.snapshot_vulnerabilities / analyzer.snapshots.payload.vulnerabilities[] / report.reports.payload.findings[].vulnerabilities[] → obtained_at"
+        },
+        "evidence_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Ссылка на первичное описание уязвимости; null, если ссылка недоступна.",
+          "format": "uri",
+          "x-storage": "analyzer.snapshot_vulnerabilities / analyzer.snapshots.payload.vulnerabilities[] / report.reports.payload.findings[].vulnerabilities[] → evidence_url"
+        }
+      }
+    },
+    "Evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "id",
+        "source",
+        "kind",
+        "description",
+        "path",
+        "revision",
+        "url",
+        "run_id",
+        "attempt",
+        "dependency",
+        "vulnerability_id",
+        "secret_match_type"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Стабильный в пределах снимка.",
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → id"
+        },
+        "source": {
+          "type": "string",
+          "description": "Идентификатор источника данных: Git, GitHub API, OSV либо соответствующий адаптер.",
+          "enum": [
+            "git",
+            "github",
+            "osv"
+          ],
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → source"
+        },
+        "kind": {
+          "type": "string",
+          "description": "file/commit/secret_match/ci_run/branch_rule/dependency/advisory/aggregate",
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → kind"
+        },
+        "description": {
+          "type": "string",
+          "description": "Безопасный факт, без исходной строки/значения секрета.",
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → description"
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Путь к файлу относительно корня репозитория; null, если доказательство не связано с файлом.",
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → path"
+        },
+        "revision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Ревизия Git, к которой относится доказательство; null, если неприменимо.",
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → revision"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Только сохранённый абсолютный HTTPS без credentials; иначе null.",
+          "format": "uri",
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → url"
+        },
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Идентификатор запуска CI у провайдера; null для доказательств другого вида.",
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → run_id"
+        },
+        "attempt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Номер попытки запуска CI; null, если он неизвестен или неприменим.",
+          "minimum": 1,
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → attempt"
+        },
+        "dependency": {
+          "anyOf": [
+            {
+              "$ref": "schemas.json#/$defs/Dependency"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → dependency",
+          "description": "Зависимость, к которой относится доказательство; null для иных доказательств."
+        },
+        "vulnerability_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Идентификатор уязвимости из источника OSV; null там, где доказательство имеет другой тип.",
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → vulnerability_id"
+        },
+        "secret_match_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "private_key_header либо suspicious_assignment; не действительность секрета.",
+          "x-storage": "analyzer.snapshots.payload.inputs[].evidence[] / report.reports.payload.categories[].metrics[].input.evidence[] → secret_match_type"
+        }
+      }
+    },
+    "MetricInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Сохранённые нормализованные безопасные входы. В snapshot нет произвольного README, логов команд или значений секретов.",
+      "required": [
+        "id",
+        "raw_value",
+        "unit",
+        "status",
+        "reason",
+        "window",
+        "sample",
+        "series",
+        "evidence",
+        "evidence_limited",
+        "evidence_total",
+        "observed_at",
+        "exclusions"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Один из 12 стабильных идентификаторов метрик методики.",
+          "enum": [
+            "ACT_COMMIT_FREQ",
+            "ACT_DAYS_SINCE_LAST",
+            "ACT_TREND",
+            "DOC_README",
+            "DOC_SUPPORT_SHARE",
+            "TEST_PRESENCE",
+            "SEC_SECRETS",
+            "SEC_VULN_RISK",
+            "SEC_SAST",
+            "CI_PRESENT",
+            "CI_SUCCESS_RATE",
+            "CI_REQUIRED_CHECKS"
+          ],
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → id"
+        },
+        "raw_value": {
+          "description": "Подтверждённый scalar: number/bool/string/null. 0/false не заменяют null. Секреты никогда не включаются.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → raw_value"
+        },
+        "unit": {
+          "type": "string",
+          "description": "commits_per_week/days/ratio/bool/secret_scan/risk",
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → unit"
+        },
+        "status": {
+          "type": "string",
+          "description": "Полнота входных данных данной метрики; не подменяется числом или булевым значением.",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_applicable"
+          ],
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → status"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "schemas.json#/$defs/Reason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → reason",
+          "description": "Причина partial/unavailable/not_applicable и границы допустимых выводов; null, если не требуется."
+        },
+        "window": {
+          "anyOf": [
+            {
+              "$ref": "schemas.json#/$defs/Window"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → window",
+          "description": "Точные границы окна активности [t−140 дней, t)."
+        },
+        "sample": {
+          "$ref": "schemas.json#/$defs/Sample",
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → sample",
+          "description": "Фактический объём и границы выборки, числитель, знаменатель и исключения."
+        },
+        "series": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Недельные счётчики для ACT_TREND, иначе [].",
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → series"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/Evidence"
+          },
+          "description": "Безопасные структурированные основания результата; значения секретов и исходные строки не включаются.",
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → evidence"
+        },
+        "evidence_limited": {
+          "type": "boolean",
+          "description": "true, если в ответ включена только часть собранных доказательств.",
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → evidence_limited"
+        },
+        "evidence_total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Полное известное число доказательств; null, если полное число не установлено.",
+          "minimum": 0,
+          "x-storage": "analyzer.snapshots.payload.inputs[] / report.reports.payload.categories[].metrics[].input → evidence_total"
+        },
+        "observed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "description": "Например фактическая дата последнего коммита; неизвестно/неприменимо=null.",
+          "x-storage": "analyzer.snapshots.payload.inputs[].observed_at / report.reports.payload.categories[].metrics[].input.observed_at"
+        },
+        "exclusions": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/ExcludedCount"
+          },
+          "description": "Отдельные количества исключений, а не одна потерянная сумма.",
+          "x-storage": "analyzer.snapshots.payload.inputs[].exclusions / report.reports.payload.categories[].metrics[].input.exclusions"
+        }
+      }
+    },
+    "FreshnessKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Нет TTL/updated_at shortcut; новые t/окно означают новый анализ.",
+      "required": [
+        "owner",
+        "repository",
+        "assessment_at",
+        "window",
+        "refs",
+        "sources",
+        "versions",
+        "explanation_parameters_fingerprint",
+        "full_context_confirmed"
+      ],
+      "properties": {
+        "owner": {
+          "$ref": "schemas.json#/$defs/Owner",
+          "description": "Неизменяемый владелец результата: account или исходный guest; структура Owner."
+        },
+        "repository": {
+          "$ref": "schemas.json#/$defs/Repository",
+          "description": "Идентичность GitHub-репозитория и зафиксированная ревизия; структура Repository."
+        },
+        "assessment_at": {
+          "type": "string",
+          "description": "Зафиксированный момент оценки t в UTC; не обновляется при чтении результата.",
+          "format": "date-time"
+        },
+        "window": {
+          "$ref": "schemas.json#/$defs/Window",
+          "description": "Точные границы окна активности [t−140 дней, t)."
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/GitRef"
+          },
+          "description": "Зафиксированные объявленные ветки и теги Git с идентификаторами объектов."
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/SourceState"
+          },
+          "description": "Состояния источников, время получения, объём выборки, причины ограничений и отпечатки."
+        },
+        "versions": {
+          "$ref": "schemas.json#/$defs/Versions",
+          "description": "Версии схемы, методики, профилей, правил и параметров объяснения для воспроизводимости."
+        },
+        "explanation_parameters_fingerprint": {
+          "type": "string",
+          "description": "Отпечаток всех параметров выбора объяснения, влияющих на переиспользование."
+        },
+        "full_context_confirmed": {
+          "type": "boolean",
+          "description": "true только при доказанной неизменности всех использованных внешних наборов. Не выводится из локального хэша ответа."
+        }
+      },
+      "x-internal": true
+    },
+    "ExcludedCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Число исключённых объектов по одной причине.",
+      "required": [
+        "reason",
+        "count"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Например cancelled/skipped/neutral."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Подтверждённое количество."
+        }
+      }
+    }
+  }
+}

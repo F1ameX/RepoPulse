@@ -5,3 +5,7 @@ project/backend/.env.*
 project/backend/bin/
 project/backend/coverage.out
 project/backend/*.test
+
+.Ds_Store
+
+.idea

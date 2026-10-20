@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RepoPulse auth v1",
+  "$defs": {
+    "Credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Нормализация и проверки в указанном FR-27 порядке обязательны на клиенте и сервере.",
+      "required": [
+        "login",
+        "password"
+      ],
+      "properties": {
+        "login": {
+          "type": "string",
+          "description": "FR-27: trim только U+0020, 3–32 ASCII, первая буква, далее буквы/цифры/_. Lowercase для хранения."
+        },
+        "password": {
+          "type": "string",
+          "description": "FR-27: NFC, 15–128 Unicode code points; L/M/N/P/S и U+0020. Регистр и внешние пробелы сохраняются. Валидировать после NFC; не логировать.",
+          "writeOnly": true,
+          "format": "password"
+        }
+      }
+    },
+    "RegistrationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "login",
+        "message"
+      ],
+      "properties": {
+        "login": {
+          "type": "string",
+          "description": "Нормализованный логин."
+        },
+        "message": {
+          "type": "string",
+          "description": "Аккаунт создан. Войдите в систему"
+        }
+      }
+    },
+    "SessionInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "kind",
+        "login",
+        "expires_at"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Тип действующей сессии: account либо guest.",
+          "enum": [
+            "account",
+            "guest"
+          ],
+          "x-storage": "auth.sessions / auth.principals.login (без session id и token) → kind"
+        },
+        "login": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Только нормализованный login аккаунта; guest=null.",
+          "x-storage": "auth.sessions / auth.principals.login (без session id и token) → login"
+        },
+        "expires_at": {
+          "type": "string",
+          "description": "Account: ровно 7 суток без продления; guest: не более 24 ч и браузерная сессия.",
+          "format": "date-time",
+          "x-storage": "auth.sessions / auth.principals.login (без session id и token) → expires_at"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "account"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "login": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "login": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SessionContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Оба поля обязательны, отсутствие представляется null. Проверка cookie перед анализом.",
+      "required": [
+        "account",
+        "guest"
+      ],
+      "properties": {
+        "account": {
+          "anyOf": [
+            {
+              "$ref": "schemas.json#/$defs/SessionInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Сведения о текущей сессии аккаунта; null, если действующего аккаунта нет."
+        },
+        "guest": {
+          "anyOf": [
+            {
+              "$ref": "schemas.json#/$defs/SessionInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Сведения об исходной гостевой сессии; null, если она отсутствует или истекла."
+        }
+      }
+    },
+    "SessionTokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "account_token",
+        "guest_token"
+      ],
+      "properties": {
+        "account_token": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Только внутренний Auth RPC, секрет."
+        },
+        "guest_token": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Только внутренний Auth RPC, секрет."
+        }
+      },
+      "x-internal": true
+    },
+    "IssuedSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "token",
+        "session"
+      ],
+      "properties": {
+        "token": {
+          "type": "string",
+          "description": "Только внутренний ответ Auth, устанавливается Gateway в HttpOnly cookie."
+        },
+        "session": {
+          "$ref": "schemas.json#/$defs/SessionInfo",
+          "description": "Публичные сведения о выданной сессии без её токена."
+        }
+      },
+      "x-internal": true
+    },
+    "LogoutCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "account_token"
+      ],
+      "properties": {
+        "account_token": {
+          "type": "string",
+          "description": "Отозвать только текущую сессию, повтор безопасен."
+        }
+      },
+      "x-internal": true
+    }
+  }
+}

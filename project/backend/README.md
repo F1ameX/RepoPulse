@@ -1,52 +1,27 @@
 # RepoPulse backend
 
-Каркас на Go 1.26 со стандартной библиотекой. API предоставляет `GET /health`
-и заготовки маршрутов анализа и отчёта. Остальные восемь процессов пока
-инициализируют логгер и ждут сигнала завершения; бизнес-логика не реализована.
+[Архитектура №916](../../docs/architecture/repopulse_architecture.md),
+[контракты по сервисам](../../contracts/README.md),
+[миграции по сервисам](migrations/README.md).
 
-## Структура
+Go 1.26. API Gateway обслуживает HTTP. Auth отвечает за сессии, Report — за
+чтение отчётов/историю. Analyzer — компонент backend: сбор Git/GitHub/OSV,
+анализаторы, Score и объяснение. Его типизированный интерфейс отделён от HTTP.
 
 ```text
-cmd/<service>/main.go        точка входа каждого сервиса
-internal/<service>/
-  adapter/                  внешние взаимодействия
-  app/                      инициализация и запуск
-  domain/                   модели и бизнес-логика
-internal/pkg/command/       общая настройка логирования и обработки сигналов
-internal/pkg/logger/        With/From для логгера в context.Context
+cmd/api, cmd/auth, cmd/report      точки входа
+internal/api                      HTTP Gateway
+internal/auth, internal/report    каркасы сервисов
+migrations/auth                   идентичности и сессии
+migrations/analyzer               очередь и снимки
+migrations/report                 отчёты и история
 ```
 
-| Каталог сервиса | Назначение |
-| --- | --- |
-| `api` | HTTP API для frontend |
-| `auth` | Аутентификация |
-| `orchestrator` | Управление анализом |
-| `github` | Адаптер платформы GitHub |
-| `sandbox` | Подготовка репозитория |
-| `analysis` | Анализаторы |
-| `scoring` | Расчёт оценок |
-| `recommendation` | Рекомендации |
-| `report` | Сборка отчёта |
-
-## Локальный запуск
-
-Из корня репозитория:
-
-```sh
-cd project/backend
-go run ./cmd/api
-```
-
-В другом терминале:
-
-```sh
-curl http://127.0.0.1:8080/health
-# {"status":"ok"}
-```
-
-Остановка — `Ctrl+C`. Для запуска другого каркаса замените `api` именем
-из таблицы, например `go run ./cmd/analysis`. Эти процессы пока не открывают порты.
-API запускается самостоятельно, без остальных сервисов, БД и внешних систем.
+Из `project/backend`: `go run ./cmd/api`. Проверка процесса:
+`curl http://127.0.0.1:8080/health` → `200 {"status":"ok"}`.
+Остановка — Ctrl+C. Auth/Report пока инициализируют логгер и ждут завершения.
+Бизнес-обработчики подключаются в следующих задачах. HTTP-маршруты из OpenAPI
+пока возвращают 501 NOT_IMPLEMENTED; health работает самостоятельно.
 
 ## Переменные окружения
 
@@ -71,31 +46,19 @@ API запускается самостоятельно, без остальны
 `logger.With(ctx, log)` и `logger.From(ctx)`. Если его нет в контексте,
 `From` возвращает `slog.Default()`.
 
-## Основа API
+## Контракты
 
-| Метод и путь | Текущее поведение |
-| --- | --- |
-| `GET /health` | `200 {"status":"ok"}` — процесс работает |
-| `POST /api/v1/analyses` | `501 NOT_IMPLEMENTED` |
-| `GET /api/v1/analyses/{analysis_id}` | `501 NOT_IMPLEMENTED` |
-| `GET /api/v1/reports/{report_id}` | `501 NOT_IMPLEMENTED` |
+[OpenAPI Gateway](../../contracts/gateway/v1/openapi.json) задаёт HTTP.
+JSON Schema и `.proto` разделены по сервисам в `contracts/`.
+[Карта полей](../../docs/field-map.md) описывает обе формы данных,
+[flow](../../docs/architecture/data-flow.md) — их передачу и сохранение.
+Код классов контрактов каждый сервис получает своими инструментами.
 
-Для интеграции frontend использует HTTP/JSON через API. При раздельном
-локальном запуске его dev proxy должен направлять `/api` в API
-(по умолчанию `http://127.0.0.1:8080`). Форматы данных анализа и отчёта
-будут добавлены при реализации соответствующих маршрутов.
+Каркас Gateway содержит локальную структуру ErrorEnvelope для существующих
+ответов ошибок: trace_id (X-Request-ID) и field_errors. request_id отправки анализа
+остаётся отдельным ключом.
 
 ## Проверки
 
-Из `project/backend`:
-
-```sh
-gofmt -l .
-go vet ./...
-go test ./...
-go build -o bin/ ./cmd/...
-```
-
-`gofmt -l .` не должен выводить файлов. Сборка создаёт девять бинарников
-в `bin/`. CI выполняет те же проверки и запускает тесты с `-race`
-на Ubuntu.
+Из `project/backend`: `go test -race ./...`, `go vet ./...`, `go build ./...`.
+[Результат технической проверки Git](../../docs/git-check.md).

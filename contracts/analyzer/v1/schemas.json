@@ -1,0 +1,387 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RepoPulse analyzer v1",
+  "$defs": {
+    "ValidateRepositoryRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "repository_url"
+      ],
+      "properties": {
+        "repository_url": {
+          "type": "string",
+          "description": "FR-01, до 2048 code points после trim U+0020; строгая проверка исходной строки.",
+          "x-normalized-maxLength": 2048
+        }
+      }
+    },
+    "ValidatedRepository": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Публичность подтверждается данными GitHub; private/404 одинаковы, сбой источника отличается.",
+      "required": [
+        "repository",
+        "moved_from"
+      ],
+      "properties": {
+        "repository": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Repository",
+          "description": "Идентичность GitHub-репозитория и зафиксированная ревизия; структура Repository."
+        },
+        "moved_from": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Исходный канонический адрес при подтверждённом переносе с тем же GitHub ID.",
+          "format": "uri"
+        }
+      }
+    },
+    "CreateAnalysisRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "request_id",
+        "repository_url"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "description": "Стабильный ID пользовательской отправки; повтор после потери ответа сохраняет его.",
+          "format": "uuid",
+          "x-storage": "analyzer.submissions.request_id"
+        },
+        "repository_url": {
+          "type": "string",
+          "description": "Сервер независимо валидирует URL; клиент не задаёт владельца.",
+          "x-storage": "analyzer.submissions (вход запроса) → repository_url",
+          "x-normalized-maxLength": 2048
+        }
+      }
+    },
+    "CreateAnalysisResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "202 accepted / 200 reused. Replay проверяется до новых обращений к изменяемым источникам; другой URL с тем же request_id → 409.",
+      "required": [
+        "outcome",
+        "analysis_id",
+        "report_id",
+        "status",
+        "repository"
+      ],
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "description": "accepted — принято новое задание; reused — выбран ранее сохранённый отчёт.",
+          "enum": [
+            "accepted",
+            "reused"
+          ]
+        },
+        "analysis_id": {
+          "type": "string",
+          "description": "Стабильный ID принятого анализа либо анализа переиспользуемого отчёта.",
+          "format": "uuid"
+        },
+        "report_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "null для нового анализа, ID прежнего отчёта для reused.",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "description": "Текущее состояние принятого анализа; для reused — completed.",
+          "enum": [
+            "queued",
+            "running",
+            "completed",
+            "failed"
+          ]
+        },
+        "repository": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Repository",
+          "description": "Идентичность GitHub-репозитория и зафиксированная ревизия; структура Repository."
+        }
+      }
+    },
+    "AnalysisStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Никаких фиктивных процентов. Ошибка чтения статуса не меняет состояние анализа.",
+      "required": [
+        "analysis_id",
+        "repository",
+        "status",
+        "stage",
+        "created_at",
+        "started_at",
+        "completed_at",
+        "report_id",
+        "error"
+      ],
+      "properties": {
+        "analysis_id": {
+          "type": "string",
+          "description": "UUID анализа; используется для чтения статуса и связи со снимком и отчётом.",
+          "format": "uuid",
+          "x-storage": "analyzer.analyses.id"
+        },
+        "repository": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Repository",
+          "x-storage": "analyzer.analyses (проекция) → repository",
+          "description": "Идентичность GitHub-репозитория и зафиксированная ревизия; структура Repository."
+        },
+        "status": {
+          "type": "string",
+          "description": "Сохранённое состояние: queued, running, completed или failed.",
+          "enum": [
+            "queued",
+            "running",
+            "completed",
+            "failed"
+          ],
+          "x-storage": "analyzer.analyses.status"
+        },
+        "stage": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Подтверждённый этап: collecting_git, collecting_external, calculating, explaining, saving. null/неизвестное значение не меняет status и игнорируется UI.",
+          "x-storage": "analyzer.analyses.stage"
+        },
+        "created_at": {
+          "type": "string",
+          "description": "Момент создания записи в UTC.",
+          "format": "date-time",
+          "x-storage": "analyzer.analyses.created_at"
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Момент начала выполнения; null до запуска.",
+          "format": "date-time",
+          "x-storage": "analyzer.analyses.started_at"
+        },
+        "completed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Момент терминального завершения в UTC; null до completed/failed там, где допускается.",
+          "format": "date-time",
+          "x-storage": "analyzer.analyses.completed_at"
+        },
+        "report_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Обязателен для completed, иначе null.",
+          "format": "uuid",
+          "x-storage": "analyzer.analyses.report_id"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "../../common/v1/schemas.json#/$defs/ApiError"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-storage": "analyzer.analyses (проекция) → error",
+          "description": "Безопасная структурированная ошибка ApiError; null при отсутствии ошибки."
+        }
+      }
+    },
+    "Snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Внутренний неизменяемый снимок, необходимый для повторного численного расчёта без сети.",
+      "required": [
+        "snapshot_id",
+        "analysis_id",
+        "owner",
+        "repository",
+        "assessment_at",
+        "window",
+        "refs",
+        "versions",
+        "sources",
+        "inputs",
+        "dependencies",
+        "vulnerabilities"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "type": "string",
+          "description": "UUID сохранённого снимка входных данных анализа.",
+          "format": "uuid",
+          "x-storage": "analyzer.snapshots.id"
+        },
+        "analysis_id": {
+          "type": "string",
+          "description": "UUID анализа; используется для чтения статуса и связи со снимком и отчётом.",
+          "format": "uuid",
+          "x-storage": "analyzer.snapshots.analysis_id"
+        },
+        "owner": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Owner",
+          "x-storage": "analyzer.snapshots.payload → owner",
+          "description": "Неизменяемый владелец результата: account или исходный guest; структура Owner."
+        },
+        "repository": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Repository",
+          "x-storage": "analyzer.snapshots.payload → repository",
+          "description": "Идентичность GitHub-репозитория и зафиксированная ревизия; структура Repository."
+        },
+        "assessment_at": {
+          "type": "string",
+          "description": "t фиксируется при первой пользовательской отправке.",
+          "format": "date-time",
+          "x-storage": "analyzer.analyses.assessment_at"
+        },
+        "window": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Window",
+          "x-storage": "analyzer.snapshots.payload → window",
+          "description": "Точные границы окна активности [t−140 дней, t)."
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "../../common/v1/schemas.json#/$defs/GitRef"
+          },
+          "description": "Зафиксированные объявленные ветки и теги Git с идентификаторами объектов.",
+          "x-storage": "analyzer.snapshots.payload → refs"
+        },
+        "versions": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Versions",
+          "x-storage": "analyzer.snapshots.payload → versions",
+          "description": "Версии схемы, методики, профилей, правил и параметров объяснения для воспроизводимости."
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "../../common/v1/schemas.json#/$defs/SourceState"
+          },
+          "description": "Состояния источников, время получения, объём выборки, причины ограничений и отпечатки.",
+          "x-storage": "analyzer.snapshots.payload → sources"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "../../common/v1/schemas.json#/$defs/MetricInput"
+          },
+          "description": "Все 12 входных метрик с исходными значениями, выборкой и доказательствами.",
+          "minItems": 12,
+          "maxItems": 12,
+          "x-storage": "analyzer.snapshots.payload → inputs"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "../../common/v1/schemas.json#/$defs/Dependency"
+          },
+          "description": "Прямые зависимости npm/Maven/Go; дедупликация по ecosystem/package/version, общий лимит 20.",
+          "maxItems": 20,
+          "x-storage": "analyzer.snapshots.payload → dependencies"
+        },
+        "vulnerabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "../../common/v1/schemas.json#/$defs/Vulnerability"
+          },
+          "description": "Известные уязвимости конкретных версий зависимостей; идентификаторы и серьёзность OSV.",
+          "x-storage": "analyzer.snapshots.payload → vulnerabilities"
+        }
+      },
+      "x-internal": true
+    },
+    "GetAnalysisQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "context",
+        "analysis_id"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "../../common/v1/schemas.json#/$defs/VerifiedContext",
+          "description": "Проверенные Auth идентичности и сроки действия; клиент не задаёт этот объект."
+        },
+        "analysis_id": {
+          "type": "string",
+          "description": "UUID анализа; используется для чтения статуса и связи со снимком и отчётом.",
+          "format": "uuid"
+        }
+      },
+      "x-internal": true
+    },
+    "CreateAnalysisCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "context",
+        "request"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "../../common/v1/schemas.json#/$defs/VerifiedContext",
+          "description": "Проверенные Auth идентичности и сроки действия; клиент не задаёт этот объект."
+        },
+        "request": {
+          "$ref": "schemas.json#/$defs/CreateAnalysisRequest",
+          "description": "Тело исходного пользовательского запроса; владелец определяется отдельно через context."
+        }
+      },
+      "x-internal": true
+    },
+    "ValidateRepositoryCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "context",
+        "request"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "../../common/v1/schemas.json#/$defs/VerifiedContext",
+          "description": "Проверенные Auth идентичности и сроки действия; клиент не задаёт этот объект."
+        },
+        "request": {
+          "$ref": "schemas.json#/$defs/ValidateRepositoryRequest",
+          "description": "Тело исходного пользовательского запроса; владелец определяется отдельно через context."
+        }
+      },
+      "x-internal": true
+    }
+  },
+  "x-analyzer-interfaces": {
+    "ValidateRepository": [
+      "ValidateRepositoryCommand",
+      "ValidatedRepository"
+    ],
+    "CreateAnalysis": [
+      "CreateAnalysisCommand",
+      "CreateAnalysisResponse"
+    ],
+    "GetAnalysis": [
+      "GetAnalysisQuery",
+      "AnalysisStatus"
+    ]
+  }
+}
