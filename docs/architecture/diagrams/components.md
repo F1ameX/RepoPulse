@@ -8,15 +8,16 @@ flowchart TD
     ApiGateway -->|gRPC| AuthService[Auth Service]
     ApiGateway -->|gRPC| ReportService[Report Service]
     ApiGateway -->|внутренний интерфейс| Analyzer[Analyzer]
-    Analyzer --> Collection[Git / GitHub / OSV: сбор данных]
-    Collection --> MetricAnalyzers[Пять анализаторов / 12 метрик]
-    MetricAnalyzers --> Scoring[Score / каталог рекомендаций]
-    Scoring --> Explanation[AI: выбор объяснения / fallback]
-    Explanation --> ReportStorage[(PostgreSQL: снимок и отчёт)]
+    Analyzer -->|gRPC| ReportService
+    Analyzer --> ReportStorage[(PostgreSQL: report / отчёты)]
     AuthService --> AuthStorage[(PostgreSQL: auth)]
     ReportService --> ReportStorage
-    Analyzer --> AnalyzerStorage[(PostgreSQL: analyzer / очередь)]
+    Analyzer --> AnalyzerStorage[(PostgreSQL: analyzer / очередь и снимки)]
 ```
+
+Analyzer показан одним блоком на уровне сервисов. Сбор данных, анализаторы,
+Score и объяснение — его внутренние модули; последовательность их работы описана
+в [flow данных](../data-flow.md#выполнение-analyzer-и-сохранение).
 
 Auth владеет идентичностями и сессиями. Analyzer фиксирует владельца, момент
 оценки, данные и результат; атомарно берёт задания из очереди. Report читает
