@@ -1,0 +1,70 @@
+syntax = "proto3";
+package repopulse.analyzer.v1;
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/gen/analyzer/v1;analyzerv1";
+import "common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+message ValidateRepositoryRequest {
+  string repository_url = 1;
+}
+
+message ValidatedRepository {
+  repopulse.common.v1.Repository repository = 1;
+  optional string moved_from = 2;
+}
+
+message CreateAnalysisRequest {
+  string request_id = 1;
+  string repository_url = 2;
+}
+
+message CreateAnalysisResponse {
+  string outcome = 1;
+  string analysis_id = 2;
+  optional string report_id = 3;
+  string status = 4;
+  repopulse.common.v1.Repository repository = 5;
+}
+
+message AnalysisStatus {
+  string analysis_id = 1;
+  repopulse.common.v1.Repository repository = 2;
+  string status = 3;
+  optional string stage = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp completed_at = 7;
+  optional string report_id = 8;
+  repopulse.common.v1.ApiError error = 9;
+}
+
+message Snapshot {
+  string snapshot_id = 1;
+  string analysis_id = 2;
+  repopulse.common.v1.Owner owner = 3;
+  repopulse.common.v1.Repository repository = 4;
+  google.protobuf.Timestamp assessment_at = 5;
+  repopulse.common.v1.Window window = 6;
+  repeated repopulse.common.v1.GitRef refs = 7;
+  repopulse.common.v1.Versions versions = 8;
+  repeated repopulse.common.v1.SourceState sources = 9;
+  repeated repopulse.common.v1.MetricInput inputs = 10;
+  repeated repopulse.common.v1.Dependency dependencies = 11;
+  repeated repopulse.common.v1.Vulnerability vulnerabilities = 12;
+}
+
+message GetAnalysisQuery {
+  repopulse.common.v1.VerifiedContext context = 1;
+  string analysis_id = 2;
+}
+
+message CreateAnalysisCommand {
+  repopulse.common.v1.VerifiedContext context = 1;
+  CreateAnalysisRequest request = 2;
+}
+
+message ValidateRepositoryCommand {
+  repopulse.common.v1.VerifiedContext context = 1;
+  ValidateRepositoryRequest request = 2;
+}
+

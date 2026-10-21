@@ -1,0 +1,49 @@
+syntax = "proto3";
+package repopulse.auth.v1;
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/gen/auth/v1;authv1";
+import "common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+message Credentials {
+  string login = 1;
+  string password = 2;
+}
+
+message RegistrationResult {
+  string login = 1;
+  string message = 2;
+}
+
+message SessionInfo {
+  string kind = 1;
+  optional string login = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+message SessionContext {
+  SessionInfo account = 1;
+  SessionInfo guest = 2;
+}
+
+message SessionTokens {
+  optional string account_token = 1;
+  optional string guest_token = 2;
+}
+
+message IssuedSession {
+  string token = 1;
+  SessionInfo session = 2;
+}
+
+message LogoutCommand {
+  string account_token = 1;
+}
+
+service AuthService {
+  rpc Register (Credentials) returns (RegistrationResult);
+  rpc Login (Credentials) returns (IssuedSession);
+  rpc CreateGuestSession (repopulse.common.v1.Empty) returns (IssuedSession);
+  rpc ResolveContext (SessionTokens) returns (repopulse.common.v1.VerifiedContext);
+  rpc Logout (LogoutCommand) returns (repopulse.common.v1.Empty);
+}
+

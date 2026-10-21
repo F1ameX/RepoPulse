@@ -29,7 +29,7 @@ func TestHTTPContract(t *testing.T) {
 		{"GET", "/", 404, "NOT_FOUND", ""},
 		{"GET", "/health/extra", 404, "NOT_FOUND", ""},
 		{"GET", "/api/v1/analyses/A123/extra", 404, "NOT_FOUND", ""},
-		{"GET", "/api/v1/reports", 404, "NOT_FOUND", ""},
+		{"GET", "/api/v1/reports", 501, "NOT_IMPLEMENTED", ""},
 		{"GET", "/api/v1/analyses", 405, "METHOD_NOT_ALLOWED", "POST"},
 		{"DELETE", "/api/v1/reports/R123", 405, "METHOD_NOT_ALLOWED", "GET, HEAD"},
 		{"POST", "/health", 405, "METHOD_NOT_ALLOWED", "GET, HEAD"},
@@ -60,7 +60,7 @@ func TestHTTPContract(t *testing.T) {
 			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 				t.Fatal(err)
 			}
-			if response.Error.Code != tc.code || response.Error.RequestID != requestID || response.Error.Message == "" {
+			if response.Error.Code != tc.code || response.Error.TraceID != requestID || response.Error.Message == "" || response.Error.FieldErrors == nil {
 				t.Fatalf("unexpected error response: %+v", response)
 			}
 		})

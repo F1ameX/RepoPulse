@@ -11,9 +11,16 @@ type errorResponse struct {
 }
 
 type apiError struct {
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	RequestID string `json:"request_id"`
+	Code        string       `json:"code"`
+	Message     string       `json:"message"`
+	TraceID     string       `json:"trace_id"`
+	FieldErrors []fieldError `json:"field_errors"`
+}
+
+type fieldError struct {
+	Field   string `json:"field"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 func NewHandler() http.Handler {
@@ -37,6 +44,13 @@ func NewHandler() http.Handler {
 	route("/api/v1/analyses", http.MethodPost, notImplemented)
 	route("/api/v1/analyses/{analysis_id}", http.MethodGet, notImplemented)
 	route("/api/v1/reports/{report_id}", http.MethodGet, notImplemented)
+	route("/api/v1/reports", http.MethodGet, notImplemented)
+	route("/api/v1/repositories/validate", http.MethodPost, notImplemented)
+	route("/api/v1/auth/register", http.MethodPost, notImplemented)
+	route("/api/v1/auth/login", http.MethodPost, notImplemented)
+	route("/api/v1/auth/guest-session", http.MethodPost, notImplemented)
+	route("/api/v1/auth/session", http.MethodGet, notImplemented)
+	route("/api/v1/auth/logout", http.MethodPost, notImplemented)
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "Route not found")
 	})
@@ -50,7 +64,8 @@ func notImplemented(w http.ResponseWriter, _ *http.Request) {
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, errorResponse{Error: apiError{
-		Code: code, Message: message, RequestID: w.Header().Get("X-Request-ID"),
+		Code: code, Message: message, TraceID: w.Header().Get("X-Request-ID"),
+		FieldErrors: []fieldError{},
 	}})
 }
 

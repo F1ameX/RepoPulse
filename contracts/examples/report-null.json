@@ -1,0 +1,622 @@
+{
+  "report_id": "00000000-0000-4000-8000-000000000004",
+  "analysis_id": "00000000-0000-4000-8000-000000000002",
+  "snapshot_id": "00000000-0000-4000-8000-000000000003",
+  "repository": {
+    "platform": "github",
+    "github_id": "example-only",
+    "canonical_url": "https://github.com/example/repopulse-fixture",
+    "owner": "example",
+    "name": "repopulse-fixture",
+    "default_branch": "main",
+    "commit_sha": "0000000000000000000000000000000000000000"
+  },
+  "assessment_at": "2026-10-20T00:00:00Z",
+  "window": {
+    "from": "2026-06-02T00:00:00Z",
+    "until": "2026-10-20T00:00:00Z"
+  },
+  "completed_at": "2026-10-20T00:00:00Z",
+  "versions": {
+    "schema": "mvp-contract-1.1.0",
+    "methodology": "rhs-mvp-1.1.0",
+    "scoring_config": "rhs-mvp-1.1.0",
+    "collector_profile": "github-mvp-1.1.0",
+    "secret_rules": "secrets-mvp-1.0.0",
+    "recommendation_catalog": "recommendations-mvp-1.0.0",
+    "explanation_schema": "catalog-selection-1.0.0",
+    "prompt": "catalog-selection-1.0.0"
+  },
+  "overall_score": null,
+  "overall_reason": {
+    "code": "timeout",
+    "message": "Источник не ответил вовремя",
+    "cannot_conclude": "Полная оценка этой проверки недоступна"
+  },
+  "summary": "Пример частичного отчёта",
+  "coverage": {
+    "calculated": 0,
+    "total": 12,
+    "percentage": 0.0,
+    "partial": 0,
+    "unavailable": 12,
+    "not_applicable": 0
+  },
+  "categories": [
+    {
+      "id": "activity",
+      "score": null,
+      "status": "unavailable",
+      "reason": {
+        "code": "timeout",
+        "message": "Источник не ответил вовремя",
+        "cannot_conclude": "Полная оценка этой проверки недоступна"
+      },
+      "coverage": {
+        "calculated": 0,
+        "total": 3,
+        "percentage": 0.0,
+        "partial": 0,
+        "unavailable": 3,
+        "not_applicable": 0
+      },
+      "effective_weight": null,
+      "explanation": "Пример формата",
+      "metrics": [
+        {
+          "input": {
+            "id": "ACT_COMMIT_FREQ",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": null,
+              "total": null,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        },
+        {
+          "input": {
+            "id": "ACT_DAYS_SINCE_LAST",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": null,
+              "total": null,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        },
+        {
+          "input": {
+            "id": "ACT_TREND",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": null,
+              "total": null,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        }
+      ]
+    },
+    {
+      "id": "documentation",
+      "score": null,
+      "status": "unavailable",
+      "reason": {
+        "code": "timeout",
+        "message": "Источник не ответил вовремя",
+        "cannot_conclude": "Полная оценка этой проверки недоступна"
+      },
+      "coverage": {
+        "calculated": 0,
+        "total": 2,
+        "percentage": 0.0,
+        "partial": 0,
+        "unavailable": 2,
+        "not_applicable": 0
+      },
+      "effective_weight": null,
+      "explanation": "Пример формата",
+      "metrics": [
+        {
+          "input": {
+            "id": "DOC_README",
+            "raw_value": null,
+            "unit": "bool",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": 1,
+              "total": 1,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "boolean",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        },
+        {
+          "input": {
+            "id": "DOC_SUPPORT_SHARE",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": 1,
+              "total": 1,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        }
+      ]
+    },
+    {
+      "id": "testing",
+      "score": null,
+      "status": "unavailable",
+      "reason": {
+        "code": "timeout",
+        "message": "Источник не ответил вовремя",
+        "cannot_conclude": "Полная оценка этой проверки недоступна"
+      },
+      "coverage": {
+        "calculated": 0,
+        "total": 1,
+        "percentage": 0.0,
+        "partial": 0,
+        "unavailable": 1,
+        "not_applicable": 0
+      },
+      "effective_weight": null,
+      "explanation": "Пример формата",
+      "metrics": [
+        {
+          "input": {
+            "id": "TEST_PRESENCE",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": null,
+              "total": null,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        }
+      ]
+    },
+    {
+      "id": "security",
+      "score": null,
+      "status": "unavailable",
+      "reason": {
+        "code": "timeout",
+        "message": "Источник не ответил вовремя",
+        "cannot_conclude": "Полная оценка этой проверки недоступна"
+      },
+      "coverage": {
+        "calculated": 0,
+        "total": 3,
+        "percentage": 0.0,
+        "partial": 0,
+        "unavailable": 3,
+        "not_applicable": 0
+      },
+      "effective_weight": null,
+      "explanation": "Пример формата",
+      "metrics": [
+        {
+          "input": {
+            "id": "SEC_SECRETS",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": null,
+              "total": null,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        },
+        {
+          "input": {
+            "id": "SEC_VULN_RISK",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": null,
+              "total": null,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        },
+        {
+          "input": {
+            "id": "SEC_SAST",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": null,
+              "total": null,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        }
+      ]
+    },
+    {
+      "id": "ci_cd",
+      "score": null,
+      "status": "unavailable",
+      "reason": {
+        "code": "timeout",
+        "message": "Источник не ответил вовремя",
+        "cannot_conclude": "Полная оценка этой проверки недоступна"
+      },
+      "coverage": {
+        "calculated": 0,
+        "total": 3,
+        "percentage": 0.0,
+        "partial": 0,
+        "unavailable": 3,
+        "not_applicable": 0
+      },
+      "effective_weight": null,
+      "explanation": "Пример формата",
+      "metrics": [
+        {
+          "input": {
+            "id": "CI_PRESENT",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": null,
+              "total": null,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        },
+        {
+          "input": {
+            "id": "CI_SUCCESS_RATE",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": null,
+              "total": null,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        },
+        {
+          "input": {
+            "id": "CI_REQUIRED_CHECKS",
+            "raw_value": null,
+            "unit": "ratio",
+            "status": "unavailable",
+            "reason": {
+              "code": "timeout",
+              "message": "Источник не ответил вовремя",
+              "cannot_conclude": "Полная оценка этой проверки недоступна"
+            },
+            "window": null,
+            "sample": {
+              "collected": null,
+              "total": null,
+              "numerator": null,
+              "denominator": null,
+              "excluded": null,
+              "excluded_reason": null
+            },
+            "series": [],
+            "evidence": [],
+            "evidence_limited": false,
+            "evidence_total": 0,
+            "observed_at": null,
+            "exclusions": []
+          },
+          "normalized_score": null,
+          "rule_version": "rhs-mvp-1.1.0",
+          "rule": "100 * share",
+          "threshold": null,
+          "explanation": "Пример формата, не результат проверки"
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "source": "git",
+      "scope": "tree",
+      "status": "complete",
+      "reason": null,
+      "sample": {
+        "collected": 5,
+        "total": 5,
+        "numerator": null,
+        "denominator": null,
+        "excluded": null,
+        "excluded_reason": null
+      },
+      "obtained_at": "2026-10-20T00:00:00Z",
+      "fingerprint": "example-only-not-a-freshness-proof"
+    }
+  ],
+  "dependencies": [
+    {
+      "ecosystem": "npm",
+      "package": "lodash",
+      "version": "4.17.21",
+      "manifest_path": "package-lock.json",
+      "version_source": "npm_lock_v3",
+      "origins": [
+        {
+          "manifest_path": "package-lock.json",
+          "version_source": "npm_lock_v3"
+        }
+      ]
+    },
+    {
+      "ecosystem": "Maven",
+      "package": "junit:junit",
+      "version": "4.13.2",
+      "manifest_path": "pom.xml",
+      "version_source": "maven_declaration",
+      "origins": [
+        {
+          "manifest_path": "pom.xml",
+          "version_source": "maven_declaration"
+        }
+      ]
+    },
+    {
+      "ecosystem": "Go",
+      "package": "golang.org/x/text",
+      "version": "v0.17.0",
+      "manifest_path": "go.mod",
+      "version_source": "go_require_declaration",
+      "origins": [
+        {
+          "manifest_path": "go.mod",
+          "version_source": "go_require_declaration"
+        }
+      ]
+    }
+  ],
+  "findings": [],
+  "recommendations": [],
+  "explanation": {
+    "mode": "deterministic_fallback",
+    "fallback_reason": "no_findings",
+    "model": null,
+    "catalog_version": "recommendations-mvp-1.0.0",
+    "schema_version": "catalog-selection-1.0.0",
+    "prompt_version": "catalog-selection-1.0.0"
+  }
+}
