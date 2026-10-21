@@ -1,0 +1,70 @@
+@startuml RepoPulse_C4_Level1
+
+title RepoPulse — C4 Level 1: System Context Diagram
+
+left to right direction
+
+skinparam shadowing false
+skinparam roundcorner 0
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+skinparam nodesep 100
+skinparam ranksep 320
+skinparam defaultFontSize 14
+skinparam ArrowFontSize 13
+skinparam ArrowColor #666666
+skinparam ArrowFontColor #333333
+
+skinparam actor {
+    BackgroundColor #08427B
+    BorderColor #052E56
+    FontColor #08427B
+}
+
+skinparam rectangle {
+    BackgroundColor #438DD5
+    BorderColor #2E6295
+    FontColor white
+}
+
+actor "Гость\n[Person]\n\nРаботает без аккаунта" as guest
+actor "Авторизованный пользователь\n[Person]\n\nРаботает со своим аккаунтом" as user
+
+rectangle "RepoPulse\n[Software System]\n\nОценивает техническое состояние\nпубличных GitHub-репозиториев.\n\nФормирует отчёты, Repo Health Score\nи рекомендации; предоставляет\nисторию аккаунта и скачивание PDF." as repopulse
+
+rectangle "GitHub\n[External Software System]\n\nХранит публичные Git-репозитории\nи данные об их разработке:\nPR, issues, reviews и CI/CD." as github #999999
+
+rectangle "SonarQube Server\n[External Software System]\n\nВыполняет статический анализ\nисходного кода и предоставляет\nметрики качества и findings." as sonarqube #999999
+
+rectangle "AI / LLM Provider\n[External Software System]\n\nПредоставляет модели для оценки\nсостояния репозитория\nи формирования рекомендаций." as llm #999999
+
+' Скрытые связи закрепляют три колонки: люди, система, внешние системы.
+' В LR-компоновке right выстраивает отдельные элементы сверху вниз.
+guest -right[hidden]-> user
+guest -[hidden]-> repopulse
+user -[hidden]-> repopulse
+repopulse -[hidden]-> sonarqube
+github -right[hidden]-> sonarqube
+sonarqube -right[hidden]-> llm
+
+' Видимые связи не меняют расположение элементов.
+guest -[norank]-> repopulse : Указывает URL репозитория;\nсмотрит статус анализа\nи свой готовый отчёт
+
+user -[norank]-> repopulse : Запускает анализ; смотрит статус,\nсвои отчёты и историю аккаунта;\nскачивает свои отчёты в PDF
+
+repopulse -[norank]-> github : Получает данные о репозитории\nи клонирует исходный код
+
+repopulse -[norank]-> sonarqube : Отправляет код\nна статический анализ;\nполучает результаты
+
+repopulse -[norank]-> llm : Запрашивает оценку\nсостояния репозитория\nи рекомендации
+
+caption Гостевые отчёты не переносятся в аккаунт после входа.\nИстория и PDF доступны только для отчётов аккаунта.
+
+legend bottom
+  |= Цвет |= Тип элемента |
+  | <back:#08427B>    </back> | Пользователь системы |
+  | <back:#438DD5>    </back> | RepoPulse — рассматриваемая система |
+  | <back:#999999>    </back> | Внешняя программная система |
+endlegend
+
+@enduml
