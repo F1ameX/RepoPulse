@@ -11,7 +11,10 @@ Go 1.26. API Gateway обслуживает HTTP. Auth отвечает за с�
 ```text
 cmd/api, cmd/auth, cmd/report, cmd/analyzer  точки входа
 internal/api                              HTTP Gateway
-internal/auth, internal/report             каркасы сервисов
+internal/auth                             gRPC-каркас Auth Service
+internal/report                           каркас Report
+internal/pkg/grpcerr                      формат gRPC-ошибок
+pkg/proto                                 код, сгенерированный из contracts
 internal/analyzer                          каркас Analyzer
 migrations/auth                            идентичности и сессии
 migrations/analyzer                        очередь и снимки
@@ -20,7 +23,8 @@ migrations/report                          отчёты и история
 
 Из `project/backend`: `go run ./cmd/api`. Проверка процесса:
 `curl http://127.0.0.1:8080/health` → `200 {"status":"ok"}`.
-Остановка — Ctrl+C. Auth/Report/Analyzer пока инициализируют логгер и ждут завершения.
+Остановка — Ctrl+C. Report/Analyzer пока инициализируют логгер и ждут завершения.
+Auth запускает gRPC-сервер, см. раздел «Auth Service».
 Каркас Analyzer запускается через `go run ./cmd/analyzer`.
 Бизнес-обработчики подключаются в следующих задачах. HTTP-маршруты из OpenAPI
 пока возвращают 501 NOT_IMPLEMENTED; health работает самостоятельно.
@@ -38,7 +42,8 @@ migrations/report                          отчёты и история
 | `HTTP_READ_TIMEOUT` | `15s` | API |
 | `HTTP_WRITE_TIMEOUT` | `30s` | API |
 | `HTTP_IDLE_TIMEOUT` | `60s` | API |
-| `SHUTDOWN_TIMEOUT` | `10s` | API |
+| `SHUTDOWN_TIMEOUT` | `10s` | API, Auth |
+| `AUTH_GRPC_ADDR` | `127.0.0.1:9090` | Auth; host:port gRPC-сервера |
 
 Неверные и явно пустые значения приводят к ошибке запуска.
 В PowerShell: `$env:HTTP_ADDR = "127.0.0.1:9090"; go run ./cmd/api`.
@@ -47,6 +52,69 @@ migrations/report                          отчёты и история
 Логи пишутся в stdout в JSON. Логгер передаётся через контекст:
 `logger.With(ctx, log)` и `logger.From(ctx)`. Если его нет в контексте,
 `From` возвращает `slog.Default()`.
+
+## Auth Service
+
+gRPC-сервис по контракту [auth.proto](../../contracts/auth/v1/auth.proto):
+AuthService (Register, Login, CreateGuestSession, ResolveContext, Logout) и
+стандартный health-check `grpc.health.v1.Health`. Это технический каркас:
+все методы AuthService пока отвечают `UNIMPLEMENTED` с кодом `NOT_IMPLEMENTED`;
+регистрация, вход и сессии реализуются в следующих задачах.
+
+Запуск из `project/backend`:
+
+```sh
+go run ./cmd/auth
+AUTH_GRPC_ADDR=127.0.0.1:9191 go run ./cmd/auth   # другой адрес
+```
+
+В логе появится `gRPC server listening`. Остановка — Ctrl+C: health переходит
+в `NOT_SERVING`, сервер завершает активные вызовы не дольше `SHUTDOWN_TIMEOUT`.
+Сервер работает без TLS; внешняя достижимость и защита соединений задаются
+конфигурацией запуска.
+
+Health-check проверяется через
+[grpc-health-probe](https://github.com/grpc-ecosystem/grpc-health-probe):
+
+```sh
+go install github.com/grpc-ecosystem/grpc-health-probe@latest
+grpc-health-probe -addr=127.0.0.1:9090                                  # status: SERVING
+grpc-health-probe -addr=127.0.0.1:9090 -service=repopulse.auth.v1.AuthService
+```
+
+Методы AuthService можно вызвать через [grpcurl](https://github.com/fullstorydev/grpcurl).
+Reflection не включён, поэтому контракт передаётся явно (из `project/backend`):
+
+```sh
+grpcurl -plaintext -v -import-path ../../contracts -proto auth/v1/auth.proto \
+  -H 'x-request-id: local-1' -d '{}' \
+  127.0.0.1:9090 repopulse.auth.v1.AuthService/CreateGuestSession
+```
+
+Ответ: `Code: Unimplemented` и trailer `repopulse-error-bin` с ApiError.
+
+Ошибки возвращаются по [docs/errors.md](../../docs/errors.md): gRPC status и
+`common.v1.ApiError` в trailing metadata `repopulse-error-bin`; `trace_id`
+берётся из входящей metadata `x-request-id`. Пакет `internal/pkg/grpcerr`
+содержит interceptor и ошибки некорректного запроса (`INVALID_ARGUMENT` /
+`VALIDATION_FAILED` с первой ошибкой каждого поля в `field_errors`) и
+недоступного пользователя (`UNAUTHENTICATED` / `INVALID_CREDENTIALS`,
+«Неверный логин или пароль»). Прочие ошибки скрываются как `INTERNAL_ERROR`.
+
+Интерфейсы хранилищ пользователей (`UserRepository`) и токенов сессий
+(`TokenRepository`) объявлены в `internal/auth/application/auth/ports.go`;
+реализаций пока нет.
+
+### Генерация кода из proto
+
+Сгенерированный код `pkg/proto` хранится в репозитории. После изменения
+`contracts/common/v1/common.proto` или `contracts/auth/v1/auth.proto`
+выполните из `project/backend` (нужен установленный `protoc`):
+
+```sh
+go install tool          # protoc-gen-go и protoc-gen-go-grpc из go.mod
+go generate ./pkg/proto
+```
 
 ## Контракты
 
