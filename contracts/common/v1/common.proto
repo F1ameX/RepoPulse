@@ -1,0 +1,166 @@
+syntax = "proto3";
+package repopulse.common.v1;
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/gen/common/v1;commonv1";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+message Owner {
+  string kind = 1;
+  string id = 2;
+}
+
+message VerifiedContext {
+  optional string user_id = 1;
+  optional string guest_session_id = 2;
+  google.protobuf.Timestamp account_expires_at = 3;
+  google.protobuf.Timestamp guest_expires_at = 4;
+}
+
+message FieldError {
+  string field = 1;
+  string code = 2;
+  string message = 3;
+}
+
+message ApiError {
+  string code = 1;
+  string message = 2;
+  string trace_id = 3;
+  repeated FieldError field_errors = 4;
+}
+
+message ErrorEnvelope {
+  ApiError error = 1;
+}
+
+message Empty {
+}
+
+message Repository {
+  string platform = 1;
+  string github_id = 2;
+  string canonical_url = 3;
+  string owner = 4;
+  string name = 5;
+  optional string default_branch = 6;
+  optional string commit_sha = 7;
+}
+
+message Window {
+  google.protobuf.Timestamp from = 1;
+  google.protobuf.Timestamp until = 2;
+}
+
+message Versions {
+  string schema = 1;
+  string methodology = 2;
+  string scoring_config = 3;
+  string collector_profile = 4;
+  string secret_rules = 5;
+  string recommendation_catalog = 6;
+  string explanation_schema = 7;
+  string prompt = 8;
+}
+
+message Reason {
+  string code = 1;
+  string message = 2;
+  string cannot_conclude = 3;
+}
+
+message Sample {
+  optional int32 collected = 1;
+  optional int32 total = 2;
+  optional int32 numerator = 3;
+  optional int32 denominator = 4;
+  optional int32 excluded = 5;
+  optional string excluded_reason = 6;
+}
+
+message SourceState {
+  string source = 1;
+  string scope = 2;
+  string status = 3;
+  Reason reason = 4;
+  Sample sample = 5;
+  google.protobuf.Timestamp obtained_at = 6;
+  optional string fingerprint = 7;
+}
+
+message GitRef {
+  string name = 1;
+  string object_sha = 2;
+}
+
+message DependencyOrigin {
+  string manifest_path = 1;
+  string version_source = 2;
+}
+
+message Dependency {
+  string ecosystem = 1;
+  string package = 2;
+  string version = 3;
+  string manifest_path = 4;
+  string version_source = 5;
+  repeated DependencyOrigin origins = 6;
+}
+
+message Vulnerability {
+  string vulnerability_id = 1;
+  string ecosystem = 2;
+  string package = 3;
+  string version = 4;
+  optional string severity = 5;
+  google.protobuf.Timestamp obtained_at = 6;
+  optional string evidence_url = 7;
+}
+
+message Evidence {
+  string id = 1;
+  string source = 2;
+  string kind = 3;
+  string description = 4;
+  optional string path = 5;
+  optional string revision = 6;
+  optional string url = 7;
+  optional string run_id = 8;
+  optional int32 attempt = 9;
+  Dependency dependency = 10;
+  optional string vulnerability_id = 11;
+  optional string secret_match_type = 12;
+}
+
+message MetricInput {
+  string id = 1;
+  google.protobuf.Value raw_value = 2;
+  string unit = 3;
+  string status = 4;
+  Reason reason = 5;
+  Window window = 6;
+  Sample sample = 7;
+  repeated int32 series = 8;
+  repeated Evidence evidence = 9;
+  bool evidence_limited = 10;
+  optional int32 evidence_total = 11;
+  google.protobuf.Timestamp observed_at = 12;
+  repeated ExcludedCount exclusions = 13;
+}
+
+message FreshnessKey {
+  Owner owner = 1;
+  Repository repository = 2;
+  google.protobuf.Timestamp assessment_at = 3;
+  Window window = 4;
+  repeated GitRef refs = 5;
+  repeated SourceState sources = 6;
+  Versions versions = 7;
+  string explanation_parameters_fingerprint = 8;
+  bool full_context_confirmed = 9;
+}
+
+message ExcludedCount {
+  string reason = 1;
+  int32 count = 2;
+}
+

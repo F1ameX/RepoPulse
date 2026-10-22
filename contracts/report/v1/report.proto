@@ -1,0 +1,127 @@
+syntax = "proto3";
+package repopulse.report.v1;
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/gen/report/v1;reportv1";
+import "common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+message Metric {
+  repopulse.common.v1.MetricInput input = 1;
+  optional double normalized_score = 2;
+  string rule_version = 3;
+  string rule = 4;
+  optional double threshold = 5;
+  string explanation = 6;
+}
+
+message Coverage {
+  int32 calculated = 1;
+  int32 total = 2;
+  double percentage = 3;
+  int32 partial = 4;
+  int32 unavailable = 5;
+  int32 not_applicable = 6;
+}
+
+message Category {
+  string id = 1;
+  optional double score = 2;
+  string status = 3;
+  repopulse.common.v1.Reason reason = 4;
+  Coverage coverage = 5;
+  optional double effective_weight = 6;
+  string explanation = 7;
+  repeated Metric metrics = 8;
+}
+
+message Finding {
+  string id = 1;
+  string rule_id = 2;
+  string category = 3;
+  string title = 4;
+  string description = 5;
+  string severity = 6;
+  string possible_consequence = 7;
+  repeated string evidence_ids = 8;
+  repeated repopulse.common.v1.Vulnerability vulnerabilities = 9;
+}
+
+message Recommendation {
+  string id = 1;
+  string finding_id = 2;
+  string title = 3;
+  string action = 4;
+  string expected_benefit = 5;
+  string priority = 6;
+  string complexity = 7;
+  string variant_id = 8;
+  string explanation = 9;
+}
+
+message Explanation {
+  string mode = 1;
+  optional string fallback_reason = 2;
+  optional string model = 3;
+  string catalog_version = 4;
+  string schema_version = 5;
+  string prompt_version = 6;
+}
+
+message Report {
+  string report_id = 1;
+  string analysis_id = 2;
+  string snapshot_id = 3;
+  repopulse.common.v1.Repository repository = 4;
+  google.protobuf.Timestamp assessment_at = 5;
+  repopulse.common.v1.Window window = 6;
+  google.protobuf.Timestamp completed_at = 7;
+  repopulse.common.v1.Versions versions = 8;
+  optional double overall_score = 9;
+  repopulse.common.v1.Reason overall_reason = 10;
+  string summary = 11;
+  Coverage coverage = 12;
+  repeated Category categories = 13;
+  repeated repopulse.common.v1.SourceState sources = 14;
+  repeated repopulse.common.v1.Dependency dependencies = 15;
+  repeated Finding findings = 16;
+  repeated Recommendation recommendations = 17;
+  Explanation explanation = 18;
+}
+
+message ReportSummary {
+  string report_id = 1;
+  repopulse.common.v1.Repository repository = 2;
+  google.protobuf.Timestamp completed_at = 3;
+  optional double overall_score = 4;
+  bool partial = 5;
+}
+
+message HistoryPage {
+  repeated ReportSummary items = 1;
+  optional string next_cursor = 2;
+}
+
+message ListReportsQuery {
+  repopulse.common.v1.VerifiedContext context = 1;
+  optional string cursor = 2;
+}
+
+message GetReportQuery {
+  repopulse.common.v1.VerifiedContext context = 1;
+  string report_id = 2;
+}
+
+message ReusableReportQuery {
+  repopulse.common.v1.VerifiedContext context = 1;
+  repopulse.common.v1.FreshnessKey key = 2;
+}
+
+message ReusableReportResult {
+  Report report = 1;
+}
+
+service ReportService {
+  rpc GetReport (GetReportQuery) returns (Report);
+  rpc ListReports (ListReportsQuery) returns (HistoryPage);
+  rpc FindReusableReport (ReusableReportQuery) returns (ReusableReportResult);
+}
+

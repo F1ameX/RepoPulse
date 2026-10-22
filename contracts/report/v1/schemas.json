@@ -1,0 +1,751 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RepoPulse report v1",
+  "$defs": {
+    "Metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "input",
+        "normalized_score",
+        "rule_version",
+        "rule",
+        "threshold",
+        "explanation"
+      ],
+      "properties": {
+        "input": {
+          "$ref": "../../common/v1/schemas.json#/$defs/MetricInput",
+          "x-storage": "report.reports.payload.categories[].metrics[] → input",
+          "description": "Сохранённый MetricInput: исходное значение, охват, ограничения и доказательства."
+        },
+        "normalized_score": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "0..100 либо null; отсутствие балла объясняется reason.",
+          "minimum": 0,
+          "maximum": 100,
+          "x-storage": "report.reports.payload.categories[].metrics[] → normalized_score"
+        },
+        "rule_version": {
+          "type": "string",
+          "description": "Версия применённого правила расчёта метрики.",
+          "x-storage": "report.reports.payload.categories[].metrics[] → rule_version"
+        },
+        "rule": {
+          "type": "string",
+          "description": "Применённая формула и параметры, без пересчёта в UI.",
+          "x-storage": "report.reports.payload.categories[].metrics[] → rule"
+        },
+        "threshold": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Порог, использованный правилом; null для расчётов без порога.",
+          "x-storage": "report.reports.payload.categories[].metrics[] → threshold"
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Объяснение результата или рекомендации, связанное с сохранёнными основаниями.",
+          "x-storage": "report.reports.payload.categories[].metrics[] → explanation"
+        }
+      }
+    },
+    "Coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Общий total=12; category total=3/2/1/3/3. percentage=calculated/total*100. Counts are explicit and never inferred from absence.",
+      "required": [
+        "calculated",
+        "total",
+        "percentage",
+        "partial",
+        "unavailable",
+        "not_applicable"
+      ],
+      "properties": {
+        "calculated": {
+          "type": "integer",
+          "description": "Количество метрик с числовой нормализованной оценкой, включая нулевую.",
+          "minimum": 0,
+          "maximum": 12,
+          "x-storage": "report.reports.payload.coverage / report.reports.payload.categories[].coverage → calculated"
+        },
+        "total": {
+          "type": "integer",
+          "description": "Полное число метрик в области coverage: 12 для отчёта, число метрик для категории.",
+          "minimum": 1,
+          "maximum": 12,
+          "x-storage": "report.reports.payload.coverage / report.reports.payload.categories[].coverage → total"
+        },
+        "percentage": {
+          "type": "number",
+          "description": "calculated/total*100; публичное округление half-up 1 знак.",
+          "minimum": 0,
+          "maximum": 100,
+          "x-storage": "report.reports.payload.coverage / report.reports.payload.categories[].coverage → percentage"
+        },
+        "partial": {
+          "type": "integer",
+          "description": "Количество метрик с частичными данными.",
+          "minimum": 0,
+          "maximum": 12,
+          "x-storage": "report.reports.payload.coverage / report.reports.payload.categories[].coverage → partial"
+        },
+        "unavailable": {
+          "type": "integer",
+          "description": "Количество метрик с недоступными данными.",
+          "minimum": 0,
+          "maximum": 12,
+          "x-storage": "report.reports.payload.coverage / report.reports.payload.categories[].coverage → unavailable"
+        },
+        "not_applicable": {
+          "type": "integer",
+          "description": "Количество метрик, для которых проверка неприменима.",
+          "minimum": 0,
+          "maximum": 12,
+          "x-storage": "report.reports.payload.coverage / report.reports.payload.categories[].coverage → not_applicable"
+        }
+      }
+    },
+    "Category": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "id",
+        "score",
+        "status",
+        "reason",
+        "coverage",
+        "effective_weight",
+        "explanation",
+        "metrics"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Идентификатор одной из пяти категорий методики.",
+          "enum": [
+            "activity",
+            "documentation",
+            "testing",
+            "security",
+            "ci_cd"
+          ],
+          "x-storage": "report.reports.payload.categories[] → id"
+        },
+        "score": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Оценка 0..100; null при отсутствии достаточных данных.",
+          "minimum": 0,
+          "maximum": 100,
+          "x-storage": "report.reports.payload.categories[] → score"
+        },
+        "status": {
+          "type": "string",
+          "description": "Полнота данных категории по состояниям её метрик.",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "not_applicable"
+          ],
+          "x-storage": "report.reports.payload.categories[] → status"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "../../common/v1/schemas.json#/$defs/Reason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-storage": "report.reports.payload.categories[] → reason",
+          "description": "Причина partial/unavailable/not_applicable и границы допустимых выводов; null, если не требуется."
+        },
+        "coverage": {
+          "$ref": "schemas.json#/$defs/Coverage",
+          "x-storage": "report.reports.payload.categories[] → coverage",
+          "description": "Число рассчитанных, частичных, недоступных и неприменимых метрик."
+        },
+        "effective_weight": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Фактически перенормированный вклад категории.",
+          "minimum": 0,
+          "maximum": 1,
+          "x-storage": "report.reports.payload.categories[] → effective_weight"
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Объяснение результата или рекомендации, связанное с сохранёнными основаниями.",
+          "x-storage": "report.reports.payload.categories[] → explanation"
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/Metric"
+          },
+          "description": "Метрики категории в составе, установленном методикой; неизвестные значения не удаляются.",
+          "minItems": 1,
+          "maxItems": 3,
+          "x-storage": "report.reports.payload.categories[] → metrics"
+        }
+      }
+    },
+    "Finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "id",
+        "rule_id",
+        "category",
+        "title",
+        "description",
+        "severity",
+        "possible_consequence",
+        "evidence_ids",
+        "vulnerabilities"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Идентификатор находки, уникальный в пределах отчёта.",
+          "x-storage": "report.reports.payload.findings[] → id"
+        },
+        "rule_id": {
+          "type": "string",
+          "description": "Идентификатор правила или метрики, породившей находку.",
+          "enum": [
+            "ACT_COMMIT_FREQ",
+            "ACT_DAYS_SINCE_LAST",
+            "ACT_TREND",
+            "DOC_README",
+            "DOC_SUPPORT_SHARE",
+            "TEST_PRESENCE",
+            "SEC_SECRETS",
+            "SEC_VULN_RISK",
+            "SEC_SAST",
+            "CI_PRESENT",
+            "CI_SUCCESS_RATE",
+            "CI_REQUIRED_CHECKS"
+          ],
+          "x-storage": "report.reports.payload.findings[] → rule_id"
+        },
+        "category": {
+          "type": "string",
+          "description": "Категория методики, к которой относится находка.",
+          "enum": [
+            "activity",
+            "documentation",
+            "testing",
+            "security",
+            "ci_cd"
+          ],
+          "x-storage": "report.reports.payload.findings[] → category"
+        },
+        "title": {
+          "type": "string",
+          "description": "Короткое название находки или рекомендации.",
+          "x-storage": "report.reports.payload.findings[] → title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Описание наблюдения на основании собранных данных.",
+          "x-storage": "report.reports.payload.findings[] → description"
+        },
+        "severity": {
+          "type": "string",
+          "description": "Серьёзность находки: critical, high, medium, low или informational.",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "informational"
+          ],
+          "x-storage": "report.reports.payload.findings[] → severity"
+        },
+        "possible_consequence": {
+          "type": "string",
+          "description": "Возможное последствие находки; не утверждает уже произошедший инцидент.",
+          "x-storage": "report.reports.payload.findings[] → possible_consequence"
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Идентификаторы доказательств из сохранённых MetricInput.evidence этого отчёта.",
+          "x-storage": "report.reports.payload.findings[] → evidence_ids"
+        },
+        "vulnerabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "../../common/v1/schemas.json#/$defs/Vulnerability"
+          },
+          "description": "Известные уязвимости конкретных версий зависимостей; идентификаторы и серьёзность OSV.",
+          "x-storage": "report.reports.payload.findings[] → vulnerabilities"
+        }
+      }
+    },
+    "Recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "id",
+        "finding_id",
+        "title",
+        "action",
+        "expected_benefit",
+        "priority",
+        "complexity",
+        "variant_id",
+        "explanation"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Идентификатор рекомендации, уникальный в пределах отчёта.",
+          "x-storage": "report.reports.payload.recommendations[] → id"
+        },
+        "finding_id": {
+          "type": "string",
+          "description": "Обязательная связь с finding этого отчёта.",
+          "x-storage": "report.reports.payload.recommendations[] → finding_id"
+        },
+        "title": {
+          "type": "string",
+          "description": "Короткое название находки или рекомендации.",
+          "x-storage": "report.reports.payload.recommendations[] → title"
+        },
+        "action": {
+          "type": "string",
+          "description": "Конкретное предлагаемое действие из детерминированного каталога рекомендаций.",
+          "x-storage": "report.reports.payload.recommendations[] → action"
+        },
+        "expected_benefit": {
+          "type": "string",
+          "description": "Ожидаемая польза предлагаемого действия.",
+          "x-storage": "report.reports.payload.recommendations[] → expected_benefit"
+        },
+        "priority": {
+          "type": "string",
+          "description": "Приоритет рекомендации: high, middle или low.",
+          "enum": [
+            "high",
+            "middle",
+            "low"
+          ],
+          "x-storage": "report.reports.payload.recommendations[] → priority"
+        },
+        "complexity": {
+          "type": "string",
+          "description": "Оценка сложности действия: low, medium или high.",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "x-storage": "report.reports.payload.recommendations[] → complexity"
+        },
+        "variant_id": {
+          "type": "string",
+          "description": "Идентификатор допустимого текстового варианта из каталога рекомендаций.",
+          "enum": [
+            "short",
+            "expanded"
+          ],
+          "x-storage": "report.reports.payload.recommendations[] → variant_id"
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Объяснение результата или рекомендации, связанное с сохранёнными основаниями.",
+          "x-storage": "report.reports.payload.recommendations[] → explanation"
+        }
+      }
+    },
+    "Explanation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "mode",
+        "fallback_reason",
+        "model",
+        "catalog_version",
+        "schema_version",
+        "prompt_version"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "Источник выбранного текста: ai либо fallback.",
+          "enum": [
+            "ai_catalog_selection",
+            "deterministic_fallback"
+          ],
+          "x-storage": "report.reports.payload.explanation → mode"
+        },
+        "fallback_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "ai_unavailable/ai_timeout/ai_invalid_response/ai_not_configured/no_findings либо null.",
+          "x-storage": "report.reports.payload.explanation → fallback_reason"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Фактически вызванная модель; вызова не было=null.",
+          "x-storage": "report.reports.payload.explanation → model"
+        },
+        "catalog_version": {
+          "type": "string",
+          "description": "Версия каталога допустимых рекомендаций и текстовых вариантов.",
+          "x-storage": "report.reports.payload.explanation → catalog_version"
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "Версия схемы ответа AI с допустимыми идентификаторами.",
+          "x-storage": "report.reports.payload.explanation → schema_version"
+        },
+        "prompt_version": {
+          "type": "string",
+          "description": "Версия инструкции для выбора объяснения.",
+          "x-storage": "report.reports.payload.explanation → prompt_version"
+        }
+      }
+    },
+    "Report": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Единственный публичный Report DTO. Все пять категорий и 12 разных метрик обязательны. Без owner/session credentials.",
+      "required": [
+        "report_id",
+        "analysis_id",
+        "snapshot_id",
+        "repository",
+        "assessment_at",
+        "window",
+        "completed_at",
+        "versions",
+        "overall_score",
+        "overall_reason",
+        "summary",
+        "coverage",
+        "categories",
+        "sources",
+        "dependencies",
+        "findings",
+        "recommendations",
+        "explanation"
+      ],
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "description": "UUID сохранённого отчёта.",
+          "format": "uuid",
+          "x-storage": "report.reports.id"
+        },
+        "analysis_id": {
+          "type": "string",
+          "description": "UUID анализа; используется для чтения статуса и связи со снимком и отчётом.",
+          "format": "uuid",
+          "x-storage": "report.reports.analysis_id"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "description": "UUID сохранённого снимка входных данных анализа.",
+          "format": "uuid",
+          "x-storage": "report.reports.snapshot_id"
+        },
+        "repository": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Repository",
+          "x-storage": "report.reports.payload → repository",
+          "description": "Идентичность GitHub-репозитория и зафиксированная ревизия; структура Repository."
+        },
+        "assessment_at": {
+          "type": "string",
+          "description": "Зафиксированный момент оценки t в UTC; не обновляется при чтении результата.",
+          "format": "date-time",
+          "x-storage": "report.reports.payload → assessment_at"
+        },
+        "window": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Window",
+          "x-storage": "report.reports.payload → window",
+          "description": "Точные границы окна активности [t−140 дней, t)."
+        },
+        "completed_at": {
+          "type": "string",
+          "description": "Момент окончательного сохранения отчёта в UTC.",
+          "format": "date-time",
+          "x-storage": "report.reports.completed_at"
+        },
+        "versions": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Versions",
+          "x-storage": "report.reports.payload → versions",
+          "description": "Версии схемы, методики, профилей, правил и параметров объяснения для воспроизводимости."
+        },
+        "overall_score": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Итоговый Repo Health Score 0..100; null при невозможности расчёта. Ноль является оценкой.",
+          "minimum": 0,
+          "maximum": 100,
+          "x-storage": "report.reports.payload → overall_score"
+        },
+        "overall_reason": {
+          "anyOf": [
+            {
+              "$ref": "../../common/v1/schemas.json#/$defs/Reason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-storage": "report.reports.payload → overall_reason",
+          "description": "Причина отсутствия итоговой оценки; null при наличии числового результата."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Краткое резюме сохранённого отчёта.",
+          "x-storage": "report.reports.payload → summary"
+        },
+        "coverage": {
+          "$ref": "schemas.json#/$defs/Coverage",
+          "x-storage": "report.reports.payload → coverage",
+          "description": "Число рассчитанных, частичных, недоступных и неприменимых метрик."
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/Category"
+          },
+          "description": "Все пять категорий: activity, documentation, testing, security, ci_cd в установленном порядке.",
+          "minItems": 5,
+          "maxItems": 5,
+          "x-storage": "report.reports.payload → categories"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "../../common/v1/schemas.json#/$defs/SourceState"
+          },
+          "description": "Состояния источников, время получения, объём выборки, причины ограничений и отпечатки.",
+          "x-storage": "report.reports.payload → sources"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "../../common/v1/schemas.json#/$defs/Dependency"
+          },
+          "description": "Прямые зависимости npm/Maven/Go; дедупликация по ecosystem/package/version, общий лимит 20.",
+          "maxItems": 20,
+          "x-storage": "report.reports.payload → dependencies"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/Finding"
+          },
+          "description": "Детерминированные находки по метрикам; идентификаторы уникальны внутри отчёта.",
+          "maxItems": 12,
+          "x-storage": "report.reports.payload → findings"
+        },
+        "recommendations": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/Recommendation"
+          },
+          "description": "Действия из каталога, связанные с находками; AI не добавляет новых действий.",
+          "maxItems": 12,
+          "x-storage": "report.reports.payload → recommendations"
+        },
+        "explanation": {
+          "$ref": "schemas.json#/$defs/Explanation",
+          "x-storage": "report.reports.payload → explanation",
+          "description": "Сохранённый режим выбора текста, версии, модель и причина fallback."
+        }
+      }
+    },
+    "ReportSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "report_id",
+        "repository",
+        "completed_at",
+        "overall_score",
+        "partial"
+      ],
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "description": "UUID сохранённого отчёта.",
+          "format": "uuid",
+          "x-storage": "report.reports (проекция) → report_id"
+        },
+        "repository": {
+          "$ref": "../../common/v1/schemas.json#/$defs/Repository",
+          "x-storage": "report.reports (проекция) → repository",
+          "description": "Идентичность GitHub-репозитория и зафиксированная ревизия; структура Repository."
+        },
+        "completed_at": {
+          "type": "string",
+          "description": "Момент окончательного сохранения отчёта в UTC.",
+          "format": "date-time",
+          "x-storage": "report.reports (проекция) → completed_at"
+        },
+        "overall_score": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Итоговый Repo Health Score 0..100; null при невозможности расчёта. Ноль является оценкой.",
+          "minimum": 0,
+          "maximum": 100,
+          "x-storage": "report.reports (проекция) → overall_score"
+        },
+        "partial": {
+          "type": "boolean",
+          "description": "true, если отчёт содержит ограничения или неполные данные.",
+          "x-storage": "report.reports (проекция) → partial"
+        }
+      }
+    },
+    "HistoryPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "items",
+        "next_cursor"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "schemas.json#/$defs/ReportSummary"
+          },
+          "description": "Сохранённые отчёты аккаунта текущей страницы истории; максимум 20 элементов.",
+          "maxItems": 20,
+          "x-storage": "report.history_views/report.history_view_items + report.reports (проекция) → items"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Непрозрачный привязанный к аккаунту курсор фиксированного состава обхода.",
+          "x-storage": "report.history_views/report.history_view_items + report.reports (проекция) → next_cursor"
+        }
+      }
+    },
+    "ListReportsQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "context",
+        "cursor"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "../../common/v1/schemas.json#/$defs/VerifiedContext",
+          "description": "Проверенные Auth идентичности и сроки действия; клиент не задаёт этот объект."
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Непрозрачный курсор фиксированного просмотра истории; null для первой страницы."
+        }
+      },
+      "x-internal": true
+    },
+    "GetReportQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "context",
+        "report_id"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "../../common/v1/schemas.json#/$defs/VerifiedContext",
+          "description": "Проверенные Auth идентичности и сроки действия; клиент не задаёт этот объект."
+        },
+        "report_id": {
+          "type": "string",
+          "description": "UUID сохранённого отчёта.",
+          "format": "uuid"
+        }
+      },
+      "x-internal": true
+    },
+    "ReusableReportQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "context",
+        "key"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "../../common/v1/schemas.json#/$defs/VerifiedContext",
+          "description": "Проверенные Auth идентичности и сроки действия; клиент не задаёт этот объект."
+        },
+        "key": {
+          "$ref": "../../common/v1/schemas.json#/$defs/FreshnessKey",
+          "description": "Полный подтверждённый контекст поиска ранее сохранённого отчёта."
+        }
+      },
+      "x-internal": true
+    },
+    "ReusableReportResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "",
+      "required": [
+        "report"
+      ],
+      "properties": {
+        "report": {
+          "anyOf": [
+            {
+              "$ref": "schemas.json#/$defs/Report"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Подходящий сохранённый отчёт; отсутствие означает необходимость нового анализа."
+        }
+      },
+      "x-internal": true
+    }
+  }
+}

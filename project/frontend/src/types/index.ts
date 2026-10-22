@@ -1,5 +1,3 @@
-`report.ts`:
-```ts
 export type RepositoryPlatform = "github" | "gitlab";
 
 export type AnalysisStatus =
@@ -182,4 +180,3 @@ export interface AnalysisError {
 
   message: string;
 }
-```

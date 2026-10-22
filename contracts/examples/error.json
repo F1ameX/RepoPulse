@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "SUBMISSION_CHANGED",
+    "message": "Запрос изменён. Отправьте его заново",
+    "trace_id": "example-trace",
+    "field_errors": []
+  }
+}

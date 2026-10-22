@@ -1,0 +1,713 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RepoPulse MVP — единый контракт",
+    "version": "1.1.0",
+    "description": "Task #18464. Нормативные источники: Redmine #916 редакция 1.1, #888 редакция 3.0.1, #889/#909 редакции 2.3, прочитаны 20.10.2026. Поля/proto numbers — реализационные решения для этих требований. Публикация не означает командное одобрение или реализацию обработчиков."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/register": {
+      "post": {
+        "operationId": "register",
+        "summary": "Создать аккаунт без автоматического входа.",
+        "responses": {
+          "201": {
+            "description": "Успех",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Войти. Account cookie действует ровно 7 суток.",
+        "responses": {
+          "200": {
+            "description": "Успех",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "repopulse_session: HttpOnly; Secure; SameSite=Lax; Path=/api/v1; Max-Age=604800.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/guest-session": {
+      "post": {
+        "operationId": "createGuestSession",
+        "summary": "Выдать guest session cookie; максимум 24 ч, без persistent Max-Age/Expires.",
+        "responses": {
+          "201": {
+            "description": "Успех",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "repopulse_guest: HttpOnly; Secure; SameSite=Lax; Path=/api/v1; без Max-Age/Expires; серверный срок 24 ч.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "200": {
+            "description": "Повтор при действующем guest: тот же контекст и первоначальный срок без продления.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "repopulse_guest: HttpOnly; Secure; SameSite=Lax; Path=/api/v1; без Max-Age/Expires; серверный срок 24 ч.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "operationId": "getSessionContext",
+        "summary": "Проверить совместно действующие контексты, включая сохранность cookie.",
+        "responses": {
+          "200": {
+            "description": "Успех",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionContext"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "accountCookie": []
+          },
+          {
+            "guestCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Отозвать только текущую account session; повтор безопасен.",
+        "responses": {
+          "204": {
+            "description": "Успех без тела",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Удалить account cookie с теми же Path/Secure/SameSite; guest cookie сохраняется.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "accountCookie": []
+          },
+          {
+            "guestCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/repositories/validate": {
+      "post": {
+        "operationId": "validateRepository",
+        "summary": "FR-01/02: формат и подтверждение публичности. Анализ не создаётся.",
+        "responses": {
+          "200": {
+            "description": "Успех",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidatedRepository"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          },
+          "504": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "accountCookie": []
+          },
+          {
+            "guestCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateRepositoryRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analyses": {
+      "post": {
+        "operationId": "createAnalysis",
+        "summary": "Создать анализ или вернуть ранее выбранный исход отправки.",
+        "responses": {
+          "202": {
+            "description": "Успех",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAnalysisResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "200": {
+            "description": "Переиспользован ранее сформированный отчёт того же владельца.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAnalysisResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          },
+          "504": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "accountCookie": []
+          },
+          {
+            "guestCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAnalysisRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analyses/{analysis_id}": {
+      "get": {
+        "operationId": "getAnalysis",
+        "summary": "Чтение своего сохранённого ресурса без постановки работы.",
+        "responses": {
+          "200": {
+            "description": "Успех",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "accountCookie": []
+          },
+          {
+            "guestCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Некорректный/чужой/отсутствующий ID → одинаковый 404 после проверки сессии."
+          }
+        ]
+      }
+    },
+    "/api/v1/reports/{report_id}": {
+      "get": {
+        "operationId": "getReport",
+        "summary": "Чтение своего сохранённого ресурса без постановки работы.",
+        "responses": {
+          "200": {
+            "description": "Успех",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Report"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "accountCookie": []
+          },
+          {
+            "guestCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Некорректный/чужой/отсутствующий ID → одинаковый 404 после проверки сессии."
+          }
+        ]
+      }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "operationId": "listReports",
+        "summary": "Только аккаунт. До 20; completed_at DESC, report_id ASC; фиксированный состав просмотра.",
+        "responses": {
+          "200": {
+            "description": "Успех",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "accountCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "При отсутствии начинается новый фиксированный обход."
+          }
+        ]
+      }
+    }
+  },
+  "x-serialization": {
+    "json": "HTTP DTO JSON: snake_case; required fields present including null and empty arrays",
+    "int64": "not used; GitHub numeric IDs represented by strings",
+    "timestamps": "RFC3339 UTC Z; exact stored precision for window; UI display seconds only"
+  },
+  "x-invariants": [
+    "No client owner/session IDs in HTTP request bodies. additionalProperties=false.",
+    "VerifiedContext contains at least one currently valid identity; new job picks account before guest; saved Owner exactly one.",
+    "Every state-changing cookie request validates Origin/CSRF; no wildcard credentialed CORS.",
+    "Replay owner/request_id checked before GitHub; changed canonical URL -> 409.",
+    "HTTP 404 and gRPC NOT_FOUND do not disclose foreign resource metadata.",
+    "Invalid/expired presented account cookie must not silently fall back to guest for a new operation; continue-as-guest is explicit."
+  ],
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "components": {
+    "securitySchemes": {
+      "accountCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "repopulse_session"
+      },
+      "guestCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "repopulse_guest"
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Ошибка с безопасным code/message, trace_id и field_errors; см. docs/errors.md.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "FieldError": {
+        "$ref": "../../common/v1/schemas.json#/$defs/FieldError"
+      },
+      "ApiError": {
+        "$ref": "../../common/v1/schemas.json#/$defs/ApiError"
+      },
+      "ErrorEnvelope": {
+        "$ref": "../../common/v1/schemas.json#/$defs/ErrorEnvelope"
+      },
+      "Credentials": {
+        "$ref": "../../auth/v1/schemas.json#/$defs/Credentials"
+      },
+      "RegistrationResult": {
+        "$ref": "../../auth/v1/schemas.json#/$defs/RegistrationResult"
+      },
+      "SessionInfo": {
+        "$ref": "../../auth/v1/schemas.json#/$defs/SessionInfo"
+      },
+      "SessionContext": {
+        "$ref": "../../auth/v1/schemas.json#/$defs/SessionContext"
+      },
+      "Repository": {
+        "$ref": "../../common/v1/schemas.json#/$defs/Repository"
+      },
+      "ValidateRepositoryRequest": {
+        "$ref": "../../analyzer/v1/schemas.json#/$defs/ValidateRepositoryRequest"
+      },
+      "ValidatedRepository": {
+        "$ref": "../../analyzer/v1/schemas.json#/$defs/ValidatedRepository"
+      },
+      "CreateAnalysisRequest": {
+        "$ref": "../../analyzer/v1/schemas.json#/$defs/CreateAnalysisRequest"
+      },
+      "CreateAnalysisResponse": {
+        "$ref": "../../analyzer/v1/schemas.json#/$defs/CreateAnalysisResponse"
+      },
+      "AnalysisStatus": {
+        "$ref": "../../analyzer/v1/schemas.json#/$defs/AnalysisStatus"
+      },
+      "Window": {
+        "$ref": "../../common/v1/schemas.json#/$defs/Window"
+      },
+      "Versions": {
+        "$ref": "../../common/v1/schemas.json#/$defs/Versions"
+      },
+      "Reason": {
+        "$ref": "../../common/v1/schemas.json#/$defs/Reason"
+      },
+      "Sample": {
+        "$ref": "../../common/v1/schemas.json#/$defs/Sample"
+      },
+      "SourceState": {
+        "$ref": "../../common/v1/schemas.json#/$defs/SourceState"
+      },
+      "DependencyOrigin": {
+        "$ref": "../../common/v1/schemas.json#/$defs/DependencyOrigin"
+      },
+      "Dependency": {
+        "$ref": "../../common/v1/schemas.json#/$defs/Dependency"
+      },
+      "Vulnerability": {
+        "$ref": "../../common/v1/schemas.json#/$defs/Vulnerability"
+      },
+      "Evidence": {
+        "$ref": "../../common/v1/schemas.json#/$defs/Evidence"
+      },
+      "MetricInput": {
+        "$ref": "../../common/v1/schemas.json#/$defs/MetricInput"
+      },
+      "Metric": {
+        "$ref": "../../report/v1/schemas.json#/$defs/Metric"
+      },
+      "Coverage": {
+        "$ref": "../../report/v1/schemas.json#/$defs/Coverage"
+      },
+      "Category": {
+        "$ref": "../../report/v1/schemas.json#/$defs/Category"
+      },
+      "Finding": {
+        "$ref": "../../report/v1/schemas.json#/$defs/Finding"
+      },
+      "Recommendation": {
+        "$ref": "../../report/v1/schemas.json#/$defs/Recommendation"
+      },
+      "Explanation": {
+        "$ref": "../../report/v1/schemas.json#/$defs/Explanation"
+      },
+      "Report": {
+        "$ref": "../../report/v1/schemas.json#/$defs/Report"
+      },
+      "ReportSummary": {
+        "$ref": "../../report/v1/schemas.json#/$defs/ReportSummary"
+      },
+      "HistoryPage": {
+        "$ref": "../../report/v1/schemas.json#/$defs/HistoryPage"
+      },
+      "ExcludedCount": {
+        "$ref": "../../common/v1/schemas.json#/$defs/ExcludedCount"
+      }
+    }
+  }
+}
