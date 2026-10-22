@@ -24,11 +24,84 @@ migrations/report                          отчёты и история
 Из `project/backend`: `go run ./cmd/api`. Проверка процесса:
 `curl http://127.0.0.1:8080/health` → `200 {"status":"ok"}`.
 Остановка — Ctrl+C. Report пока инициализирует логгер и ждёт завершения.
-Analyzer открывает PostgreSQL-хранилище; см. раздел «Хранение анализа».
+Analyzer открывает PostgreSQL-хранилище; см.
+[пошаговый запуск](#запуск-analyzer-с-postgresql).
 Auth запускает gRPC-сервер, см. раздел «Auth Service».
-Каркас Analyzer запускается через `go run ./cmd/analyzer`.
 Бизнес-обработчики подключаются в следующих задачах. HTTP-маршруты из OpenAPI
 пока возвращают 501 NOT_IMPLEMENTED; health работает самостоятельно.
+
+## Запуск Analyzer с PostgreSQL
+
+Нужны Go 1.26, запущенная PostgreSQL 17 и её утилиты `psql`/`createdb` в PATH.
+Ниже команды для PowerShell, начиная из корня репозитория. В примере PostgreSQL
+слушает `127.0.0.1:5432`, административная роль — `postgres`, база и роль
+приложения — `repopulse`. Если у вас другие параметры, замените их в командах и DSN.
+
+1. Один раз создайте роль и базу для локальной разработки. `psql` и `createdb`
+   запросят пароль административной роли, если он требуется сервером.
+   Если роль и база уже существуют, используйте их и переходите к следующему шагу.
+
+   ```powershell
+   psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE repopulse LOGIN PASSWORD 'local-password';"
+   createdb -h 127.0.0.1 -p 5432 -U postgres -O repopulse repopulse
+   ```
+
+   `local-password` — пароль роли приложения для этого локального примера.
+   Все три схемы `auth`, `analyzer`, `report` создаются миграциями в одной базе.
+
+2. Установите CLI [Goose](https://github.com/pressly/goose), если он ещё не установлен,
+   и добавьте каталог установки Go-инструментов в PATH текущего терминала:
+
+   ```powershell
+   go install github.com/pressly/goose/v3/cmd/goose@v3.27.0
+   $gooseBin = go env GOBIN
+   if (-not $gooseBin) { $gooseBin = Join-Path (go env GOPATH) 'bin' }
+   $env:Path += ";$gooseBin"
+   goose --version
+   ```
+
+3. Перейдите в backend и задайте окружение в том же терминале:
+
+   ```powershell
+   cd project/backend
+   $env:ANALYZER_DATABASE_URL = 'postgres://repopulse:local-password@127.0.0.1:5432/repopulse?sslmode=disable'
+   $env:ANALYZER_DATABASE_TIMEOUT = '5s'
+   ```
+
+   `.env.example` служит образцом: копирование в `.env` само по себе не задаёт
+   окружение процесса. `sslmode=disable` в примере относится к локальной PostgreSQL.
+
+4. Примените миграции в порядке `auth → analyzer → report`, с отдельной таблицей
+   версий Goose для каждого каталога:
+
+   ```powershell
+   goose -dir migrations/auth -table goose_auth_version postgres "$env:ANALYZER_DATABASE_URL" up
+   goose -dir migrations/analyzer -table goose_analyzer_version postgres "$env:ANALYZER_DATABASE_URL" up
+   goose -dir migrations/report -table goose_report_version postgres "$env:ANALYZER_DATABASE_URL" up
+   ```
+
+   Каждая команда должна завершиться успешно. Применение миграций и их откат
+   подробнее описаны в [README миграций](migrations/README.md).
+
+5. Запустите Analyzer из `project/backend`:
+
+   ```powershell
+   go run ./cmd/analyzer
+   ```
+
+   Успешный запуск подтверждает JSON-лог с `service: analyzer-service` и
+   `msg: Analysis storage ready`. Процесс остаётся запущенным и ожидает завершения;
+   остановка — `Ctrl+C`, в логе появится `Service stopped`.
+
+На этом этапе процесс Analyzer проверяет БД и открывает хранилище. Он ещё не
+открывает HTTP/gRPC-порт и не запускает анализ репозитория. `GET /health`
+на порту 8080 относится к отдельно запущенному API Gateway. Проверка операций
+чтения/записи описана в разделе [«Хранение анализа»](#хранение-анализа).
+
+Если запуск завершается с `ANALYZER_DATABASE_URL is required`, проверьте окружение
+текущего терминала. `analyzer database is unavailable` означает, что нужно проверить
+работу PostgreSQL, адрес и реквизиты DSN. При `apply auth/analyzer/report migrations`
+примените все три набора миграций к той же базе, которая указана в DSN.
 
 ## Переменные окружения
 
