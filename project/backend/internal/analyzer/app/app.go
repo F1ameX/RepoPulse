@@ -9,9 +9,19 @@ import (
 
 const Name = "analyzer-service"
 
-// Run currently initializes only logging and waits for shutdown.
+// Run opens Analyzer storage. Worker scheduling and incoming operations are
+// connected by subsequent tasks; migrations are never run at process startup.
 func Run(ctx context.Context) error {
-	logger.From(ctx).InfoContext(ctx, "Service scaffold started")
+	cfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	_, closeStorage, err := OpenStorage(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer closeStorage()
+	logger.From(ctx).InfoContext(ctx, "Analysis storage ready")
 	<-ctx.Done()
 	logger.From(ctx).InfoContext(ctx, "Service stopped")
 	return nil

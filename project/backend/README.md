@@ -15,7 +15,7 @@ internal/auth                             gRPC-каркас Auth Service
 internal/report                           каркас Report
 internal/pkg/grpcerr                      формат gRPC-ошибок
 pkg/proto                                 код, сгенерированный из contracts
-internal/analyzer                          каркас Analyzer
+internal/analyzer                          модели, сценарии и PostgreSQL-хранилище
 migrations/auth                            идентичности и сессии
 migrations/analyzer                        очередь и снимки
 migrations/report                          отчёты и история
@@ -23,7 +23,8 @@ migrations/report                          отчёты и история
 
 Из `project/backend`: `go run ./cmd/api`. Проверка процесса:
 `curl http://127.0.0.1:8080/health` → `200 {"status":"ok"}`.
-Остановка — Ctrl+C. Report/Analyzer пока инициализируют логгер и ждут завершения.
+Остановка — Ctrl+C. Report пока инициализирует логгер и ждёт завершения.
+Analyzer открывает PostgreSQL-хранилище; см. раздел «Хранение анализа».
 Auth запускает gRPC-сервер, см. раздел «Auth Service».
 Каркас Analyzer запускается через `go run ./cmd/analyzer`.
 Бизнес-обработчики подключаются в следующих задачах. HTTP-маршруты из OpenAPI
@@ -44,6 +45,8 @@ Auth запускает gRPC-сервер, см. раздел «Auth Service».
 | `HTTP_IDLE_TIMEOUT` | `60s` | API |
 | `SHUTDOWN_TIMEOUT` | `10s` | API, Auth |
 | `AUTH_GRPC_ADDR` | `127.0.0.1:9090` | Auth; host:port gRPC-сервера |
+| `ANALYZER_DATABASE_URL` | обязательно | Analyzer; DSN общей PostgreSQL |
+| `ANALYZER_DATABASE_TIMEOUT` | `5s` | Analyzer; срок открытия подключения |
 
 Неверные и явно пустые значения приводят к ошибке запуска.
 В PowerShell: `$env:HTTP_ADDR = "127.0.0.1:9090"; go run ./cmd/api`.
@@ -132,3 +135,46 @@ JSON Schema и `.proto` разделены по сервисам в `contracts/`
 
 Из `project/backend`: `go test -race ./...`, `go vet ./...`, `go build ./...`.
 [Результат технической проверки Git](../../docs/git-check.md).
+
+## Хранение анализа
+
+Внутренние сценарии `internal/analyzer/application/storage` связаны с PostgreSQL
+адаптером через `app.OpenStorage`. Для `go run ./cmd/analyzer` задайте
+`ANALYZER_DATABASE_URL` и заранее примените [миграции](migrations/README.md).
+Процесс проверяет соединение и ожидает завершения. HTTP, исполнение очереди,
+сбор реальных входов и история профиля подключаются отдельными задачами.
+
+- `CreateAccepted` сохраняет уже проверенный репозиторий, серверные UUID,
+  Owner из доверенного Auth VerifiedContext, момент оценки, окно 140 дней и версии.
+  Повтор пары Owner/request_id возвращает прежний анализ; другой URL отклоняется.
+  Это операция хранения принятого задания, а не полный HTTP CreateAnalysis:
+  резервация отправки до GitHub и обработка переноса URL относятся к его оркестрации.
+- `Start` переводит queued в running и фиксирует срок исполнения.
+- `Complete` принимает только типизированные входы и вычисленный результат.
+  Metadata снимка/отчёта формируется из сохранённого анализа. Под блокировкой строки
+  одна транзакция записывает snapshot, зависимости, уязвимости, report и completed.
+  Повторное завершение отклоняется; ошибка записи откатывает все изменения.
+- `Get` и `GetResult` проверяют Owner и срок контекста. Исходный guest сохраняет
+  доступ после входа при действующем гостевом контексте; отчёт не переносится
+  владельцу аккаунта. Чтение не вызывает внешние источники.
+
+Снимок соответствует `contracts/analyzer/v1/schemas.json`: все 12 метрик,
+полнота/причины, nullable значения, версии профилей, npm/Maven/Go с origins.
+Значения секретов и исходные строки не являются полями модели. Для secret_match
+перед записью строится описание только из разрешённого типа находки; текстовый
+raw_value SEC_SECRETS отклоняется. Коллекторы и расчёт должны передавать безопасные
+нормализованные факты, а не произвольный текст файлов/ошибок.
+
+Интеграционные тесты используют `REPOPULSE_TEST_DATABASE_URL` подключения к
+тестовой PostgreSQL с правом CREATE DATABASE. Для каждого прогона создаётся
+отдельная БД `repopulse_storage_<случайный UUID>`, применяются foundation Up,
+проверяются round trip, доступ, гонки и rollback, затем Down/Up и удаление этой БД.
+Без переменной этот тест пропускается; CI поднимает PostgreSQL 17 и запускает его
+вместе с `go test -race`. Не указывайте производственную БД.
+
+Пример PowerShell:
+
+```powershell
+$env:REPOPULSE_TEST_DATABASE_URL = 'postgres://test_user:test_password@127.0.0.1:5432/postgres?sslmode=disable'
+go test -race ./...
+```
