@@ -1,0 +1,12 @@
+{
+  "repository": {
+    "platform": "github",
+    "github_id": "42",
+    "canonical_url": "https://github.com/owner/repo",
+    "owner": "Owner",
+    "name": "Repo",
+    "default_branch": "main",
+    "commit_sha": null
+  },
+  "moved_from": null
+}
