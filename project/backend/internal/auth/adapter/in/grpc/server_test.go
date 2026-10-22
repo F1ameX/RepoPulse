@@ -52,7 +52,8 @@ func apiError(t *testing.T, trailer metadata.MD) *commonv1.ApiError {
 }
 
 func TestStubMethodsReturnNotImplemented(t *testing.T) {
-	client := newClient(t, auth.NewService(nil, nil))
+	// Stub scenarios do not touch their dependencies.
+	client := newClient(t, auth.NewService(nil, nil, nil, nil, nil))
 	ctx := metadata.AppendToOutgoingContext(context.Background(), grpcerr.RequestIDKey, "req-1")
 	calls := map[string]func(...grpc.CallOption) error{
 		"Register": func(o ...grpc.CallOption) error {
@@ -61,10 +62,6 @@ func TestStubMethodsReturnNotImplemented(t *testing.T) {
 		},
 		"Login": func(o ...grpc.CallOption) error {
 			_, err := client.Login(ctx, &authv1.Credentials{Login: "flamex", Password: "correct horse battery"}, o...)
-			return err
-		},
-		"CreateGuestSession": func(o ...grpc.CallOption) error {
-			_, err := client.CreateGuestSession(ctx, &commonv1.Empty{}, o...)
 			return err
 		},
 		"ResolveContext": func(o ...grpc.CallOption) error {

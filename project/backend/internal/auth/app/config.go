@@ -12,7 +12,7 @@ import (
 type Config struct {
 	GRPCAddr        string
 	ShutdownTimeout time.Duration
-	DatabaseURL string
+	DatabaseURL     string
 }
 
 // LoadConfig reads Auth settings from the process environment.
