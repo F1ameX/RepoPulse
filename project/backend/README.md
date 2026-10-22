@@ -44,6 +44,7 @@ Auth запускает gRPC-сервер, см. раздел «Auth Service».
 | `HTTP_IDLE_TIMEOUT` | `60s` | API |
 | `SHUTDOWN_TIMEOUT` | `10s` | API, Auth |
 | `AUTH_GRPC_ADDR` | `127.0.0.1:9090` | Auth; host:port gRPC-сервера |
+| `AUTH_DATABASE_URL` | — (обязательна) | Auth; строка подключения PostgreSQL, не логируется |
 
 Неверные и явно пустые значения приводят к ошибке запуска.
 В PowerShell: `$env:HTTP_ADDR = "127.0.0.1:9090"; go run ./cmd/api`.
@@ -57,23 +58,48 @@ Auth запускает gRPC-сервер, см. раздел «Auth Service».
 
 gRPC-сервис по контракту [auth.proto](../../contracts/auth/v1/auth.proto):
 AuthService (Register, Login, CreateGuestSession, ResolveContext, Logout) и
-стандартный health-check `grpc.health.v1.Health`. Это технический каркас:
-все методы AuthService пока отвечают `UNIMPLEMENTED` с кодом `NOT_IMPLEMENTED`;
-регистрация, вход и сессии реализуются в следующих задачах.
+стандартный health-check `grpc.health.v1.Health`. Сейчас работают
+CreateGuestSession и гостевая часть ResolveContext; Register, Login и Logout
+отвечают `UNIMPLEMENTED` с кодом `NOT_IMPLEMENTED`.
 
-Запуск из `project/backend`:
+### Локальный запуск
 
-```sh
-go run ./cmd/auth
-AUTH_GRPC_ADDR=127.0.0.1:9191 go run ./cmd/auth   # другой адрес
-```
+Нужны PostgreSQL, применённая миграция схемы `auth` и переменная
+`AUTH_DATABASE_URL`; без неё сервис не стартует. Команды — из `project/backend`.
 
-В логе появится `gRPC server listening`. Остановка — Ctrl+C: health переходит
-в `NOT_SERVING`, сервер завершает активные вызовы не дольше `SHUTDOWN_TIMEOUT`.
+1. PostgreSQL. Пример с Docker (данные удаляются при остановке контейнера):
+
+   ```sh
+   docker run -d --rm --name repopulse-postgres -e POSTGRES_PASSWORD=postgres \
+     -e POSTGRES_DB=repopulse -p 127.0.0.1:5432:5432 postgres:17-alpine
+   export AUTH_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/repopulse?sslmode=disable'
+   ```
+
+2. Миграция auth применяется вручную через [Goose](https://github.com/pressly/goose),
+   при старте сервиса она не запускается (см. [README миграций](migrations/README.md)):
+
+   ```sh
+   go install github.com/pressly/goose/v3/cmd/goose@latest
+   goose -dir migrations/auth postgres "$AUTH_DATABASE_URL" up
+   ```
+
+3. Запуск сервиса:
+
+   ```sh
+   go run ./cmd/auth
+   AUTH_GRPC_ADDR=127.0.0.1:9191 go run ./cmd/auth   # другой адрес
+   ```
+
+При старте сервис подключается к БД и проверяет её через ping; при ошибке
+процесс завершается с кодом 1. В логе появится `gRPC server listening`.
+Остановка — Ctrl+C: health переходит в `NOT_SERVING`, сервер завершает
+активные вызовы не дольше `SHUTDOWN_TIMEOUT`, затем закрывается пул соединений.
 Сервер работает без TLS; внешняя достижимость и защита соединений задаются
 конфигурацией запуска.
 
-Health-check проверяется через
+### Проверка
+
+Health-check — через
 [grpc-health-probe](https://github.com/grpc-ecosystem/grpc-health-probe):
 
 ```sh
@@ -82,16 +108,27 @@ grpc-health-probe -addr=127.0.0.1:9090                                  # status
 grpc-health-probe -addr=127.0.0.1:9090 -service=repopulse.auth.v1.AuthService
 ```
 
-Методы AuthService можно вызвать через [grpcurl](https://github.com/fullstorydev/grpcurl).
-Reflection не включён, поэтому контракт передаётся явно (из `project/backend`):
+Методы — через [grpcurl](https://github.com/fullstorydev/grpcurl)
+(`go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest`). Reflection
+не включён, поэтому контракт передаётся явно; `-import-path` указывает на
+корневую папку `contracts`.
 
 ```sh
-grpcurl -plaintext -v -import-path ../../contracts -proto auth/v1/auth.proto \
+# Новая гостевая сессия: token (значение cookie repopulse_guest) и SessionInfo
+grpcurl -plaintext -import-path ../../contracts -proto auth/v1/auth.proto \
   -H 'x-request-id: local-1' -d '{}' \
   127.0.0.1:9090 repopulse.auth.v1.AuthService/CreateGuestSession
+
+# Проверка гостя: guestSessionId (id principal) и guestExpiresAt
+grpcurl -plaintext -import-path ../../contracts -proto auth/v1/auth.proto \
+  -d '{"guest_token": "<token из ответа выше>"}' \
+  127.0.0.1:9090 repopulse.auth.v1.AuthService/ResolveContext
 ```
 
-Ответ: `Code: Unimplemented` и trailer `repopulse-error-bin` с ApiError.
+Для неизвестного, истёкшего или отозванного токена ResolveContext возвращает
+`{}` — гостевые поля отсутствуют. grpcurl печатает поля в camelCase.
+Созданные записи видны в таблицах `auth.principals` и `auth.sessions`;
+в БД хранится только SHA-256 хэш токена.
 
 Ошибки возвращаются по [docs/errors.md](../../docs/errors.md): gRPC status и
 `common.v1.ApiError` в trailing metadata `repopulse-error-bin`; `trace_id`
@@ -101,9 +138,10 @@ grpcurl -plaintext -v -import-path ../../contracts -proto auth/v1/auth.proto \
 недоступного пользователя (`UNAUTHENTICATED` / `INVALID_CREDENTIALS`,
 «Неверный логин или пароль»). Прочие ошибки скрываются как `INTERNAL_ERROR`.
 
-Интерфейсы хранилищ пользователей (`UserRepository`) и токенов сессий
-(`TokenRepository`) объявлены в `internal/auth/application/auth/ports.go`;
-реализаций пока нет.
+Порты хранилищ (`UserRepository`, `TokenRepository`, `GuestRepository`) объявлены
+в `internal/auth/application/auth/ports.go`, реализации на PostgreSQL —
+в `internal/auth/adapter/out/repository`. Валидаторы логина и пароля FR-27 —
+`internal/auth/domain/credentials.go`.
 
 ### Генерация кода из proto
 

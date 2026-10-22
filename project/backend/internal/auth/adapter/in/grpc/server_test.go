@@ -64,10 +64,6 @@ func TestStubMethodsReturnNotImplemented(t *testing.T) {
 			_, err := client.Login(ctx, &authv1.Credentials{Login: "flamex", Password: "correct horse battery"}, o...)
 			return err
 		},
-		"ResolveContext": func(o ...grpc.CallOption) error {
-			_, err := client.ResolveContext(ctx, &authv1.SessionTokens{}, o...)
-			return err
-		},
 		"Logout": func(o ...grpc.CallOption) error {
 			_, err := client.Logout(ctx, &authv1.LogoutCommand{AccountToken: "token"}, o...)
 			return err
