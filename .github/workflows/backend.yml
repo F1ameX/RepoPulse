@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'project/backend/**'
+      - 'contracts/**'
       - '.github/workflows/backend.yml'
   pull_request:
     paths:
       - 'project/backend/**'
+      - 'contracts/**'
       - '.github/workflows/backend.yml'
   workflow_dispatch:
 
@@ -17,6 +19,22 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: repopulse_test
+          POSTGRES_PASSWORD: repopulse_test
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U repopulse_test -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      REPOPULSE_TEST_DATABASE_URL: postgres://repopulse_test:repopulse_test@localhost:5432/postgres?sslmode=disable
     defaults:
       run:
         working-directory: project/backend
@@ -25,7 +43,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: project/backend/go.mod
-          cache: false # Only the standard library; no go.sum yet.
+          cache-dependency-path: project/backend/go.sum
       - name: Check formatting
         run: |
           unformatted="$(gofmt -l .)"

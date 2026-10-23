@@ -18,3 +18,19 @@ Up создаёт схему, таблицы и индексы; Down удаля�
 неизменяемость результатов и транзакционное завершение анализа реализуются
 в сервисах.
 
+Задача хранения использует существующие foundation-таблицы; изменять уже
+применённые `00001_foundation.sql` для её запуска не требуется.
+При использовании Goose CLI задавайте отдельную таблицу версий для каждого
+каталога: номера миграций в трёх каталогах независимы. Из `project/backend`:
+
+```sh
+goose -dir migrations/auth -table goose_auth_version postgres "<DSN>" up
+goose -dir migrations/analyzer -table goose_analyzer_version postgres "<DSN>" up
+goose -dir migrations/report -table goose_report_version postgres "<DSN>" up
+```
+
+Для Down выполняйте команды в обратном порядке с теми же таблицами версий.
+Приложение не применяет миграции само. PostgreSQL integration-тест адаптера
+Analyzer проверяет SQL секций Up/Down на отдельной временной БД; он не заменяет
+учёт версий Goose в окружении разработчика.
+

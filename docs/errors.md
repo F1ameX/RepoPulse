@@ -44,3 +44,20 @@ userinfo, query/fragment (даже пустые), percent-encoding, дополн
 backslash, внутренние пробелы и не-ASCII; только HTTPS github.com, owner/repository,
 один конечный slash и удаление одного суффикса .git. Метаданные GitHub, а не один
 HTTP-статус или HTML-страница, подтверждают публичность и перенос с тем же GitHub ID.
+
+## Ошибки полей login/password (FR-27)
+
+VALIDATION_FAILED содержит в field_errors первую ошибку каждого поля: login, затем
+password. Проверки поля идут в порядке пустота → длина → символы → только пробелы;
+проверка занятости и учётных данных выполняется только после прохождения обоих полей.
+Сообщение не повторяет введённый пароль.
+
+| field | code | message |
+|---|---|---|
+| login | REQUIRED | Укажите логин |
+| login | INVALID_LENGTH | Логин должен содержать от 3 до 32 символов |
+| login | INVALID_CHARACTERS | Логин: первая латинская буква, далее латинские буквы, цифры или _ |
+| password | REQUIRED | Укажите пароль |
+| password | INVALID_LENGTH | Пароль должен содержать от 15 до 128 символов |
+| password | INVALID_CHARACTERS | Пароль содержит недопустимые символы |
+| password | WHITESPACE_ONLY | Пароль не может состоять только из пробелов |
