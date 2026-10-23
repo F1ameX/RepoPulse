@@ -1,1 +1,204 @@
-/* полностью редактируй под свой дизайн */
+.page {
+  --color-text: #1a1613;
+  --color-primary: #1a1613;
+  --color-primary-hover: #39312b;
+  --page-background: #fdf8f3;
+  --hero-width: 1316px;
+  --description-width: 1250px;
+  --hero-gap: 40px;
+  --title-size: 56px;
+  --description-size: 32px;
+  --label-size: 24px;
+  --hint-size: 20px;
+  --control-font-size: 32.043px;
+  --control-radius: 15px;
+  --control-border: 1.602px;
+  --control-padding-inline: 40.054px;
+  --input-height: 71px;
+  --button-height: 71px;
+  --button-width: 319.312px;
+  --controls-width: 1082.312px;
+  --control-overlap: 83px;
+  --field-gap: 3px;
+  --page-block-space: 60px;
+  --page-inline-space: 9.375%;
+  --figma-header-space: 91px;
+  --figma-hero-bottom-inset: 25px;
+  flex: 1;
+  justify-content: center;
+  min-height: 100svh;
+  padding-block: calc(
+      var(--page-block-space) + var(--figma-header-space) -
+        var(--figma-hero-bottom-inset)
+    )
+    var(--page-block-space);
+  padding-inline: var(--page-inline-space);
+  background: var(--page-background);
+  color: var(--color-text);
+  font-family: system-ui, sans-serif;
+  font-optical-sizing: none;
+  font-weight: 400;
+}
+.page,
+.hero,
+.form,
+.feedback {
+  display: flex;
+  flex-direction: column;
+}
+.page,
+.hero,
+.form,
+.controls {
+  width: 100%;
+}
+.hero,
+.form,
+.controls,
+.input,
+.page .input input,
+.page .submit,
+.hint span {
+  min-width: 0;
+}
+.title,
+.description,
+.page .submit,
+.hint span,
+.feedback {
+  overflow-wrap: anywhere;
+}
+.title,
+.description,
+.hint {
+  margin: 0;
+}
+.title,
+.description,
+.label,
+.page .input input,
+.page .submit,
+.hint {
+  line-height: normal;
+}
+.hero {
+  max-width: var(--hero-width);
+  gap: var(--hero-gap);
+}
+.title {
+  font-size: var(--title-size);
+  font-weight: 500;
+  text-shadow: 0 4px 18.6px rgb(22 19 40 / 10%);
+}
+.description {
+  max-width: var(--description-width);
+  font-size: var(--description-size);
+}
+.form {
+  position: relative;
+  max-width: var(--controls-width);
+  gap: var(--field-gap);
+}
+.label {
+  display: block;
+  font-size: var(--label-size);
+}
+.controls,
+.hint {
+  display: flex;
+  align-items: flex-start;
+}
+.input {
+  flex: 1;
+}
+.page .input input,
+.page .submit {
+  border-radius: var(--control-radius);
+  font-family: inherit;
+  font-size: var(--control-font-size);
+}
+.page .input input {
+  box-sizing: border-box;
+  width: calc(100% + var(--control-overlap));
+  height: var(--input-height);
+  padding: 0 calc(var(--control-padding-inline) + var(--control-overlap)) 0
+    var(--control-padding-inline);
+  background: transparent;
+  border: var(--control-border) solid var(--color-text);
+}
+.input input::placeholder {
+  color: rgb(22 19 40 / 75%);
+  opacity: 1;
+}
+.page .input input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.page .submit {
+  position: relative;
+  flex: 0 0 var(--button-width);
+  width: var(--button-width);
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding: 0 var(--control-padding-inline);
+  border: var(--control-border) solid var(--color-primary);
+  color: var(--page-background);
+  font-weight: 400;
+  white-space: normal;
+}
+.hint {
+  padding-inline: 15px;
+  gap: 7px;
+  font-size: var(--hint-size);
+}
+.hint img {
+  flex: none;
+  margin-top: 1px;
+}
+.feedback {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + 18px);
+  gap: 12px;
+  white-space: pre-line;
+}
+.page .message {
+  font-family: inherit;
+  font-size: var(--hint-size);
+  line-height: 1.4;
+}
+@media (width <= 900px) {
+  .page {
+    --page-inline-space: 24px;
+    --page-block-space: 32px;
+    padding-block: var(--page-block-space);
+  }
+  .controls {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .input,
+  .page .submit {
+    flex: none;
+    width: 100%;
+  }
+  .page .input input,
+  .page .submit {
+    padding-inline: 16px;
+  }
+  .page .input input {
+    width: 100%;
+  }
+  .hint {
+    padding-inline: 0;
+  }
+}
+@media (width <= 900px), (height <= 800px) {
+  .feedback {
+    position: static;
+    margin-top: 15px;
+  }
+  .feedback:empty {
+    display: none;
+  }
+}
