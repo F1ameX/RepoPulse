@@ -194,11 +194,15 @@ func TestNetworkFailuresTimeoutCancellationAndResponseLimit(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client := NewClient(&http.Client{Transport: tc.transport}, "")
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-			defer cancel()
+			ctx := t.Context()
+			if tc.name == "deadline" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 50*time.Millisecond)
+				defer cancel()
+			}
 			_, err := client.Lookup(ctx, domain.RepositoryURL{Owner: "owner", Name: "repo"})
 			if !errors.Is(err, tc.want) {
-				t.Fatalf("got %v, want %v", err, tc.want)
+				t.Fatalf("got %#v, want %#v", err, tc.want)
 			}
 		})
 	}

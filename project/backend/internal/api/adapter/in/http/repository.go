@@ -12,6 +12,7 @@ import (
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/repository"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/in/http/dto"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
@@ -28,21 +29,6 @@ type SessionTokens struct {
 // not establish an identity; only Auth may produce a VerifiedContext.
 type ContextResolver interface {
 	ResolveContext(context.Context, SessionTokens) (domain.VerifiedContext, error)
-}
-
-type repositoryDTO struct {
-	Platform      string  `json:"platform"`
-	GitHubID      string  `json:"github_id"`
-	CanonicalURL  string  `json:"canonical_url"`
-	Owner         string  `json:"owner"`
-	Name          string  `json:"name"`
-	DefaultBranch *string `json:"default_branch"`
-	CommitSHA     *string `json:"commit_sha"`
-}
-
-type validatedRepositoryDTO struct {
-	Repository repositoryDTO `json:"repository"`
-	MovedFrom  *string       `json:"moved_from"`
 }
 
 func validateRepository(validator RepositoryValidator, resolver ContextResolver) http.HandlerFunc {
@@ -100,7 +86,7 @@ func validateRepository(validator RepositoryValidator, resolver ContextResolver)
 			return
 		}
 		repository := result.Repository
-		writeJSON(w, http.StatusOK, validatedRepositoryDTO{Repository: repositoryDTO{
+		writeJSON(w, http.StatusOK, dto.ValidatedRepositoryDTO{Repository: dto.RepositoryDTO{
 			Platform: "github", GitHubID: repository.GitHubID, CanonicalURL: repository.CanonicalURL,
 			Owner: repository.Owner, Name: repository.Name, DefaultBranch: repository.DefaultBranch,
 			CommitSHA: repository.CommitSHA,

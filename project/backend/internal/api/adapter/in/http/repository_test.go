@@ -14,6 +14,7 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/github"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/repository"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/in/http/dto"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
@@ -85,7 +86,7 @@ func TestRepositoryValidationHTTPToGitHub(t *testing.T) {
 				t.Fatal("source error or credentials leaked")
 			}
 			if tc.status == 200 {
-				var result validatedRepositoryDTO
+				var result dto.ValidatedRepositoryDTO
 				if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
 					t.Fatal(err)
 				}
