@@ -13,6 +13,7 @@ import (
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 	authv1 "github.com/F1ameX/RepoPulse/project/backend/pkg/proto/auth/v1"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const Name = "auth-service"
@@ -22,11 +23,21 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("connect database: %w", err)
+	}
+	defer pool.Close()
+	if err := pool.Ping(ctx); err != nil {
+		return fmt.Errorf("ping database: %w", err)
+	}
+
 	listener, err := net.Listen("tcp", cfg.GRPCAddr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
-	server, healthServer := newGRPCServer(ctx)
+	server, healthServer := newGRPCServer(ctx, pool)
 	return serve(ctx, listener, server, healthServer, cfg.ShutdownTimeout)
 }
 

@@ -16,7 +16,6 @@ import (
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 	authv1 "github.com/F1ameX/RepoPulse/project/backend/pkg/proto/auth/v1"
-	commonv1 "github.com/F1ameX/RepoPulse/project/backend/pkg/proto/common/v1"
 )
 
 func TestServerHealthStubAndShutdown(t *testing.T) {
@@ -27,7 +26,8 @@ func TestServerHealthStubAndShutdown(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	ctx, cancel := context.WithCancel(logger.With(context.Background(), log))
 	defer cancel()
-	server, healthServer := newGRPCServer(ctx)
+	// The pool is only passed to repositories; the calls below do not reach the database.
+	server, healthServer := newGRPCServer(ctx, nil)
 	done := make(chan error, 1)
 	go func() { done <- serve(ctx, listener, server, healthServer, time.Second) }()
 
@@ -50,9 +50,9 @@ func TestServerHealthStubAndShutdown(t *testing.T) {
 		}
 	}
 
-	_, err = authv1.NewAuthServiceClient(conn).CreateGuestSession(callCtx, &commonv1.Empty{})
+	_, err = authv1.NewAuthServiceClient(conn).Register(callCtx, &authv1.Credentials{})
 	if status.Code(err) != codes.Unimplemented {
-		t.Fatalf("CreateGuestSession = %v", err)
+		t.Fatalf("Register = %v", err)
 	}
 
 	cancel()
