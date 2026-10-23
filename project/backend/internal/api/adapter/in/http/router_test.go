@@ -15,7 +15,7 @@ import (
 )
 
 func TestHTTPContract(t *testing.T) {
-	handler := NewHandler()
+	handler := NewHandler(nil, nil)
 	ctx := logger.With(context.Background(), slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	for _, tc := range []struct {
 		method, path string
@@ -69,7 +69,7 @@ func TestHTTPContract(t *testing.T) {
 
 func TestRequestIDsMatchLogsAndAreGeneratedPerRequest(t *testing.T) {
 	var logs bytes.Buffer
-	handler := NewHandler()
+	handler := NewHandler(nil, nil)
 	ctx := logger.With(context.Background(), slog.New(slog.NewJSONHandler(&logs, nil)))
 	previousID := ""
 	for range 2 {

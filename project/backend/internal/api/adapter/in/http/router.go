@@ -23,7 +23,7 @@ type fieldError struct {
 	Message string `json:"message"`
 }
 
-func NewHandler() http.Handler {
+func NewHandler(validator RepositoryValidator, resolver ContextResolver) http.Handler {
 	mux := http.NewServeMux()
 	route := func(path, method string, handler http.HandlerFunc) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +45,7 @@ func NewHandler() http.Handler {
 	route("/api/v1/analyses/{analysis_id}", http.MethodGet, notImplemented)
 	route("/api/v1/reports/{report_id}", http.MethodGet, notImplemented)
 	route("/api/v1/reports", http.MethodGet, notImplemented)
-	route("/api/v1/repositories/validate", http.MethodPost, notImplemented)
+	route("/api/v1/repositories/validate", http.MethodPost, validateRepository(validator, resolver))
 	route("/api/v1/auth/register", http.MethodPost, notImplemented)
 	route("/api/v1/auth/login", http.MethodPost, notImplemented)
 	route("/api/v1/auth/guest-session", http.MethodPost, notImplemented)

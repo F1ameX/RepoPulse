@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "REPOSITORY_CHECK_FAILED",
+    "message": "Не удалось проверить доступность репозитория. Повторите попытку позже",
+    "trace_id": "example-trace",
+    "field_errors": []
+  }
+}

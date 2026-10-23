@@ -22,7 +22,8 @@ func TestDefaults(t *testing.T) {
 		HTTPAddr:          "127.0.0.1:8080",
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second,
 		WriteTimeout: 30 * time.Second, IdleTimeout: time.Minute,
-		ShutdownTimeout: 10 * time.Second,
+		ShutdownTimeout:    10 * time.Second,
+		GitHubCheckTimeout: 25 * time.Second,
 	}
 	if cfg != want {
 		t.Fatalf("got %+v, want %+v", cfg, want)
@@ -34,6 +35,7 @@ func TestEnvironmentOverrides(t *testing.T) {
 		"HTTP_ADDR":                "[::1]:9000",
 		"HTTP_READ_HEADER_TIMEOUT": "1s", "HTTP_READ_TIMEOUT": "2s",
 		"HTTP_WRITE_TIMEOUT": "3s", "HTTP_IDLE_TIMEOUT": "4s", "SHUTDOWN_TIMEOUT": "500ms",
+		"GITHUB_CHECK_TIMEOUT": "2s", "GITHUB_TOKEN": "service-test-token",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +44,8 @@ func TestEnvironmentOverrides(t *testing.T) {
 		HTTPAddr:          "[::1]:9000",
 		ReadHeaderTimeout: time.Second, ReadTimeout: 2 * time.Second,
 		WriteTimeout: 3 * time.Second, IdleTimeout: 4 * time.Second,
-		ShutdownTimeout: 500 * time.Millisecond,
+		ShutdownTimeout:    500 * time.Millisecond,
+		GitHubCheckTimeout: 2 * time.Second, GitHubToken: "service-test-token",
 	}
 	if cfg != want {
 		t.Fatalf("got %+v, want %+v", cfg, want)
@@ -58,6 +61,7 @@ func TestInvalidEnvironmentFailsEarly(t *testing.T) {
 	for _, key := range []string{
 		"HTTP_READ_HEADER_TIMEOUT", "HTTP_READ_TIMEOUT", "HTTP_WRITE_TIMEOUT",
 		"HTTP_IDLE_TIMEOUT", "SHUTDOWN_TIMEOUT",
+		"GITHUB_CHECK_TIMEOUT",
 	} {
 		for _, value := range []string{"", "0s", "-1s", "30", "invalid"} {
 			cases = append(cases, struct{ key, value string }{key, value})
@@ -70,5 +74,16 @@ func TestInvalidEnvironmentFailsEarly(t *testing.T) {
 				t.Fatalf("expected error naming %s, got %v", tc.key, err)
 			}
 		})
+	}
+}
+
+func TestGitHubBudgetFitsHTTPResponseTimeout(t *testing.T) {
+	for _, values := range []map[string]string{
+		{"GITHUB_CHECK_TIMEOUT": "26s"},
+		{"GITHUB_CHECK_TIMEOUT": "25s", "HTTP_WRITE_TIMEOUT": "25s"},
+	} {
+		if _, err := loadConfig(fromMap(values)); err == nil {
+			t.Fatal("invalid GitHub budget accepted")
+		}
 	}
 }
