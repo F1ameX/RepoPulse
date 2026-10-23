@@ -1,6 +1,6 @@
 syntax = "proto3";
 package repopulse.common.v1;
-option go_package = "github.com/F1ameX/RepoPulse/project/backend/gen/common/v1;commonv1";
+option go_package = "github.com/F1ameX/RepoPulse/project/backend/pkg/proto/common/v1;commonv1";
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 

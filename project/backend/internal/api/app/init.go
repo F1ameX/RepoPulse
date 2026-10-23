@@ -6,14 +6,19 @@ import (
 	"net"
 	"net/http"
 
-	httpapi "github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/github"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/repository"
+	httpapi "github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/in/http"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
 func newHTTPServer(ctx context.Context, cfg Config) *http.Server {
+	validator := repository.NewValidator(github.NewClient(nil, cfg.GitHubToken), cfg.GitHubCheckTimeout)
 	return &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewHandler(),
+		Addr: cfg.HTTPAddr,
+		// Auth.ResolveContext is not connected yet. A nil resolver keeps the
+		// contract's session requirement instead of enabling anonymous access.
+		Handler:           httpapi.NewHandler(validator, nil),
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
 		ReadTimeout:       cfg.ReadTimeout,
 		WriteTimeout:      cfg.WriteTimeout,

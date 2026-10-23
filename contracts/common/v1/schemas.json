@@ -157,7 +157,7 @@
         },
         "code": {
           "type": "string",
-          "description": "Стабильный код первой ошибки поля."
+          "description": "Стабильный код первой ошибки поля. Для login/password: REQUIRED, INVALID_LENGTH, INVALID_CHARACTERS, WHITESPACE_ONLY (только password)."
         },
         "message": {
           "type": "string",

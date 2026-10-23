@@ -32,7 +32,7 @@ HTTP публикует только модели, на которые ссыл�
 | Поле | JSON: тип и значения | protobuf: тип и номер | Обязательное в JSON / null | Описание | Хранение |
 |---|---|---|---|---|---|
 | `FieldError.field` | `string` | `string` #1 | да / нет | repository_url/login/password/request_id | — |
-| `FieldError.code` | `string` | `string` #2 | да / нет | Стабильный код первой ошибки поля. | — |
+| `FieldError.code` | `string` | `string` #2 | да / нет | Стабильный код первой ошибки поля. Для login/password: REQUIRED, INVALID_LENGTH, INVALID_CHARACTERS, WHITESPACE_ONLY (только password); см. errors.md. | — |
 | `FieldError.message` | `string` | `string` #3 | да / нет | Безопасное сообщение; не содержит введённый пароль. | — |
 
 ## ApiError

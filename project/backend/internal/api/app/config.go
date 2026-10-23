@@ -10,12 +10,14 @@ import (
 )
 
 type Config struct {
-	HTTPAddr          string
-	ReadHeaderTimeout time.Duration
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
-	ShutdownTimeout   time.Duration
+	HTTPAddr           string
+	ReadHeaderTimeout  time.Duration
+	ReadTimeout        time.Duration
+	WriteTimeout       time.Duration
+	IdleTimeout        time.Duration
+	ShutdownTimeout    time.Duration
+	GitHubCheckTimeout time.Duration
+	GitHubToken        string
 }
 
 // LoadConfig reads API settings from the process environment.
@@ -32,7 +34,7 @@ func loadConfig(lookup func(string) (string, bool)) (Config, error) {
 		return fallback
 	}
 
-	cfg := Config{HTTPAddr: value("HTTP_ADDR", "127.0.0.1:8080")}
+	cfg := Config{HTTPAddr: value("HTTP_ADDR", "127.0.0.1:8080"), GitHubToken: value("GITHUB_TOKEN", "")}
 	_, port, err := net.SplitHostPort(cfg.HTTPAddr)
 	if err != nil {
 		return Config{}, fmt.Errorf("HTTP_ADDR must use host:port: %w", err)
@@ -52,12 +54,16 @@ func loadConfig(lookup func(string) (string, bool)) (Config, error) {
 		{"HTTP_WRITE_TIMEOUT", "30s", &cfg.WriteTimeout},
 		{"HTTP_IDLE_TIMEOUT", "60s", &cfg.IdleTimeout},
 		{"SHUTDOWN_TIMEOUT", "10s", &cfg.ShutdownTimeout},
+		{"GITHUB_CHECK_TIMEOUT", "25s", &cfg.GitHubCheckTimeout},
 	} {
 		duration, err := time.ParseDuration(value(setting.key, setting.fallback))
 		if err != nil || duration <= 0 {
 			return Config{}, fmt.Errorf("%s must be a positive duration (for example, 5s)", setting.key)
 		}
 		*setting.target = duration
+	}
+	if cfg.GitHubCheckTimeout > 25*time.Second || cfg.GitHubCheckTimeout >= cfg.WriteTimeout {
+		return Config{}, fmt.Errorf("GITHUB_CHECK_TIMEOUT must be at most 25s and less than HTTP_WRITE_TIMEOUT")
 	}
 	return cfg, nil
 }
