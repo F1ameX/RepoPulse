@@ -32,18 +32,12 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ErrorBody>) => {
     if (!error.response) {
-      return Promise.reject(
-        new ApiError('NETWORK_ERROR', 'Нет соединения с сервером'),
-      );
+      return Promise.reject(new ApiError('NETWORK_ERROR', 'Нет соединения с сервером'));
     }
     const { status, data } = error.response;
     const payload = data?.error ?? data ?? {};
     return Promise.reject(
-      new ApiError(
-        payload.code ?? 'INTERNAL_ERROR',
-        payload.message ?? `HTTP ${status}`,
-        status,
-      ),
+      new ApiError(payload.code ?? 'INTERNAL_ERROR', payload.message ?? `HTTP ${status}`, status),
     );
   },
 );

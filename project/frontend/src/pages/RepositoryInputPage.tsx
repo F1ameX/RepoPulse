@@ -1,88 +1,113 @@
-import { useNavigate } from 'react-router-dom';
 import { Button, Input, Message } from '@/components';
 import { useRepositoryValidation } from '@/hooks/useRepositoryValidation';
-
-/* меняй под свой дизайн с фигмоы */
+import styles from './RepositoryInputPage.module.css';
 
 export default function RepositoryInputPage() {
-  const navigate = useNavigate();
-  const { url, state, isPending, inputRef, setUrl, submit, retry, fix, useNew } =
-    useRepositoryValidation({
-      onAnalysisCreated: (id) => navigate(`/analysis/${id}`),
-    });
-
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-      noValidate
-    >
-      <Input
-        ref={inputRef}
-        label="URL репозитория"
-        type="url"
-        placeholder="https://github.com/username/repo"
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        size="lg"
-        required
-        disabled={isPending}
-      />
-
-      {state.kind === 'pending' && (
-        <Message variant="info" icon={false}>
-          Проверяем доступность репозитория…
-        </Message>
-      )}
-
-      {state.kind === 'validated' && (
-        <Message variant="success">Репозиторий доступен. URL прошёл проверку.</Message>
-      )}
-
-      {state.kind === 'permanent-error' && (
-        <Message
-          variant="error"
-          actions={
-            <Button variant="secondary" size="sm" onClick={fix}>
-              Изменить URL
-            </Button>
-          }
-        >
-          {state.message}
-        </Message>
-      )}
-
-      {state.kind === 'temporary-error' && (
-        <Message
-          variant="warning"
-          actions={
-            <Button variant="secondary" size="sm" onClick={retry}>
-              Повторить
-            </Button>
-          }
-        >
-          {state.message}
-        </Message>
-      )}
-
-      {state.kind === 'moved' && (
-        <Message
-          variant="info"
-          actions={
-            <Button variant="secondary" size="sm" onClick={useNew}>
-              Использовать новый
-            </Button>
-          }
-        >
-          Репозиторий переименован. Новый адрес: {state.newUrl}
-        </Message>
-      )}
-
-      <Button type="submit" size="lg" isLoading={isPending}>
-        Анализировать
+  const { url, state, isPending, inputRef, setUrl, submit, retry, fix } = useRepositoryValidation();
+  const actions = (
+    <>
+      <Button variant="secondary" size="sm" onClick={retry}>
+        Повторить
       </Button>
-    </form>
+      <Button variant="secondary" size="sm" onClick={fix}>
+        Изменить URL
+      </Button>
+    </>
+  );
+  return (
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <span className={styles.logo}>RepoPulse</span>
+      </header>
+      <main className={styles.content}>
+        <section className={styles.hero} aria-labelledby="project-title">
+          <h1 id="project-title" className={styles.title}>
+            Веб-сервис для автоматической оценки технического здоровья GitHub-репозитория
+          </h1>
+          <p className={styles.description}>
+            Проверьте URL и доступность публичного GitHub-репозитория. Формирование отчётов пока
+            недоступно.
+          </p>
+          <form
+            className={styles.form}
+            onSubmit={(event) => {
+              event.preventDefault();
+              submit();
+            }}
+            noValidate
+            aria-busy={isPending}
+          >
+            <label className={styles.label} htmlFor="repository-url">
+              URL репозитория
+            </label>
+            <div className={styles.controls}>
+              <Input
+                id="repository-url"
+                ref={inputRef}
+                className={styles.input}
+                error={state.kind === 'field-error' ? state.message : undefined}
+                type="text"
+                inputMode="url"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="https://github.com/username/repo"
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                onPaste={(event) => {
+                  // Keep raw line breaks for validation instead of silently removing them.
+                  event.preventDefault();
+                  const input = event.currentTarget;
+                  setUrl(
+                    url.slice(0, input.selectionStart ?? url.length) +
+                      event.clipboardData.getData('text') +
+                      url.slice(input.selectionEnd ?? url.length),
+                  );
+                }}
+                aria-describedby="repository-hint"
+                size="lg"
+                required
+                disabled={isPending}
+              />
+              <Button className={styles.submit} type="submit" size="lg" isLoading={isPending}>
+                Анализировать
+              </Button>
+            </div>
+            <p className={styles.hint} id="repository-hint">
+              Поддерживаются публичные репозитории GitHub
+            </p>
+            <div className={styles.feedback}>
+              {state.kind === 'pending' && (
+                <Message variant="info" icon={false}>
+                  Проверяем доступность репозитория
+                </Message>
+              )}
+              {state.kind === 'validated' && (
+                <>
+                  {state.movedTo && (
+                    <Message variant="info">Репозиторий перемещён: {state.movedTo}</Message>
+                  )}
+                  <Message variant="success">Репозиторий доступен. URL прошёл проверку.</Message>
+                </>
+              )}
+              {state.kind === 'unavailable' && (
+                <Message variant="error" actions={actions}>
+                  Публичный репозиторий недоступен
+                </Message>
+              )}
+              {state.kind === 'temporary-error' && (
+                <Message variant="warning" actions={actions}>
+                  {state.message}
+                </Message>
+              )}
+              {state.kind === 'session-error' && (
+                <Message variant="error" actions={actions}>
+                  {state.message}
+                </Message>
+              )}
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
   );
 }

@@ -1,183 +1,112 @@
-import { useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/services/api';
 import { authService } from '@/services/authService';
-import {
-  repositoryService,
-  classifyRepositoryError,
-  normalizeUrl,
-} from '@/services/repositoryService';
+import { repositoryService } from '@/services/repositoryService';
+import { URL_MESSAGES, validateRepositoryUrl } from '@/lib/repositoryUrl';
 
 export type ValidationState =
   | { kind: 'idle' }
   | { kind: 'pending' }
-  | { kind: 'permanent-error'; message: string }
+  | { kind: 'field-error'; message: string }
+  | { kind: 'unavailable' }
   | { kind: 'temporary-error'; message: string }
-  | { kind: 'moved'; newUrl: string }
-  | { kind: 'validated' };
+  | { kind: 'session-error'; message: string }
+  | { kind: 'validated'; movedTo: string | null };
 
-const DEFAULT_MESSAGES: Record<string, string> = {
-  INVALID_REPOSITORY_URL: 'Укажите ссылку вида https://github.com/owner/repository.',
-  REPOSITORY_NOT_FOUND_OR_PRIVATE: 'Репозиторий не найден или приватный.',
-  UNSUPPORTED_PLATFORM: 'Поддерживаются только репозитории GitHub.',
-  UPSTREAM_RATE_LIMITED: 'GitHub временно ограничил запросы. Подождите и повторите.',
-  UPSTREAM_TIMEOUT: 'GitHub не ответил вовремя.',
-  NETWORK_ERROR: 'Сервер недоступен. Проверьте соединение.',
-  AUTH_UNAVAILABLE: 'Сервис сессий временно недоступен. Попробуйте позже.',
-  REPOSITORY_CHECK_FAILED: 'Сервис проверки временно недоступен. Попробуйте позже.',
-  /*
-  INVALID_REQUEST: 'Некорректный запрос к серверу. Обновите страницу и попробуйте снова.',
-  UNAUTHORIZED: 'Ошибка авторизации. Попробуйте обновить страницу.',
-  FORBIDDEN: 'Доступ запрещен.',
-*/
-};
+const CHECK_FAILED = 'Не удалось проверить доступность репозитория. Повторите попытку позже';
 
-export interface UseRepositoryValidationOptions {
-  onAnalysisCreated: (analysisId: string) => void;
-  messages?: Record<string, string>;
-}
-
-export interface UseRepositoryValidationResult {
-  url: string;
-  state: ValidationState;
-  isPending: boolean;
-  inputRef: RefObject<HTMLInputElement | null>;
-  setUrl: (value: string) => void;
-  submit: () => void;
-  retry: () => void;
-  fix: () => void;
-  useNew: () => void;
-  reset: () => void;
-}
-
-const getStorageKey = (url: string) => `req_id_${normalizeUrl(url)}`;
-
-const getOrCreateRequestId = (url: string) => {
-  const key = getStorageKey(url);
-  let id = sessionStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    sessionStorage.setItem(key, id);
-  }
-  return id;
-};
-
-const clearRequestId = (url: string) => {
-  sessionStorage.removeItem(getStorageKey(url));
-};
-
-export function useRepositoryValidation({
-  onAnalysisCreated,
-  messages,
-}: UseRepositoryValidationOptions): UseRepositoryValidationResult {
+export function useRepositoryValidation() {
   const [url, setUrlState] = useState('');
   const [state, setState] = useState<ValidationState>({ kind: 'idle' });
   const inputRef = useRef<HTMLInputElement>(null);
-  const inFlightRef = useRef(false);
+  const activeRequest = useRef<AbortController | null>(null);
 
-  const isPending = state.kind === 'pending';
-  const mergedMessages = { ...DEFAULT_MESSAGES, ...messages };
+  useEffect(() => () => activeRequest.current?.abort(), []);
+  useEffect(() => {
+    if (state.kind === 'field-error') inputRef.current?.focus();
+  }, [state]);
 
-  const run = async (value: string) => {
-    if (inFlightRef.current) return;
-    const trimmed = value.trim();
-
-    if (!trimmed) {
-      setState({
-        kind: 'permanent-error',
-        message: 'Введите ссылку на репозиторий',
-      });
+  const run = async () => {
+    if (activeRequest.current) return;
+    const checked = validateRepositoryUrl(url);
+    if (!checked.ok) {
+      setState({ kind: 'field-error', message: checked.message });
       inputRef.current?.focus();
       return;
     }
 
-    inFlightRef.current = true;
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setState({ kind: 'pending' });
-
     try {
-      const session = await authService.getSessionContext();
+      const session = await authService.getSessionContext(controller.signal);
+      if (controller.signal.aborted) return;
       if (!session.account && !session.guest) {
-        await authService.createGuestSession();
-        const confirmed = await authService.getSessionContext();
+        await authService.createGuestSession(controller.signal);
+        if (controller.signal.aborted) return;
+        const confirmed = await authService.getSessionContext(controller.signal);
+        if (controller.signal.aborted) return;
         if (!confirmed.account && !confirmed.guest) {
-          throw new ApiError(
-            'SESSION_REQUIRED',
-            'Не удалось сохранить сессию. Разрешите cookie для сайта.',
-            401,
-          );
-        }
-      }
-
-      const validated = await repositoryService.validateRepository(trimmed);
-      const canonicalUrl = validated.repository.canonical_url;
-
-      if (normalizeUrl(canonicalUrl) !== normalizeUrl(trimmed)) {
-        setState({ kind: 'moved', newUrl: canonicalUrl });
-        return;
-      }
-
-      const requestId = getOrCreateRequestId(canonicalUrl);
-
-      try {
-        const { analysis_id } = await repositoryService.createAnalysis({
-          repository_url: canonicalUrl,
-          request_id: requestId,
-        });
-        clearRequestId(canonicalUrl);
-        onAnalysisCreated(analysis_id);
-      } catch (err) {
-        // C1 completes repository validation; analysis creation is a later step.
-        if (err instanceof ApiError && err.status === 501 && err.code === 'NOT_IMPLEMENTED') {
-          setState({ kind: 'validated' });
+          setState({
+            kind: 'session-error',
+            message: 'Для работы RepoPulse разрешите cookie для этого сайта',
+          });
           return;
         }
-        throw err;
       }
+      // Preserve the raw URL so server normalization runs exactly once.
+      const validated = await repositoryService.validateRepository(url, controller.signal);
+      if (controller.signal.aborted) return;
+      setState({
+        kind: 'validated',
+        movedTo: validated.moved_from
+          ? validated.repository.owner + '/' + validated.repository.name
+          : null,
+      });
+      // C1 stops at preflight; job creation and its status page belong to C2.
     } catch (err) {
-      if (err instanceof ApiError) {
-        const message = mergedMessages[err.code] ?? err.message ?? 'Неизвестная ошибка';
-        const kind = classifyRepositoryError(err.code);
-        setState(
-          kind === 'temporary'
-            ? { kind: 'temporary-error', message }
-            : { kind: 'permanent-error', message },
-        );
+      if (controller.signal.aborted) return;
+      if (err instanceof ApiError && Object.hasOwn(URL_MESSAGES, err.code)) {
+        setState({
+          kind: 'field-error',
+          message: URL_MESSAGES[err.code as keyof typeof URL_MESSAGES],
+        });
+      } else if (err instanceof ApiError && err.code === 'REPOSITORY_NOT_FOUND_OR_PRIVATE') {
+        setState({ kind: 'unavailable' });
+      } else if (
+        err instanceof ApiError &&
+        ['SESSION_EXPIRED', 'SESSION_REQUIRED'].includes(err.code)
+      ) {
+        setState({ kind: 'session-error', message: 'Сессия истекла. Войдите снова' });
       } else {
-        setState({ kind: 'permanent-error', message: 'Неизвестная ошибка' });
+        // Do not render arbitrary response messages or transport details.
+        setState({ kind: 'temporary-error', message: CHECK_FAILED });
       }
     } finally {
-      inFlightRef.current = false;
+      if (activeRequest.current === controller) activeRequest.current = null;
     }
   };
 
   return {
     url,
     state,
-    isPending,
     inputRef,
-    setUrl: (value) => {
+    isPending: state.kind === 'pending',
+    setUrl: (value: string) => {
+      if (activeRequest.current) return;
       setUrlState(value);
-      if (state.kind !== 'pending' && state.kind !== 'idle') {
-        setState({ kind: 'idle' });
-      }
+      setState({ kind: 'idle' });
     },
     submit: () => {
-      if (inFlightRef.current) return;
-      void run(url);
+      void run();
     },
     retry: () => {
-      if (inFlightRef.current) return;
-      void run(url);
+      void run();
     },
     fix: () => {
+      if (activeRequest.current) return;
       setState({ kind: 'idle' });
       inputRef.current?.focus();
-      inputRef.current?.select();
     },
-    useNew: () => {
-      if (state.kind !== 'moved' || inFlightRef.current) return;
-      setUrlState(state.newUrl);
-      void run(state.newUrl);
-    },
-    reset: () => setState({ kind: 'idle' }),
   };
 }

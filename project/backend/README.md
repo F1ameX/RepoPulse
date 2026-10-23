@@ -37,6 +37,10 @@ HTTP-маршруты пока возвращают 501 NOT_IMPLEMENTED; health 
 через [Docker Compose](../../README.md#docker--спринт-1). Goose устанавливается
 в отдельный контейнер; на хосте он нужен только для запуска вне Compose.
 
+Весь проект с PostgreSQL и автоматическим применением миграций запускается
+через [Docker Compose](../../README.md#docker--спринт-1). Goose устанавливается
+в отдельный контейнер; на хосте он нужен только для запуска вне Compose.
+
 ## Запуск Analyzer с PostgreSQL
 
 Нужны Go 1.26, запущенная PostgreSQL 17 и её утилиты `psql`/`createdb` в PATH.

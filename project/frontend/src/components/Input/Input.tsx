@@ -5,8 +5,7 @@ import styles from './Input.module.css';
 
 export type InputSize = 'sm' | 'md' | 'lg';
 
-export interface InputProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
+export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
   label?: string;
   hint?: string;
   error?: string;
@@ -22,6 +21,7 @@ export function Input({
   id,
   className,
   ref,
+  'aria-describedby': externalDescription,
   ...rest
 }: InputProps) {
   const autoId = useId();
@@ -30,7 +30,7 @@ export function Input({
   const hintId = `${inputId}-hint`;
 
   const describedBy =
-    [hint && !error ? hintId : null, error ? errorId : null]
+    [externalDescription, hint && !error ? hintId : null, error ? errorId : null]
       .filter(Boolean)
       .join(' ') || undefined;
 
@@ -51,11 +51,7 @@ export function Input({
         id={inputId}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
-        className={cn(
-          styles.input,
-          styles[size],
-          error && styles.hasError,
-        )}
+        className={cn(styles.input, styles[size], error && styles.hasError)}
         {...rest}
       />
       {error && (

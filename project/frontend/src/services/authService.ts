@@ -12,13 +12,13 @@ export interface SessionContext {
 }
 
 export const authService = {
-  async createGuestSession(): Promise<SessionInfo> {
-    const { data } = await api.post<SessionInfo>('/auth/guest-session');
+  async createGuestSession(signal?: AbortSignal): Promise<SessionInfo> {
+    const { data } = await api.post<SessionInfo>('/auth/guest-session', undefined, { signal });
     return data;
   },
 
-  async getSessionContext(): Promise<SessionContext> {
-    const { data } = await api.get<SessionContext>('/auth/session');
+  async getSessionContext(signal?: AbortSignal): Promise<SessionContext> {
+    const { data } = await api.get<SessionContext>('/auth/session', { signal });
     return data;
   },
 
