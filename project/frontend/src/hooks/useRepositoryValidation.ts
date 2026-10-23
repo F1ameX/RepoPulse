@@ -7,7 +7,6 @@ import {
   normalizeUrl,
 } from '@/services/repositoryService';
 
-/*  */
 export type ValidationState =
   | { kind: 'idle' }
   | { kind: 'pending' }
@@ -23,6 +22,7 @@ const DEFAULT_MESSAGES: Record<string, string> = {
     'GitHub временно ограничил запросы. Подождите и повторите.',
   UPSTREAM_TIMEOUT: 'GitHub не ответил вовремя.',
   NETWORK_ERROR: 'Сервер недоступен. Проверьте соединение.',
+  REPOSITORY_CHECK_FAILED: 'Сервис проверки временно недоступен. Попробуйте позже.',
 };
 
 export interface UseRepositoryValidationOptions {
@@ -88,23 +88,32 @@ export function useRepositoryValidation({
     setState({ kind: 'pending' });
 
     try {
-      await authService.createGuestSession().catch(() => {}); 
+      try {
+        await authService.getSessionContext();
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          await authService.createGuestSession();
+        } else {
+          throw err;
+        }
+      }
 
       const validated = await repositoryService.validateRepository(trimmed);
+      const canonicalUrl = validated.repository.canonical_url;
 
-      if (normalizeUrl(validated.canonical_url) !== normalizeUrl(trimmed)) {
-        setState({ kind: 'moved', newUrl: validated.canonical_url });
+      if (normalizeUrl(canonicalUrl) !== normalizeUrl(trimmed)) {
+        setState({ kind: 'moved', newUrl: canonicalUrl });
         return;
       }
 
-      const requestId = getOrCreateRequestId(validated.canonical_url);
+      const requestId = getOrCreateRequestId(canonicalUrl);
       
       const { analysis_id } = await repositoryService.createAnalysis({
-        canonical_url: validated.canonical_url,
+        repository_url: canonicalUrl, // Изменено на repository_url согласно контракту
         request_id: requestId,
       });
       
-      clearRequestId(validated.canonical_url);
+      clearRequestId(canonicalUrl);
       onAnalysisCreated(analysis_id);
       
     } catch (err) {

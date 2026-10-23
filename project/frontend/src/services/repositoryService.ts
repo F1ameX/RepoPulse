@@ -1,17 +1,20 @@
 import api from './api';
 
 export interface ValidatedRepository {
-  platform: 'github' | 'gitlab';
-  owner: string;
-  name: string;
-  canonical_url: string;
-  visibility: 'public';
+  repository: {
+    platform: 'github' | 'gitlab';
+    owner: string;
+    name: string;
+    canonical_url: string;
+    visibility: 'public';
+  };
+  moved_from?: string | null;
 }
 
 export type AnalysisStatusValue = 'queued' | 'running' | 'completed' | 'failed';
 
 export interface CreateAnalysisRequest {
-  canonical_url: string;
+  repository_url: string;
   request_id: string;
 }
 
@@ -28,8 +31,8 @@ export interface AnalysisStatus {
 }
 
 export const repositoryService = {
-  async validateRepository(url: string): Promise<ValidatedRepository> {
-    const { data } = await api.post('/repositories/validate', { url });
+  async validateRepository(repositoryUrl: string): Promise<ValidatedRepository> {
+    const { data } = await api.post('/repositories/validate', { repository_url: repositoryUrl });
     return data;
   },
 
@@ -59,6 +62,7 @@ export function classifyRepositoryError(code: string): RepositoryErrorKind {
     case 'UPSTREAM_TIMEOUT':
     case 'NETWORK_ERROR':
     case 'REPOSITORY_UNAVAILABLE':
+    case 'REPOSITORY_CHECK_FAILED':
       return 'temporary';
     case 'INVALID_REPOSITORY_URL':
     case 'REPOSITORY_NOT_FOUND_OR_PRIVATE':
