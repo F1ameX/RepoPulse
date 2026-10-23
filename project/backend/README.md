@@ -31,6 +31,10 @@ Auth запускает gRPC-сервер, см. раздел «Auth Service».
 Бизнес-обработчики подключаются в следующих задачах. HTTP-маршруты из OpenAPI
 пока возвращают 501 NOT_IMPLEMENTED; health работает самостоятельно.
 
+Весь проект с PostgreSQL и автоматическим применением миграций запускается
+через [Docker Compose](../../README.md#docker--спринт-1). Goose устанавливается
+в отдельный контейнер; на хосте он нужен только для запуска вне Compose.
+
 ## Запуск Analyzer с PostgreSQL
 
 Нужны Go 1.26, запущенная PostgreSQL 17 и её утилиты `psql`/`createdb` в PATH.
@@ -157,7 +161,7 @@ CreateGuestSession и гостевая часть ResolveContext; Register, Logi
 
    ```sh
    go install github.com/pressly/goose/v3/cmd/goose@latest
-   goose -dir migrations/auth postgres "$AUTH_DATABASE_URL" up
+   goose -dir migrations/auth -table goose_auth_version postgres "$AUTH_DATABASE_URL" up
    ```
 
 3. Запуск сервиса:
