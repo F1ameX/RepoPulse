@@ -1,12 +1,13 @@
-import { useRef, useState } from 'react';
-import type { RefObject } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { ApiError } from '@/services/api';
+import { authService } from '@/services/authService';
 import {
   repositoryService,
   classifyRepositoryError,
   normalizeUrl,
 } from '@/services/repositoryService';
 
+/*  */
 export type ValidationState =
   | { kind: 'idle' }
   | { kind: 'pending' }
@@ -25,9 +26,7 @@ const DEFAULT_MESSAGES: Record<string, string> = {
 };
 
 export interface UseRepositoryValidationOptions {
-  /** Вызывается, когда анализ создан. Обычно — redirect на /analysis/:id */
   onAnalysisCreated: (analysisId: string) => void;
-  /** Переопределения сообщений по коду ошибки */
   messages?: Record<string, string>;
 }
 
@@ -35,7 +34,7 @@ export interface UseRepositoryValidationResult {
   url: string;
   state: ValidationState;
   isPending: boolean;
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  inputRef: RefObject<HTMLInputElement | null>;
   setUrl: (value: string) => void;
   submit: () => void;
   retry: () => void;
@@ -43,6 +42,22 @@ export interface UseRepositoryValidationResult {
   useNew: () => void;
   reset: () => void;
 }
+
+const getStorageKey = (url: string) => `req_id_${normalizeUrl(url)}`;
+
+const getOrCreateRequestId = (url: string) => {
+  const key = getStorageKey(url);
+  let id = sessionStorage.getItem(key);
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem(key, id);
+  }
+  return id;
+};
+
+const clearRequestId = (url: string) => {
+  sessionStorage.removeItem(getStorageKey(url));
+};
 
 export function useRepositoryValidation({
   onAnalysisCreated,
@@ -73,6 +88,8 @@ export function useRepositoryValidation({
     setState({ kind: 'pending' });
 
     try {
+      await authService.createGuestSession().catch(() => {}); 
+
       const validated = await repositoryService.validateRepository(trimmed);
 
       if (normalizeUrl(validated.canonical_url) !== normalizeUrl(trimmed)) {
@@ -80,11 +97,16 @@ export function useRepositoryValidation({
         return;
       }
 
+      const requestId = getOrCreateRequestId(validated.canonical_url);
+      
       const { analysis_id } = await repositoryService.createAnalysis({
         canonical_url: validated.canonical_url,
-        request_id: crypto.randomUUID(),
+        request_id: requestId,
       });
+      
+      clearRequestId(validated.canonical_url);
       onAnalysisCreated(analysis_id);
+      
     } catch (err) {
       if (err instanceof ApiError) {
         const message =
