@@ -21,7 +21,7 @@ import (
 )
 
 // newGRPCServer registers AuthService and the standard health service.
-// Repository implementations are not wired yet: the scenarios are stubs.
+// Guest scenarios use PostgreSQL; account registration/login/logout remain stubs.
 func newGRPCServer(ctx context.Context, pool *pgxpool.Pool) (*grpc.Server, *health.Server) {
 	log := logger.From(ctx)
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(

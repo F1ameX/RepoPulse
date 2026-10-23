@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/F1ameX/RepoPulse/project/backend/internal/api/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
@@ -13,7 +14,7 @@ func withRequestLogging(next http.Handler) http.Handler {
 		start := time.Now()
 		requestID := rand.Text()
 		log := logger.From(r.Context()).With("request_id", requestID)
-		r = r.WithContext(logger.With(r.Context(), log))
+		r = r.WithContext(domain.WithTraceID(logger.With(r.Context(), log), requestID))
 		w.Header().Set("X-Request-ID", requestID)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")

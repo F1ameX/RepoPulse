@@ -2,13 +2,15 @@ import api from './api';
 
 export interface ValidatedRepository {
   repository: {
-    platform: 'github' | 'gitlab';
+    platform: 'github';
+    github_id: string;
+    default_branch: string | null;
+    commit_sha: string | null;
     owner: string;
     name: string;
     canonical_url: string;
-    visibility: 'public';
   };
-  moved_from?: string | null;
+  moved_from: string | null;
 }
 
 export type AnalysisStatusValue = 'queued' | 'running' | 'completed' | 'failed';
@@ -36,9 +38,7 @@ export const repositoryService = {
     return data;
   },
 
-  async createAnalysis(
-    payload: CreateAnalysisRequest,
-  ): Promise<CreateAnalysisResponse> {
+  async createAnalysis(payload: CreateAnalysisRequest): Promise<CreateAnalysisResponse> {
     const { data } = await api.post('/analyses', payload);
     return data;
   },
@@ -58,6 +58,7 @@ export type RepositoryErrorKind = 'permanent' | 'temporary';
 
 export function classifyRepositoryError(code: string): RepositoryErrorKind {
   switch (code) {
+    case 'AUTH_UNAVAILABLE':
     case 'UPSTREAM_RATE_LIMITED':
     case 'UPSTREAM_TIMEOUT':
     case 'NETWORK_ERROR':

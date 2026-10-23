@@ -12,18 +12,19 @@ export type ValidationState =
   | { kind: 'pending' }
   | { kind: 'permanent-error'; message: string }
   | { kind: 'temporary-error'; message: string }
-  | { kind: 'moved'; newUrl: string };
+  | { kind: 'moved'; newUrl: string }
+  | { kind: 'validated' };
 
 const DEFAULT_MESSAGES: Record<string, string> = {
-  INVALID_REPOSITORY_URL: 'Ссылка не похожа на GitHub или GitLab.',
+  INVALID_REPOSITORY_URL: 'Укажите ссылку вида https://github.com/owner/repository.',
   REPOSITORY_NOT_FOUND_OR_PRIVATE: 'Репозиторий не найден или приватный.',
-  UNSUPPORTED_PLATFORM: 'Поддерживаются только GitHub и GitLab.',
-  UPSTREAM_RATE_LIMITED:
-    'GitHub временно ограничил запросы. Подождите и повторите.',
+  UNSUPPORTED_PLATFORM: 'Поддерживаются только репозитории GitHub.',
+  UPSTREAM_RATE_LIMITED: 'GitHub временно ограничил запросы. Подождите и повторите.',
   UPSTREAM_TIMEOUT: 'GitHub не ответил вовремя.',
   NETWORK_ERROR: 'Сервер недоступен. Проверьте соединение.',
+  AUTH_UNAVAILABLE: 'Сервис сессий временно недоступен. Попробуйте позже.',
   REPOSITORY_CHECK_FAILED: 'Сервис проверки временно недоступен. Попробуйте позже.',
-/*
+  /*
   INVALID_REQUEST: 'Некорректный запрос к серверу. Обновите страницу и попробуйте снова.',
   UNAUTHORIZED: 'Ошибка авторизации. Попробуйте обновить страницу.',
   FORBIDDEN: 'Доступ запрещен.',
@@ -93,13 +94,16 @@ export function useRepositoryValidation({
     setState({ kind: 'pending' });
 
     try {
-      try {
-        await authService.getSessionContext();
-      } catch (err) {
-        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-          await authService.createGuestSession();
-        } else {
-          throw err;
+      const session = await authService.getSessionContext();
+      if (!session.account && !session.guest) {
+        await authService.createGuestSession();
+        const confirmed = await authService.getSessionContext();
+        if (!confirmed.account && !confirmed.guest) {
+          throw new ApiError(
+            'SESSION_REQUIRED',
+            'Не удалось сохранить сессию. Разрешите cookie для сайта.',
+            401,
+          );
         }
       }
 
@@ -112,19 +116,25 @@ export function useRepositoryValidation({
       }
 
       const requestId = getOrCreateRequestId(canonicalUrl);
-      
-      const { analysis_id } = await repositoryService.createAnalysis({
-        repository_url: canonicalUrl,
-        request_id: requestId,
-      });
-      
-      clearRequestId(canonicalUrl);
-      onAnalysisCreated(analysis_id);
-      
+
+      try {
+        const { analysis_id } = await repositoryService.createAnalysis({
+          repository_url: canonicalUrl,
+          request_id: requestId,
+        });
+        clearRequestId(canonicalUrl);
+        onAnalysisCreated(analysis_id);
+      } catch (err) {
+        // C1 completes repository validation; analysis creation is a later step.
+        if (err instanceof ApiError && err.status === 501 && err.code === 'NOT_IMPLEMENTED') {
+          setState({ kind: 'validated' });
+          return;
+        }
+        throw err;
+      }
     } catch (err) {
       if (err instanceof ApiError) {
-        const message =
-          mergedMessages[err.code] ?? err.message ?? 'Неизвестная ошибка';
+        const message = mergedMessages[err.code] ?? err.message ?? 'Неизвестная ошибка';
         const kind = classifyRepositoryError(err.code);
         setState(
           kind === 'temporary'

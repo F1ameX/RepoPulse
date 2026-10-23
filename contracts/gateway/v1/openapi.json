@@ -123,7 +123,7 @@
             },
             "headers": {
               "Set-Cookie": {
-                "description": "repopulse_guest: HttpOnly; Secure; SameSite=Lax; Path=/api/v1; без Max-Age/Expires; серверный срок 24 ч.",
+                "description": "repopulse_guest: HttpOnly; Secure; SameSite=Lax; Path=/api/v1; без Max-Age/Expires; серверный срок 24 ч. Только при локальном HTTP COOKIE_SECURE=false отключает Secure; по умолчанию true.",
                 "schema": {
                   "type": "string"
                 }
@@ -156,15 +156,22 @@
             },
             "headers": {
               "Set-Cookie": {
-                "description": "repopulse_guest: HttpOnly; Secure; SameSite=Lax; Path=/api/v1; без Max-Age/Expires; серверный срок 24 ч.",
+                "description": "repopulse_guest: HttpOnly; Secure; SameSite=Lax; Path=/api/v1; без Max-Age/Expires; серверный срок 24 ч. Только при локальном HTTP COOKIE_SECURE=false отключает Secure; по умолчанию true.",
                 "schema": {
                   "type": "string"
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
           }
         },
-        "security": []
+        "security": [],
+        "description": "Origin обязателен и должен точно совпадать с PUBLIC_ORIGIN; иначе 403 CSRF_REJECTED. Для С1 — гостевая сессия."
       }
     },
     "/api/v1/auth/session": {
@@ -173,7 +180,7 @@
         "summary": "Проверить совместно действующие контексты, включая сохранность cookie.",
         "responses": {
           "200": {
-            "description": "Успех",
+            "description": "SessionContext; без действующих cookie оба поля null. Предъявленная недействительная account cookie даёт 401 SESSION_EXPIRED.",
             "content": {
               "application/json": {
                 "schema": {
@@ -201,14 +208,7 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "security": [
-          {
-            "accountCookie": []
-          },
-          {
-            "guestCookie": []
-          }
-        ]
+        "security": []
       }
     },
     "/api/v1/auth/logout": {
@@ -322,7 +322,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Origin обязателен и должен точно совпадать с PUBLIC_ORIGIN; иначе 403 CSRF_REJECTED. Для С1 — гостевая сессия."
       }
     },
     "/api/v1/analyses": {

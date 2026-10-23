@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: repopulse
+      POSTGRES_USER: repopulse
+      POSTGRES_PASSWORD: repopulse
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U repopulse -d repopulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrations:
+    build: ./project/backend/migrations
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: postgres://repopulse:repopulse@postgres:5432/repopulse?sslmode=disable
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        goose -dir /migrations/auth -table goose_auth_version up
+        goose -dir /migrations/analyzer -table goose_analyzer_version up
+        goose -dir /migrations/report -table goose_report_version up
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./project/backend
+      args:
+        SERVICE: api
+    environment:
+      HTTP_ADDR: 0.0.0.0:8080
+      AUTH_GRPC_TARGET: auth:9090
+      PUBLIC_ORIGIN: http://localhost:3000
+      COOKIE_SECURE: "false"
+    depends_on:
+      auth:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  auth:
+    build:
+      context: ./project/backend
+      args:
+        SERVICE: auth
+    environment:
+      AUTH_GRPC_ADDR: 0.0.0.0:9090
+      AUTH_DATABASE_URL: postgres://repopulse:repopulse@postgres:5432/repopulse?sslmode=disable
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+
+  report:
+    build:
+      context: ./project/backend
+      args:
+        SERVICE: report
+
+  analyzer:
+    build:
+      context: ./project/backend
+      args:
+        SERVICE: analyzer
+    environment:
+      ANALYZER_DATABASE_URL: postgres://repopulse:repopulse@postgres:5432/repopulse?sslmode=disable
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+
+  frontend:
+    build: ./project/frontend
+    ports:
+      - "127.0.0.1:3000:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
