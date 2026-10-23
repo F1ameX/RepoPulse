@@ -50,34 +50,32 @@ func (s *Service) CreateGuestSession(ctx context.Context) (domain.IssuedSession,
 	}
 
 	logger.From(ctx).InfoContext(ctx, "Guest session created",
-      "principal_id", session.PrincipalID,
-      "session_id", session.ID,
-      "expires_at", session.ExpiresAt)
+		"principal_id", session.PrincipalID,
+		"session_id", session.ID,
+		"expires_at", session.ExpiresAt)
 
 	return domain.IssuedSession{Token: token,
 		Session: domain.SessionInfo{Kind: domain.KindGuest,
 			Login: nil, ExpiresAt: session.ExpiresAt}}, nil
 }
 
-
 func (s *Service) ResolveContext(ctx context.Context, tokens domain.SessionTokens) (domain.VerifiedContext, error) {
-      var verified domain.VerifiedContext
-      if tokens.GuestToken != nil {
-              session, err := s.tokens.FindSessionByTokenHash(ctx, s.generator.Hash(*tokens.GuestToken))
-              switch {
-              case errors.Is(err, domain.ErrSessionNotFound):
-                      // неизвестный токен: гостя нет
-              case err != nil:
-                      return domain.VerifiedContext{}, fmt.Errorf("find guest session: %w", err)
-			  case session.Kind == domain.KindGuest && session.RevokedAt == nil && s.now().Before(session.ExpiresAt):
-                      verified.GuestSessionID = &session.PrincipalID
-                      verified.GuestExpiresAt = &session.ExpiresAt
-              }
-      }
-           
-	  return verified, nil
-}
+	var verified domain.VerifiedContext
+	if tokens.GuestToken != nil {
+		session, err := s.tokens.FindSessionByTokenHash(ctx, s.generator.Hash(*tokens.GuestToken))
+		switch {
+		case errors.Is(err, domain.ErrSessionNotFound):
+			// неизвестный токен: гостя нет
+		case err != nil:
+			return domain.VerifiedContext{}, fmt.Errorf("find guest session: %w", err)
+		case session.Kind == domain.KindGuest && session.RevokedAt == nil && s.now().Before(session.ExpiresAt):
+			verified.GuestSessionID = &session.PrincipalID
+			verified.GuestExpiresAt = &session.ExpiresAt
+		}
+	}
 
+	return verified, nil
+}
 
 func (s *Service) Logout(context.Context, string) error {
 	return domain.ErrNotImplemented

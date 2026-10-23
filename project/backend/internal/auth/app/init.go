@@ -26,7 +26,7 @@ func newGRPCServer(ctx context.Context, pool *pgxpool.Pool) (*grpc.Server, *heal
 	log := logger.From(ctx)
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		// Handlers receive the service logger through the request context.
-		withRequestLogger(log),grpcerr.UnaryServerInterceptor(),))
+		withRequestLogger(log), grpcerr.UnaryServerInterceptor()))
 
 	sessionsRepo := repository.NewSessions(pool)
 	authv1.RegisterAuthServiceServer(server, grpcadapter.NewServer(auth.NewService(sessionsRepo,
@@ -42,11 +42,11 @@ func newGRPCServer(ctx context.Context, pool *pgxpool.Pool) (*grpc.Server, *heal
 }
 
 func withRequestLogger(log *slog.Logger) grpc.UnaryServerInterceptor {
-      return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-              l := log
-              if ids := metadata.ValueFromIncomingContext(ctx, grpcerr.RequestIDKey); len(ids) > 0 {
-                      l = l.With("request_id", ids[0])
-              }
-              return handler(logger.With(ctx, l), req)
-      }
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		l := log
+		if ids := metadata.ValueFromIncomingContext(ctx, grpcerr.RequestIDKey); len(ids) > 0 {
+			l = l.With("request_id", ids[0])
+		}
+		return handler(logger.With(ctx, l), req)
+	}
 }

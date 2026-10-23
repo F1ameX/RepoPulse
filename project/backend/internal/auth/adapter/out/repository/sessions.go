@@ -28,13 +28,13 @@ func (r *Sessions) CreateSession(ctx context.Context, session domain.Session) (d
 
 func (r *Sessions) FindSessionByTokenHash(ctx context.Context, tokenHash string) (domain.Session, error) {
 	var s domain.Session
-	err := r.pool.QueryRow(ctx, 
-	`SELECT id, principal_id, kind, token_hash,
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, principal_id, kind, token_hash,
 	issued_at, expires_at, revoked_at
 	FROM auth.sessions
 	WHERE token_hash = $1`, tokenHash,
 	).Scan(&s.ID, &s.PrincipalID, &s.Kind, &s.TokenHash,
-	&s.IssuedAt, &s.ExpiresAt, &s.RevokedAt)
+		&s.IssuedAt, &s.ExpiresAt, &s.RevokedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Session{}, domain.ErrSessionNotFound
@@ -43,7 +43,7 @@ func (r *Sessions) FindSessionByTokenHash(ctx context.Context, tokenHash string)
 	if err != nil {
 		return domain.Session{}, err
 	}
-	
+
 	return s, nil
 }
 
