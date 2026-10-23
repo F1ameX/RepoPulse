@@ -1,9 +1,37 @@
 # Frontend
 
 ## Запуск
+
 В корне директории frontend:
 
-`npm run dev`
+`npm ci`, затем `npm run dev`. API должен быть доступен на порту 8080.
+
+## Проверки
+
+`npm run lint`, `npm test`, `npm run build`.
+
+Тесты проверяют правила URL из FR-01 и состояния формы из FR-02/FR-27,
+включая границы длины, порядок ошибок, повторную попытку, гостевую сессию,
+отключённые cookie и отмену запроса. Ответы сервисов в компонентных тестах
+контролируются тестом; это не проверка доступности реального GitHub.
+HTTP-клиент дополнительно проверяется на локальном тестовом сервере:
+JSON-ошибки, HTML-ответ 502, разрыв соединения, тайм-аут и отмена запроса.
+
+| Требование С1 | Проверки |
+| --- | --- |
+| FR-01: URL, 2048 кодовых точек, порядок ошибок | `src/lib/repositoryUrl.test.ts` |
+| FR-01: ошибка у поля, ввод и фокус, запрет отправки | `src/pages/RepositoryInputPage.test.tsx` |
+| FR-02: проверка, перенос, недоступность, временный отказ и повтор | `src/pages/RepositoryInputPage.test.tsx`, `src/services/repositoryService.test.ts` |
+| FR-27: создание и подтверждение гостевой сессии, cookie, запрет незаметной смены аккаунта | `src/pages/RepositoryInputPage.test.tsx` |
+| Input/Button/Message: доступные ошибки и блокировка повторного действия | `src/components/Controls.test.tsx` |
+| Ошибки HTTP и отсутствие фиктивного состояния анализа | `src/services/api.test.ts`, `src/pages/PlaceholderPages.test.tsx` |
+
+## Граница С1
+
+Форма проверяет URL локально, подтверждает гостевой или учётный контекст
+и проверяет доступность публичного репозитория через Gateway. Создание
+анализа, отслеживание состояния, отчёт и интерфейс входа реализуются в
+последующих спринтах. Успешная проверка URL не означает выполненный анализ.
 
 ## Хук валидации репозитория
 
@@ -12,17 +40,14 @@ import { useRepositoryValidation } from '@/hooks/useRepositoryValidation';
 
 const {
 	url,        // string
-	state,      // ValidationState (idle | pending | permanent-error | temporary-error | moved)
+	state,      // idle | pending | field-error | unavailable | temporary-error | session-error | validated
 	isPending,  // boolean
 	inputRef,   // RefObject<HTMLInputElement | null>
 	setUrl,     // (value: string) => void
 	submit,     // () => void
 	retry,      // () => void
 	fix,        // () => void
-	useNew,     // () => void
-} = useRepositoryValidation({
-	onAnalysisCreated: (id) => navigate(`/analysis/${id}`),
-});
+} = useRepositoryValidation();
 ```
 
 ## Компоненты

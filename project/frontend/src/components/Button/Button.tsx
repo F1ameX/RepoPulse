@@ -5,8 +5,7 @@ import styles from './Button.module.css';
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
-export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   isLoading?: boolean;
@@ -48,13 +47,9 @@ export function Button({
       {...rest}
     >
       {isLoading && <span aria-hidden className={styles.spinner} />}
-      {!isLoading && leftIcon && (
-        <span className={styles.icon}>{leftIcon}</span>
-      )}
+      {!isLoading && leftIcon && <span className={styles.icon}>{leftIcon}</span>}
       <span className={styles.label}>{children}</span>
-      {!isLoading && rightIcon && (
-        <span className={styles.icon}>{rightIcon}</span>
-      )}
+      {!isLoading && rightIcon && <span className={styles.icon}>{rightIcon}</span>}
     </button>
   );
 }

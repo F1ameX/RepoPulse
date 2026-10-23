@@ -1,24 +1,19 @@
-import { useNavigate } from "react-router-dom";
-import { Button, Input, Message } from "@/components";
-import { useRepositoryValidation } from "@/hooks/useRepositoryValidation";
-import styles from "./RepositoryInputPage.module.css";
+import { Button, Input, Message } from '@/components';
+import { useRepositoryValidation } from '@/hooks/useRepositoryValidation';
+import styles from './RepositoryInputPage.module.css';
 
 export default function RepositoryInputPage() {
-  const navigate = useNavigate();
-  const {
-    url,
-    state,
-    isPending,
-    inputRef,
-    setUrl,
-    submit,
-    retry,
-    fix,
-    useNew,
-  } = useRepositoryValidation({
-    onAnalysisCreated: (id) => navigate(`/analysis/${id}`),
-  });
-
+  const { url, state, isPending, inputRef, setUrl, submit, retry, fix } = useRepositoryValidation();
+  const actions = (
+    <>
+      <Button variant="secondary" size="sm" onClick={retry}>
+        Повторить
+      </Button>
+      <Button variant="secondary" size="sm" onClick={fix}>
+        Изменить URL
+      </Button>
+    </>
+  );
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -27,15 +22,12 @@ export default function RepositoryInputPage() {
       <main className={styles.content}>
         <section className={styles.hero} aria-labelledby="project-title">
           <h1 id="project-title" className={styles.title}>
-            Веб-сервис для автоматической оценки технического здоровья
-            GitHub-репозитория
+            Веб-сервис для автоматической оценки технического здоровья GitHub-репозитория
           </h1>
-          <h3 className={styles.description}>
-            RepoPulse анализирует историю, документацию, тесты, зависимости,
-            CI/CD и code review — и выдаёт Repo Health Score от 0 до 100 с
-            объяснением и рекомендациями.
-          </h3>
-
+          <p className={styles.description}>
+            Проверьте URL и доступность публичного GitHub-репозитория. Формирование отчётов пока
+            недоступно.
+          </p>
           <form
             className={styles.form}
             onSubmit={(event) => {
@@ -53,77 +45,63 @@ export default function RepositoryInputPage() {
                 id="repository-url"
                 ref={inputRef}
                 className={styles.input}
-                type="url"
+                error={state.kind === 'field-error' ? state.message : undefined}
+                type="text"
+                inputMode="url"
+                autoCapitalize="none"
+                spellCheck={false}
                 placeholder="https://github.com/username/repo"
                 value={url}
                 onChange={(event) => setUrl(event.target.value)}
+                onPaste={(event) => {
+                  // Keep raw line breaks for validation instead of silently removing them.
+                  event.preventDefault();
+                  const input = event.currentTarget;
+                  setUrl(
+                    url.slice(0, input.selectionStart ?? url.length) +
+                      event.clipboardData.getData('text') +
+                      url.slice(input.selectionEnd ?? url.length),
+                  );
+                }}
                 aria-describedby="repository-hint"
                 size="lg"
                 required
                 disabled={isPending}
               />
-              <Button
-                className={styles.submit}
-                type="submit"
-                size="lg"
-                isLoading={isPending}
-              >
+              <Button className={styles.submit} type="submit" size="lg" isLoading={isPending}>
                 Анализировать
               </Button>
             </div>
             <p className={styles.hint} id="repository-hint">
               Поддерживаются публичные репозитории GitHub
             </p>
-
             <div className={styles.feedback}>
-              {state.kind === "pending" && (
+              {state.kind === 'pending' && (
                 <Message variant="info" icon={false}>
-                  Проверяем доступность репозитория…
+                  Проверяем доступность репозитория
                 </Message>
               )}
-
-              {state.kind === "validated" && (
-                <Message variant="success">
-                  Репозиторий доступен. URL прошёл проверку.
+              {state.kind === 'validated' && (
+                <>
+                  {state.movedTo && (
+                    <Message variant="info">Репозиторий перемещён: {state.movedTo}</Message>
+                  )}
+                  <Message variant="success">Репозиторий доступен. URL прошёл проверку.</Message>
+                </>
+              )}
+              {state.kind === 'unavailable' && (
+                <Message variant="error" actions={actions}>
+                  Публичный репозиторий недоступен
                 </Message>
               )}
-
-              {state.kind === "permanent-error" && (
-                <Message
-                  variant="error"
-                  actions={
-                    <Button variant="secondary" size="sm" onClick={fix}>
-                      Изменить URL
-                    </Button>
-                  }
-                >
+              {state.kind === 'temporary-error' && (
+                <Message variant="warning" actions={actions}>
                   {state.message}
                 </Message>
               )}
-
-              {state.kind === "temporary-error" && (
-                <Message
-                  variant="warning"
-                  actions={
-                    <Button variant="secondary" size="sm" onClick={retry}>
-                      Повторить
-                    </Button>
-                  }
-                >
+              {state.kind === 'session-error' && (
+                <Message variant="error" actions={actions}>
                   {state.message}
-                </Message>
-              )}
-
-              {state.kind === "moved" && (
-                <Message
-                  variant="info"
-                  actions={
-                    <Button variant="secondary" size="sm" onClick={useNew}>
-                      Использовать новый
-                    </Button>
-                  }
-                >
-                  Репозиторий переименован. Новый адрес: {state.newUrl}
                 </Message>
               )}
             </div>

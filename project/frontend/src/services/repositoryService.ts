@@ -1,4 +1,4 @@
-import api from './api';
+import api, { ApiError } from './api';
 
 export interface ValidatedRepository {
   repository: {
@@ -32,10 +32,47 @@ export interface AnalysisStatus {
   report_id?: string | null;
 }
 
+function parseValidatedRepository(data: unknown): ValidatedRepository {
+  const value = data as Partial<ValidatedRepository> | null;
+  const repository = value?.repository;
+  if (
+    !repository ||
+    repository.platform !== 'github' ||
+    typeof repository.github_id !== 'string' ||
+    !repository.github_id ||
+    typeof repository.owner !== 'string' ||
+    !/^[A-Za-z0-9-]+$/.test(repository.owner) ||
+    typeof repository.name !== 'string' ||
+    !/^[A-Za-z0-9_.-]+$/.test(repository.name) ||
+    repository.canonical_url !==
+      `https://github.com/${repository.owner}/${repository.name}`.toLowerCase() ||
+    !(repository.default_branch === null || typeof repository.default_branch === 'string') ||
+    !(
+      repository.commit_sha === null ||
+      (typeof repository.commit_sha === 'string' && /^[0-9a-f]{40}$/.test(repository.commit_sha))
+    ) ||
+    !(
+      value?.moved_from === null ||
+      (typeof value?.moved_from === 'string' &&
+        /^https:\/\/github\.com\/[a-z0-9-]+\/[a-z0-9_.-]+$/.test(value.moved_from))
+    )
+  ) {
+    throw new ApiError('REPOSITORY_CHECK_FAILED', 'Не удалось проверить доступность репозитория');
+  }
+  return value as ValidatedRepository;
+}
+
 export const repositoryService = {
-  async validateRepository(repositoryUrl: string): Promise<ValidatedRepository> {
-    const { data } = await api.post('/repositories/validate', { repository_url: repositoryUrl });
-    return data;
+  async validateRepository(
+    repositoryUrl: string,
+    signal?: AbortSignal,
+  ): Promise<ValidatedRepository> {
+    const { data } = await api.post<unknown>(
+      '/repositories/validate',
+      { repository_url: repositoryUrl },
+      { signal },
+    );
+    return parseValidatedRepository(data);
   },
 
   async createAnalysis(payload: CreateAnalysisRequest): Promise<CreateAnalysisResponse> {
@@ -53,32 +90,3 @@ export const repositoryService = {
     return data;
   },
 };
-
-export type RepositoryErrorKind = 'permanent' | 'temporary';
-
-export function classifyRepositoryError(code: string): RepositoryErrorKind {
-  switch (code) {
-    case 'AUTH_UNAVAILABLE':
-    case 'UPSTREAM_RATE_LIMITED':
-    case 'UPSTREAM_TIMEOUT':
-    case 'NETWORK_ERROR':
-    case 'REPOSITORY_UNAVAILABLE':
-    case 'REPOSITORY_CHECK_FAILED':
-      return 'temporary';
-    case 'INVALID_REPOSITORY_URL':
-    case 'REPOSITORY_NOT_FOUND_OR_PRIVATE':
-    case 'UNSUPPORTED_PLATFORM':
-    case 'CLONE_FAILED':
-    case 'ANALYSIS_FAILED':
-    default:
-      return 'permanent';
-  }
-}
-
-export function normalizeUrl(input: string): string {
-  return input
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\.git$/, '')
-    .toLowerCase();
-}

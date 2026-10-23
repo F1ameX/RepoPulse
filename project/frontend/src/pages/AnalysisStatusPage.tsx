@@ -1,6 +1,9 @@
-import { useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 export default function AnalysisStatusPage() {
-  const { id } = useParams<{ id: string }>();
-  return <div>Анализ {id} выполняется…</div>;
+  return (
+    <div>
+      Просмотр состояния анализа пока не реализован. <Link to="/">К проверке репозитория</Link>
+    </div>
+  );
 }

@@ -1,7 +1,10 @@
-import { useRouteError } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 export default function ErrorPage() {
-  const error = useRouteError();
-  console.error(error);
-  return <div>Что-то пошло не так</div>;
+  return (
+    <div role="alert">
+      <p>Не удалось открыть страницу.</p>
+      <Link to="/">К проверке репозитория</Link>
+    </div>
+  );
 }
