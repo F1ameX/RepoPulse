@@ -47,9 +47,27 @@ curl http://localhost:8080/health
 миграций проверьте `docker compose logs migrations`, исправьте причину и повторите
 `docker compose up -d --build`.
 
-Compose запускает текущую реализацию: Auth обслуживает gRPC, Analyzer открывает
-хранилище, Report пока является каркасом. Подключение Auth к HTTP Gateway,
-исполнение очереди и остальные бизнес-обработчики развиваются в отдельных задачах.
+В С1 Gateway подключён к Auth по gRPC: работают гостевая сессия, чтение её
+контекста и валидация публичного GitHub URL. Frontend доступен с Origin
+http://localhost:3000; POST проверяет его точное совпадение с PUBLIC_ORIGIN.
+Для локального HTTP в Compose задано COOKIE_SECURE=false; при HTTPS используйте true.
+Auth хранит хэши токенов в PostgreSQL. Analyzer открывает хранилище, Report пока
+является каркасом. Регистрация/вход/выход, создание анализа и исполнение очереди
+развиваются в отдельных задачах. Если создание анализа возвращает
+501 NOT_IMPLEMENTED, текущий экран С1 показывает успешную проверку URL,
+не создавая фиктивный analysis_id и не переходя к отчёту.
+
+Проверка гостевого сценария (из браузера frontend отправляет те же запросы):
+
+```sh
+curl -c /tmp/repopulse-cookies.txt -H 'Origin: http://localhost:3000' -X POST http://localhost:3000/api/v1/auth/guest-session
+curl -b /tmp/repopulse-cookies.txt http://localhost:3000/api/v1/auth/session
+curl -b /tmp/repopulse-cookies.txt -H 'Origin: http://localhost:3000' -H 'Content-Type: application/json' -d '{"repository_url":"https://github.com/pressly/goose"}' http://localhost:3000/api/v1/repositories/validate
+```
+
+Для запуска frontend вне Docker: `npm run dev` из project/frontend (порт 3000);
+Vite передаёт `/api` в Gateway на localhost:8080. Для локального запуска Gateway
+на HTTP задайте COOKIE_SECURE=false.
 
 ## Документация
 

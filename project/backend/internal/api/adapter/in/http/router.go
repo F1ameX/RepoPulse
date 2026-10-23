@@ -23,7 +23,11 @@ type fieldError struct {
 	Message string `json:"message"`
 }
 
-func NewHandler(validator RepositoryValidator, resolver ContextResolver) http.Handler {
+func NewHandler(validator RepositoryValidator, resolver ContextResolver, options ...Options) http.Handler {
+	cfg := Options{CookieSecure: true, PublicOrigin: "http://localhost:3000"}
+	if len(options) > 0 {
+		cfg = options[0]
+	}
 	mux := http.NewServeMux()
 	route := func(path, method string, handler http.HandlerFunc) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -45,11 +49,11 @@ func NewHandler(validator RepositoryValidator, resolver ContextResolver) http.Ha
 	route("/api/v1/analyses/{analysis_id}", http.MethodGet, notImplemented)
 	route("/api/v1/reports/{report_id}", http.MethodGet, notImplemented)
 	route("/api/v1/reports", http.MethodGet, notImplemented)
-	route("/api/v1/repositories/validate", http.MethodPost, validateRepository(validator, resolver))
+	route("/api/v1/repositories/validate", http.MethodPost, sameOrigin(cfg.PublicOrigin, validateRepository(validator, resolver)))
 	route("/api/v1/auth/register", http.MethodPost, notImplemented)
 	route("/api/v1/auth/login", http.MethodPost, notImplemented)
-	route("/api/v1/auth/guest-session", http.MethodPost, notImplemented)
-	route("/api/v1/auth/session", http.MethodGet, notImplemented)
+	route("/api/v1/auth/guest-session", http.MethodPost, sameOrigin(cfg.PublicOrigin, continueGuest(cfg.Sessions, cfg.CookieSecure)))
+	route("/api/v1/auth/session", http.MethodGet, getSession(cfg.Sessions))
 	route("/api/v1/auth/logout", http.MethodPost, notImplemented)
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "Route not found")

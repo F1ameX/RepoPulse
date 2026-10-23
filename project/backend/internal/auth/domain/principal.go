@@ -39,6 +39,12 @@ type SessionInfo struct {
 	ExpiresAt time.Time
 }
 
+// SessionContext describes both active sessions without exposing credentials.
+type SessionContext struct {
+	Account *SessionInfo
+	Guest   *SessionInfo
+}
+
 // IssuedSession is a new session; Token is returned once and never stored.
 type IssuedSession struct {
 	Token   string

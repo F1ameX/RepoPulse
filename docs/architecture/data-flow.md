@@ -35,7 +35,8 @@ backend; ValidateRepository/CreateAnalysis/GetAnalysis описаны как в�
 |---|---|---|
 | Регистрация | Credentials → Auth.Register → RegistrationResult | Подтверждение создания; вход выполняется отдельно |
 | Вход | Credentials → Auth.Login → IssuedSession | SessionInfo; token из IssuedSession устанавливается account cookie |
-| Продолжение гостем | Проверка cookie через ResolveContext; при отсутствии действующего гостя Auth.CreateGuestSession(Empty) → IssuedSession | SessionInfo и guest cookie; действующая гостевая сессия не продлевается |
+| Продолжение гостем | Проверка guest cookie через GetSessionContext; при отсутствии действующего гостя Auth.CreateGuestSession(Empty) → IssuedSession | SessionInfo и guest cookie; действующая гостевая сессия не продлевается |
+| Сведения для UI | Cookie → SessionTokens → Auth.GetSessionContext → SessionContext | account/guest с kind/login/expires_at либо null; токены и ID не возвращаются |
 | Проверка контекста | Cookie → SessionTokens → Auth.ResolveContext → VerifiedContext | Gateway использует только проверенные идентичности и сроки |
 | Выход | Текущая account cookie → LogoutCommand.account_token → Auth.Logout → Empty | 204 и удаление account cookie; независимые сессии и guest сохраняются |
 
@@ -50,11 +51,22 @@ Owner сохраняется в submissions/analyses/snapshot/report и не м�
 предъявленная account cookie не приводит к незаметному гостевому запуску:
 возвращается ошибка сессии, продолжение гостем — отдельное действие пользователя.
 
-Открытый вопрос текущего Auth-контракта: GET /auth/session возвращает
-SessionContext с SessionInfo.login, но ResolveContext возвращает только
-идентификаторы и сроки в VerifiedContext. RPC получения логина текущего аккаунта
-в auth.proto пока нет. При реализации этой операции нужно согласовать расширение
-ответа Auth или отдельный RPC; Gateway не должен читать таблицы Auth напрямую.
+Для GET /auth/session добавлен отдельный RPC GetSessionContext(SessionTokens).
+Gateway явно преобразует SessionInfo в HTTP DTO и не читает БД Auth.
+В С1 Auth возвращает сведения о гостевой сессии; аккаунтные сценарии ещё не
+реализованы. Отсутствующие, истёкшие и отозванные guest cookie дают guest=null.
+GET без действующих сессий возвращает 200 с account=null и guest=null.
+Предъявленная account cookie без подтверждения Auth даёт 401 SESSION_EXPIRED,
+даже при действующем госте. Frontend не перехватывает эту ошибку для смены владельца.
+
+При пустом контексте frontend создаёт гостя через POST /auth/guest-session и
+повторным GET подтверждает сохранность cookie перед запросом валидации.
+POST повторно использует действующего гостя: тот же токен и первоначальный срок,
+ответ 200 вместо 201. Cookie HttpOnly, SameSite=Lax, Path=/api/v1, без Max-Age/Expires.
+Secure включён по умолчанию; COOKIE_SECURE=false используется только для локального
+HTTP в Compose. POST guest-session и repositories/validate требуют Origin,
+точно совпадающий с PUBLIC_ORIGIN; чужой/отсутствующий Origin даёт CSRF_REJECTED.
+
 
 ## Проверка URL и отправка анализа
 
@@ -112,13 +124,17 @@ cookie в Auth.ResolveContext и использует только провер�
 HTTP-адаптер вызывает сценарий `internal/analyzer/application/repository`;
 нормализация находится в domain, GitHub-клиент — в adapter/out/github.
 
-Текущая реализация: интерфейс зависимости Auth объявлен в HTTP-адаптере,
-но реальный клиент ResolveContext ещё не подключён в app/init.go. После
-проверки JSON запрос получает 401 SESSION_REQUIRED, если ни одна session cookie
-не предъявлена, либо 501 NOT_IMPLEMENTED с cookie до подключения Auth. Контекст из
-тела или наличия cookie не создаётся; GitHub без проверенной сессии не вызывается.
-Сценарий Analyzer также отклоняет пустой или истёкший контекст. Рабочий путь
-проверен с подставным Auth-resolver в тестах; это не готовая интеграция с Auth.
+Текущая реализация: app/init.go подключает gRPC-клиент Auth через
+AUTH_GRPC_TARGET. Таймаут каждого RPC задаётся AUTH_REQUEST_TIMEOUT; соединение
+закрывается при завершении API. HTTP trace_id передаётся в gRPC x-request-id.
+JSON-контексты из тела и само наличие cookie не устанавливают идентичность:
+HTTP-адаптер передаёт токены в Auth.ResolveContext и получает VerifiedContext.
+Без cookie возвращается 401 SESSION_REQUIRED; без подтверждённого аккаунта при
+предъявленной account cookie — 401 SESSION_EXPIRED. При недоступном Auth —
+503 AUTH_UNAVAILABLE, без запроса GitHub и без создания гостя вместо ошибки.
+Сценарий Analyzer повторно проверяет наличие и срок VerifiedContext.
+Цепочка HTTP → настоящий gRPC Auth → проверка URL покрыта интеграционным тестом.
+Создание job и полный запуск анализа остаются следующими задачами.
 
 Порядок FR-01: trim только U+0020 → пустота → длина в code points → запрещённые
 символы/абсолютный HTTPS → хост → userinfo/порт/query/fragment/путь. Проверяется

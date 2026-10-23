@@ -23,6 +23,7 @@ func TestHTTPServerDoesNotBypassMissingAuthIntegration(t *testing.T) {
 		{"repopulse_session=opaque", "NOT_IMPLEMENTED", http.StatusNotImplemented},
 	} {
 		request := httptest.NewRequest(http.MethodPost, "/api/v1/repositories/validate", strings.NewReader(`{"repository_url":"https://github.com/owner/repo"}`))
+		request.Header.Set("Origin", "http://localhost:3000")
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("Cookie", tc.cookie)
 		recorder := httptest.NewRecorder()
