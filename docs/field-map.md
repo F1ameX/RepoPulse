@@ -10,6 +10,8 @@ HTTP DTO и gRPC-сообщения реализуются отдельно; 0, 
 - [report](fields/report.md) — `contracts/report/v1/schemas.json`
 
 [Gateway HTTP](../contracts/gateway/v1/openapi.json) ссылается на эти модели.
+Сведения для HTTP SessionContext получает Auth.GetSessionContext(SessionTokens);
+идентичности для операций — Auth.ResolveContext, без чтения Auth-таблиц Gateway.
 
 [HTTP операции и параметры](../contracts/gateway/README.md).
 [Движение данных между компонентами](architecture/data-flow.md).

@@ -12,7 +12,7 @@ import (
 )
 
 // Service is the entry point to Auth business logic.
-// Scenarios are not implemented yet and return domain.ErrNotImplemented.
+// Account registration, login and logout remain scaffold operations.
 type Service struct {
 	guests    GuestRepository
 	users     UserRepository
@@ -43,7 +43,9 @@ func (s *Service) CreateGuestSession(ctx context.Context) (domain.IssuedSession,
 	if err != nil {
 		return domain.IssuedSession{}, fmt.Errorf("create token: %w", err)
 	}
-	now := s.now()
+	// PostgreSQL timestamps have microsecond precision; the initial response
+	// and subsequent reads must describe the exact same stored expiry.
+	now := s.now().UTC().Truncate(time.Microsecond)
 	session, err := s.guests.CreateGuestSession(ctx, hash, now, now.Add(24*time.Hour))
 	if err != nil {
 		return domain.IssuedSession{}, fmt.Errorf("create guest: %w", err)
@@ -75,6 +77,18 @@ func (s *Service) ResolveContext(ctx context.Context, tokens domain.SessionToken
 	}
 
 	return verified, nil
+}
+
+func (s *Service) GetSessionContext(ctx context.Context, tokens domain.SessionTokens) (domain.SessionContext, error) {
+	verified, err := s.ResolveContext(ctx, tokens)
+	if err != nil {
+		return domain.SessionContext{}, err
+	}
+	result := domain.SessionContext{}
+	if verified.GuestSessionID != nil && verified.GuestExpiresAt != nil {
+		result.Guest = &domain.SessionInfo{Kind: domain.KindGuest, ExpiresAt: *verified.GuestExpiresAt}
+	}
+	return result, nil
 }
 
 func (s *Service) Logout(context.Context, string) error {

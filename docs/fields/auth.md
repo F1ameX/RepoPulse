@@ -16,6 +16,7 @@ HTTP публикует только модели, на которые ссыл�
 | `Register` | `Credentials` | `RegistrationResult` |
 | `Login` | `Credentials` | `IssuedSession` |
 | `CreateGuestSession` | `repopulse.common.v1.Empty` | `IssuedSession` |
+| `GetSessionContext` | `SessionTokens` | `SessionContext` |
 | `ResolveContext` | `SessionTokens` | `repopulse.common.v1.VerifiedContext` |
 | `Logout` | `LogoutCommand` | `repopulse.common.v1.Empty` |
 
@@ -45,7 +46,13 @@ HTTP публикует только модели, на которые ссыл�
 
 ## SessionContext
 
-Оба поля обязательны, отсутствие представляется null. Проверка cookie перед анализом.
+Оба поля обязательны в HTTP JSON, отсутствие представляется null. Отдельный
+RPC `GetSessionContext(SessionTokens)` возвращает сведения о сессиях для UI;
+`ResolveContext` возвращает проверенные идентичности для внутренних операций.
+В С1 `GetSessionContext` реализует гостевой путь; account остаётся null до
+реализации входа и получения сведений об аккаунте. Без действующих cookie
+HTTP GET возвращает 200 с `account=null, guest=null`; недействительная
+предъявленная account cookie вызывает 401 SESSION_EXPIRED без перехода на гостя.
 
 | Поле | JSON: тип и значения | protobuf: тип и номер | Обязательное в JSON / null | Описание | Хранение |
 |---|---|---|---|---|---|

@@ -37,6 +37,12 @@ services:
         SERVICE: api
     environment:
       HTTP_ADDR: 0.0.0.0:8080
+      AUTH_GRPC_TARGET: auth:9090
+      PUBLIC_ORIGIN: http://localhost:3000
+      COOKIE_SECURE: "false"
+    depends_on:
+      auth:
+        condition: service_started
     ports:
       - "127.0.0.1:8080:8080"
 

@@ -19,7 +19,12 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return runHTTP(ctx, newHTTPServer(ctx, cfg), cfg.ShutdownTimeout)
+	sessions, conn, err := newSessions(cfg)
+	if err != nil {
+		return fmt.Errorf("initialize Auth client: %w", err)
+	}
+	defer conn.Close()
+	return runHTTP(ctx, newHTTPServer(ctx, cfg, sessions), cfg.ShutdownTimeout)
 }
 
 func runHTTP(ctx context.Context, server *http.Server, shutdownTimeout time.Duration) error {

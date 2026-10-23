@@ -37,6 +37,10 @@ export default function RepositoryInputPage() {
         </Message>
       )}
 
+      {state.kind === 'validated' && (
+        <Message variant="success">Репозиторий доступен. URL прошёл проверку.</Message>
+      )}
+
       {state.kind === 'permanent-error' && (
         <Message
           variant="error"

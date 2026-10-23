@@ -75,6 +75,7 @@ func TestRepositoryValidationHTTPToGitHub(t *testing.T) {
 			handler := NewHandler(repository.NewValidator(client, 100*time.Millisecond), resolver)
 			ctx := logger.With(context.Background(), slog.New(slog.NewJSONHandler(io.Discard, nil)))
 			request := httptest.NewRequestWithContext(ctx, "POST", "/api/v1/repositories/validate", strings.NewReader(tc.body))
+			request.Header.Set("Origin", "http://localhost:3000")
 			request.Header.Set("Content-Type", "application/json")
 			request.AddCookie(&http.Cookie{Name: "repopulse_guest", Value: "opaque-guest-token"})
 			recorder := httptest.NewRecorder()
@@ -125,6 +126,7 @@ func TestValidationRejectsMalformedJSONBeforeCallingApplication(t *testing.T) {
 	} {
 		t.Run(body, func(t *testing.T) {
 			request := httptest.NewRequest("POST", "/api/v1/repositories/validate", strings.NewReader(body))
+			request.Header.Set("Origin", "http://localhost:3000")
 			request.Header.Set("Content-Type", "application/json; charset=utf-8")
 			recorder := httptest.NewRecorder()
 			NewHandler(nil, nil).ServeHTTP(recorder, request)
@@ -142,6 +144,7 @@ func TestValidationRejectsMalformedJSONBeforeCallingApplication(t *testing.T) {
 		{"application/json", strings.Repeat(" ", (1<<20)+1), 400},
 	} {
 		request := httptest.NewRequest("POST", "/api/v1/repositories/validate", strings.NewReader(tc.body))
+		request.Header.Set("Origin", "http://localhost:3000")
 		request.Header.Set("Content-Type", tc.contentType)
 		recorder := httptest.NewRecorder()
 		NewHandler(nil, nil).ServeHTTP(recorder, request)
@@ -179,6 +182,7 @@ func TestValidationDoesNotBypassAuth(t *testing.T) {
 				return nil, context.Canceled
 			})}, "")
 			request := httptest.NewRequest(http.MethodPost, "/api/v1/repositories/validate", strings.NewReader(`{"repository_url":"https://github.com/owner/repo"}`))
+			request.Header.Set("Origin", "http://localhost:3000")
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("Cookie", tc.cookies)
 			recorder := httptest.NewRecorder()

@@ -43,6 +43,7 @@ service AuthService {
   rpc Register (Credentials) returns (RegistrationResult);
   rpc Login (Credentials) returns (IssuedSession);
   rpc CreateGuestSession (repopulse.common.v1.Empty) returns (IssuedSession);
+  rpc GetSessionContext (SessionTokens) returns (SessionContext);
   rpc ResolveContext (SessionTokens) returns (repopulse.common.v1.VerifiedContext);
   rpc Logout (LogoutCommand) returns (repopulse.common.v1.Empty);
 }
