@@ -23,6 +23,11 @@ const DEFAULT_MESSAGES: Record<string, string> = {
   UPSTREAM_TIMEOUT: 'GitHub не ответил вовремя.',
   NETWORK_ERROR: 'Сервер недоступен. Проверьте соединение.',
   REPOSITORY_CHECK_FAILED: 'Сервис проверки временно недоступен. Попробуйте позже.',
+/*
+  INVALID_REQUEST: 'Некорректный запрос к серверу. Обновите страницу и попробуйте снова.',
+  UNAUTHORIZED: 'Ошибка авторизации. Попробуйте обновить страницу.',
+  FORBIDDEN: 'Доступ запрещен.',
+*/
 };
 
 export interface UseRepositoryValidationOptions {
@@ -91,7 +96,7 @@ export function useRepositoryValidation({
       try {
         await authService.getSessionContext();
       } catch (err) {
-        if (err instanceof ApiError && err.status === 401) {
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
           await authService.createGuestSession();
         } else {
           throw err;
@@ -109,7 +114,7 @@ export function useRepositoryValidation({
       const requestId = getOrCreateRequestId(canonicalUrl);
       
       const { analysis_id } = await repositoryService.createAnalysis({
-        repository_url: canonicalUrl, // Изменено на repository_url согласно контракту
+        repository_url: canonicalUrl,
         request_id: requestId,
       });
       
