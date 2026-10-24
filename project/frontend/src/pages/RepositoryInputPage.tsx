@@ -45,7 +45,12 @@ export default function RepositoryInputPage() {
                 id="repository-url"
                 ref={inputRef}
                 className={styles.input}
-                error={state.kind === 'field-error' ? state.message : undefined}
+                aria-invalid={state.kind === 'field-error'}
+                aria-describedby={
+                  state.kind === 'field-error'
+                    ? 'repository-hint repository-error'
+                    : 'repository-hint'
+                }
                 type="text"
                 inputMode="url"
                 autoCapitalize="none"
@@ -63,7 +68,6 @@ export default function RepositoryInputPage() {
                       url.slice(input.selectionEnd ?? url.length),
                   );
                 }}
-                aria-describedby="repository-hint"
                 size="lg"
                 required
                 disabled={isPending}
@@ -103,6 +107,11 @@ export default function RepositoryInputPage() {
                 <Message variant="error" actions={actions}>
                   {state.message}
                 </Message>
+              )}
+              {state.kind === 'field-error' && (
+                <div id="repository-error">
+                  <Message variant="error">{state.message}</Message>
+                </div>
               )}
             </div>
           </form>
