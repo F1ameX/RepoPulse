@@ -1,7 +1,7 @@
 # RepoPulse
 Health assessment service for GitHub repositories
 
-## Docker — Спринт 1
+## Docker
 
 В корневом `docker-compose.yml` описаны API Gateway, Auth, Report, Analyzer,
 frontend и общая PostgreSQL 17. Для backend используется один Dockerfile:
@@ -51,9 +51,12 @@ curl http://localhost:8080/health
 контекста и валидация публичного GitHub URL. Frontend доступен с Origin
 http://localhost:3000; POST проверяет его точное совпадение с PUBLIC_ORIGIN.
 Для локального HTTP в Compose задано COOKIE_SECURE=false; при HTTPS используйте true.
-Auth хранит хэши токенов в PostgreSQL. Analyzer открывает хранилище, Report пока
-является каркасом. Регистрация/вход/выход, создание анализа и исполнение очереди
-развиваются в отдельных задачах. Экран С1 выполняет только проверку URL и
+Auth хранит хэши токенов в PostgreSQL. Analyzer исполняет очередь PostgreSQL
+и безопасно читает Git; Report пока является каркасом. HTTP-запуск анализа
+(#18478), нормализаторы входов (#18479) и расчёт результата подключаются отдельно.
+Пока Processor не подключён, задание после чтения Git завершается failed,
+без фиктивного отчёта. [Устройство исполнителя](docs/architecture/analyzer-execution.md).
+Экран С1 выполняет только проверку URL и
 доступности репозитория: не вызывает создание анализа, не создаёт фиктивный
 analysis_id и не переходит к отчёту. Не реализованные маршруты следующих
 спринтов пока возвращают 501 NOT_IMPLEMENTED.

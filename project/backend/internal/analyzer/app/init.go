@@ -6,13 +6,15 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	gitreader "github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/git"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/repository"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/storage"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/worker"
 )
 
-// OpenStorage wires the internal storage scenarios for Analyzer and its future
-// callers. Schema migrations must already have been applied by the developer.
-func OpenStorage(ctx context.Context, cfg Config) (*storage.Service, func(), error) {
+// openRepository checks the shared schema; Compose or the developer applies
+// migrations before starting the service.
+func openRepository(ctx context.Context, cfg Config) (*repository.Postgres, func(), error) {
 	ctx, cancel := context.WithTimeout(ctx, cfg.DatabaseTimeout)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
@@ -36,5 +38,26 @@ func OpenStorage(ctx context.Context, cfg Config) (*storage.Service, func(), err
 		pool.Close()
 		return nil, nil, errors.New("apply auth/analyzer/report migrations before opening analysis storage")
 	}
-	return storage.NewService(repository.NewPostgres(pool)), pool.Close, nil
+	return repository.NewPostgres(pool), pool.Close, nil
+}
+
+func OpenStorage(ctx context.Context, cfg Config) (*storage.Service, func(), error) {
+	repo, close, err := openRepository(ctx, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return storage.NewService(repo), close, nil
+}
+
+func OpenWorker(ctx context.Context, cfg Config, processor worker.Processor) (*worker.Service, func(), error) {
+	repo, close, err := openRepository(ctx, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	git, err := gitreader.NewReader(cfg.TempDirectory, gitreader.Limits{Timeout: cfg.GitTimeout, Bytes: cfg.GitMaxBytes, Paths: cfg.GitMaxPaths, Commits: cfg.GitMaxCommits})
+	if err != nil {
+		close()
+		return nil, nil, err
+	}
+	return worker.NewService(repo, git, processor, storage.NewService(repo), cfg.AnalysisTimeout), close, nil
 }
