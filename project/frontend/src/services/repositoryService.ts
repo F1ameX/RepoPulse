@@ -30,6 +30,7 @@ export interface AnalysisStatus {
   analysis_id: string;
   status: AnalysisStatusValue;
   report_id?: string | null;
+  error?: { code: string; message: string } | null;
 }
 
 function parseValidatedRepository(data: unknown): ValidatedRepository {
