@@ -19,15 +19,18 @@ type Service struct {
 	tokens    TokenRepository
 	generator TokenGenerator
 	now       func() time.Time
+	opt       domain.Options
 }
 
-func NewService(guests GuestRepository, users UserRepository, tokens TokenRepository, generator TokenGenerator, now func() time.Time) *Service {
+func NewService(guests GuestRepository, users UserRepository, tokens TokenRepository, generator TokenGenerator, now func() time.Time, opt domain.Options) *Service {
 	return &Service{
 		guests:    guests,
 		users:     users,
 		tokens:    tokens,
 		generator: generator,
-		now:       now}
+		now:       now,
+		opt: opt,
+	}
 }
 
 func (s *Service) Register(context.Context, string, string) (domain.RegistrationResult, error) {
@@ -46,7 +49,7 @@ func (s *Service) CreateGuestSession(ctx context.Context) (domain.IssuedSession,
 	// PostgreSQL timestamps have microsecond precision; the initial response
 	// and subsequent reads must describe the exact same stored expiry.
 	now := s.now().UTC().Truncate(time.Microsecond)
-	session, err := s.guests.CreateGuestSession(ctx, hash, now, now.Add(24*time.Hour))
+	session, err := s.guests.CreateGuestSession(ctx, hash, now, now.Add(s.opt.GuestSessionTTL))
 	if err != nil {
 		return domain.IssuedSession{}, fmt.Errorf("create guest: %w", err)
 	}

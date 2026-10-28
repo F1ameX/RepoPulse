@@ -14,6 +14,7 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/adapter/out/repository"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/adapter/out/token"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/application/auth"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/grpcerr"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 	authv1 "github.com/F1ameX/RepoPulse/project/backend/pkg/proto/auth/v1"
@@ -22,7 +23,7 @@ import (
 
 // newGRPCServer registers AuthService and the standard health service.
 // Guest scenarios use PostgreSQL; account registration/login/logout remain stubs.
-func newGRPCServer(ctx context.Context, pool *pgxpool.Pool) (*grpc.Server, *health.Server) {
+func newGRPCServer(ctx context.Context, pool *pgxpool.Pool, options domain.Options) (*grpc.Server, *health.Server) {
 	log := logger.From(ctx)
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		// Handlers receive the service logger through the request context.
@@ -34,6 +35,7 @@ func newGRPCServer(ctx context.Context, pool *pgxpool.Pool) (*grpc.Server, *heal
 		sessionsRepo,
 		token.NewGenerator(),
 		func() time.Time { return time.Now().UTC() },
+		options,
 	)))
 
 	healthServer := health.NewServer()
