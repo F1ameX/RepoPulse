@@ -33,7 +33,13 @@ func NewService(guests GuestRepository, users UserRepository, tokens TokenReposi
 	}
 }
 
-func (s *Service) Register(context.Context, string, string) (domain.RegistrationResult, error) {
+func (s *Service) Register(ctx context.Context, login string, password string) (domain.RegistrationResult, error) {
+	now := s.now().UTC().Truncate(time.Microsecond)
+	var hash string 
+	_ , err := s.users.CreateAccount(ctx, login, hash, now)
+	if err != nil {
+		return domain.RegistrationResult{}, err
+	}
 	return domain.RegistrationResult{}, domain.ErrNotImplemented
 }
 

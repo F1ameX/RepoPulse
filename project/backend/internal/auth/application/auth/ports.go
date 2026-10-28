@@ -18,7 +18,7 @@ type UserRepository interface {
 	// CreateAccount creates exactly one account for a normalized login.
 	// It returns domain.ErrLoginTaken when the login is used, including
 	// concurrent registrations of the same login.
-	CreateAccount(ctx context.Context, login, passwordHash string) (domain.Principal, error)
+	CreateAccount(ctx context.Context, login, passwordHash string, createdAt time.Time) (domain.Principal, error)
 	// FindAccountByLogin looks up a normalized login. It returns
 	// domain.ErrInvalidCredentials when the account does not exist.
 	FindAccountByLogin(ctx context.Context, login string) (domain.Principal, error)
