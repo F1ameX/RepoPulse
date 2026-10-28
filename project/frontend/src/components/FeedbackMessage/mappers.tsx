@@ -198,6 +198,14 @@ export function statusFeedback(
           </Button>
         ),
       };
+
+    case 'hidden':
+      return {
+        variant: 'error',
+        message: ['SESSION_REQUIRED', 'SESSION_EXPIRED', 'LOGIN_REQUIRED'].includes(state.code)
+          ? 'Сессия истекла. Войдите снова'
+          : 'Анализ недоступен',
+      };
   }
 }
 
@@ -246,7 +254,9 @@ export function reportFeedback(
     case 'hidden':
       return {
         variant: 'error',
-        message: 'Данные отчёта недоступны.',
+        message: ['SESSION_REQUIRED', 'SESSION_EXPIRED', 'LOGIN_REQUIRED'].includes(state.code)
+          ? 'Сессия истекла. Войдите снова'
+          : 'Анализ недоступен',
       };
   }
 }

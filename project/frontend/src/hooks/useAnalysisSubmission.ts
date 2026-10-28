@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/services/api';
 import { repositoryService } from '@/services/repositoryService';
-import type { CreateAnalysisResponse } from '@/services/repositoryService';
+import type { CreateAnalysisResponse } from '@/types';
 
 const UNKNOWN_AFTER_MS = 35_000;
 
 const SAFE_MESSAGES: Record<string, string> = {
   ANALYSIS_FAILED: 'Анализ завершился ошибкой. Запустите его заново.',
   ANALYSIS_NOT_FOUND: 'Анализ не найден.',
+  AUTH_UNAVAILABLE: 'Сервис сессий временно недоступен. Повторите позже.',
   REPORT_NOT_FOUND: 'Отчёт не найден.',
   REPORT_SAVE_FAILED: 'Не удалось сохранить отчёт.',
   REPOSITORY_NOT_FOUND_OR_PRIVATE: 'Публичный репозиторий недоступен.',
@@ -33,6 +34,7 @@ function isTemporaryCode(code: string): boolean {
     code === 'UPSTREAM_RATE_LIMITED' ||
     code === 'UPSTREAM_TIMEOUT' ||
     code === 'NETWORK_ERROR' ||
+    code === 'AUTH_UNAVAILABLE' ||
     code === 'INTERNAL_ERROR'
   );
 }
@@ -73,6 +75,7 @@ export function useAnalysisSubmission(options?: UseAnalysisSubmissionOptions) {
   const inFlightRef = useRef(false);
   const timerRef = useRef<number | null>(null);
   const payloadRef = useRef<SubmissionPayload | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const onAcceptedRef = useRef(options?.onAccepted);
   useEffect(() => {
@@ -90,6 +93,7 @@ export function useAnalysisSubmission(options?: UseAnalysisSubmissionOptions) {
     () => () => {
       clearTimer();
       attemptRef.current += 1;
+      controllerRef.current?.abort();
     },
     [clearTimer],
   );
@@ -103,6 +107,10 @@ export function useAnalysisSubmission(options?: UseAnalysisSubmissionOptions) {
       const attempt = ++attemptRef.current;
       payloadRef.current = payload;
 
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+
       setState({
         kind: 'submitting',
         requestId: payload.requestId,
@@ -111,6 +119,7 @@ export function useAnalysisSubmission(options?: UseAnalysisSubmissionOptions) {
 
       timerRef.current = window.setTimeout(() => {
         if (attemptRef.current !== attempt) return;
+        controller.abort();
         inFlightRef.current = false;
         setState({
           kind: 'unknown',
@@ -121,13 +130,13 @@ export function useAnalysisSubmission(options?: UseAnalysisSubmissionOptions) {
       }, UNKNOWN_AFTER_MS);
 
       try {
-        // === BACKEND CALL: POST /analyses { repository_url, request_id } ===
-        // `request_id` — ключ идемпотентности. Повтор с тем же id
-        // должен вернуть тот же analysis_id (без дубля).
-        const response = await repositoryService.createAnalysis({
-          repository_url: payload.url,
-          request_id: payload.requestId,
-        });
+        const response = await repositoryService.createAnalysis(
+          {
+            repository_url: payload.url,
+            request_id: payload.requestId,
+          },
+          controller.signal,
+        );
 
         if (attemptRef.current !== attempt) return;
         clearTimer();
@@ -195,6 +204,7 @@ export function useAnalysisSubmission(options?: UseAnalysisSubmissionOptions) {
     clearTimer();
     attemptRef.current += 1;
     inFlightRef.current = false;
+    controllerRef.current?.abort();
     payloadRef.current = null;
     setState({ kind: 'idle' });
   }, [clearTimer]);

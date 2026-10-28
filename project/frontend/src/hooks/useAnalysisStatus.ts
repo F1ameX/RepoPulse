@@ -6,6 +6,7 @@ import { useOnlineStatus } from './useOnlineStatus';
 
 const SAFE_MESSAGES: Record<string, string> = {
   ANALYSIS_NOT_FOUND: 'Анализ не найден.',
+  AUTH_UNAVAILABLE: 'Сервис сессий временно недоступен. Повторите позже.',
   SESSION_REQUIRED: 'Требуется вход в систему.',
   SESSION_EXPIRED: 'Сессия истекла. Войдите снова.',
   UPSTREAM_RATE_LIMITED: 'Сервис временно ограничил запросы. Повторите позже.',
@@ -38,7 +39,8 @@ export type AnalysisStatusState =
       message: string;
       lastConfirmed: ConfirmedStatus | null;
     }
-  | { kind: 'offline'; analysisId: string; lastConfirmed: ConfirmedStatus | null };
+  | { kind: 'offline'; analysisId: string; lastConfirmed: ConfirmedStatus | null }
+  | { kind: 'hidden'; analysisId: string; code: string };
 
 export function useAnalysisStatus(analysisId: string | null | undefined) {
   const online = useOnlineStatus();
@@ -69,6 +71,8 @@ export function useAnalysisStatus(analysisId: string | null | undefined) {
 
     inFlightRef.current = true;
     const attempt = ++attemptRef.current;
+    const controller = new AbortController();
+
     setState({
       kind: 'loading',
       analysisId,
@@ -76,11 +80,7 @@ export function useAnalysisStatus(analysisId: string | null | undefined) {
     });
 
     try {
-      // === BACKEND CALL: GET /analyses/:id ===
-      // Ожидаемая форма (совпадает с services/repositoryService.ts):
-      // { analysis_id, status: 'queued'|'running'|'completed'|'failed',
-      //   report_id?: string|null, error?: { code, message } | null }
-      const data = await repositoryService.getAnalysis(analysisId);
+      const data = await repositoryService.getAnalysis(analysisId, controller.signal);
       if (attemptRef.current !== attempt) return;
 
       const confirmed: ConfirmedStatus = {
@@ -93,12 +93,20 @@ export function useAnalysisStatus(analysisId: string | null | undefined) {
       setState({ kind: 'confirmed', analysisId, lastConfirmed: confirmed });
     } catch (error) {
       if (attemptRef.current !== attempt) return;
-      setState({
-        kind: 'error',
-        analysisId,
-        message: safeMessage(error),
-        lastConfirmed: lastConfirmedRef.current,
-      });
+
+      const code = error instanceof ApiError ? error.code : 'NETWORK_ERROR';
+
+      if (['SESSION_REQUIRED', 'SESSION_EXPIRED', 'LOGIN_REQUIRED', 'ANALYSIS_NOT_FOUND', 'FORBIDDEN'].includes(code)) {
+        lastConfirmedRef.current = null;
+        setState({ kind: 'hidden', analysisId, code });
+      } else {
+        setState({
+          kind: 'error',
+          analysisId,
+          message: safeMessage(error),
+          lastConfirmed: lastConfirmedRef.current,
+        });
+      }
     } finally {
       if (attemptRef.current === attempt) inFlightRef.current = false;
     }

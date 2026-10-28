@@ -1,37 +1,19 @@
 import api, { ApiError } from './api';
+import type {
+  ValidatedRepository,
+  CreateAnalysisRequest,
+  CreateAnalysisResponse,
+  AnalysisStatus,
+  Report,
+} from '@/types';
 
-export interface ValidatedRepository {
-  repository: {
-    platform: 'github';
-    github_id: string;
-    default_branch: string | null;
-    commit_sha: string | null;
-    owner: string;
-    name: string;
-    canonical_url: string;
-  };
-  moved_from: string | null;
-}
-
-export type AnalysisStatusValue = 'queued' | 'running' | 'completed' | 'failed';
-
-export interface CreateAnalysisRequest {
-  repository_url: string;
-  request_id: string;
-}
-
-export interface CreateAnalysisResponse {
-  analysis_id: string;
-  status: AnalysisStatusValue;
-  report_id?: string | null;
-}
-
-export interface AnalysisStatus {
-  analysis_id: string;
-  status: AnalysisStatusValue;
-  report_id?: string | null;
-  error?: { code: string; message: string } | null;
-}
+export type {
+  ValidatedRepository,
+  CreateAnalysisRequest,
+  CreateAnalysisResponse,
+  AnalysisStatus,
+  AnalysisStatusValue,
+} from '@/types';
 
 function parseValidatedRepository(data: unknown): ValidatedRepository {
   const value = data as Partial<ValidatedRepository> | null;
@@ -76,18 +58,30 @@ export const repositoryService = {
     return parseValidatedRepository(data);
   },
 
-  async createAnalysis(payload: CreateAnalysisRequest): Promise<CreateAnalysisResponse> {
-    const { data } = await api.post('/analyses', payload);
+  async createAnalysis(
+    payload: CreateAnalysisRequest,
+    signal?: AbortSignal,
+  ): Promise<CreateAnalysisResponse> {
+    const { data } = await api.post('/analyses', payload, {
+      timeout: 35_000,
+      signal,
+    });
     return data;
   },
 
-  async getAnalysis(analysisId: string): Promise<AnalysisStatus> {
-    const { data } = await api.get(`/analyses/${analysisId}`);
+  async getAnalysis(analysisId: string, signal?: AbortSignal): Promise<AnalysisStatus> {
+    const { data } = await api.get(`/analyses/${encodeURIComponent(analysisId)}`, {
+      timeout: 15_000,
+      signal,
+    });
     return data;
   },
 
-  async getReport(reportId: string): Promise<unknown> {
-    const { data } = await api.get(`/reports/${reportId}`);
+  async getReport(reportId: string, signal?: AbortSignal): Promise<Report> {
+    const { data } = await api.get(`/reports/${encodeURIComponent(reportId)}`, {
+      timeout: 15_000,
+      signal,
+    });
     return data;
   },
 };
