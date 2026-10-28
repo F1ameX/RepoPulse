@@ -11,8 +11,11 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
+// registrationMessage is the FR-27 success text; registration does not sign the user in.
+const registrationMessage = "Аккаунт создан. Войдите в систему"
+
 // Service is the entry point to Auth business logic.
-// Account registration, login and logout remain scaffold operations.
+// Login and logout remain scaffold operations.
 type Service struct {
 	guests    GuestRepository
 	users     UserRepository
@@ -20,27 +23,45 @@ type Service struct {
 	generator TokenGenerator
 	now       func() time.Time
 	opt       domain.Options
+	hasher    PasswordHasher
 }
 
-func NewService(guests GuestRepository, users UserRepository, tokens TokenRepository, generator TokenGenerator, now func() time.Time, opt domain.Options) *Service {
+func NewService(guests GuestRepository, users UserRepository, tokens TokenRepository, generator TokenGenerator, now func() time.Time, opt domain.Options, hasher PasswordHasher) *Service {
 	return &Service{
 		guests:    guests,
 		users:     users,
 		tokens:    tokens,
 		generator: generator,
 		now:       now,
-		opt: opt,
+		opt:       opt,
+		hasher:    hasher,
 	}
 }
 
+// Register validates the credentials (FR-27), stores the account with the
+// Argon2id hash of the NFC password and returns the normalized login.
+// It creates neither a session nor a report.
 func (s *Service) Register(ctx context.Context, login string, password string) (domain.RegistrationResult, error) {
-	now := s.now().UTC().Truncate(time.Microsecond)
-	var hash string 
-	_ , err := s.users.CreateAccount(ctx, login, hash, now)
+	valLogin, valPassword, err := domain.ValidateCredentials(login, password)
 	if err != nil {
-		return domain.RegistrationResult{}, err
+		return domain.RegistrationResult{}, err // *domain.ValidationError with field errors
 	}
-	return domain.RegistrationResult{}, domain.ErrNotImplemented
+	hash, err := s.hasher.Hash(valPassword)
+	if err != nil {
+		return domain.RegistrationResult{}, fmt.Errorf("hash password: %w", err)
+	}
+	now := s.now().UTC().Truncate(time.Microsecond)
+	principal, err := s.users.CreateAccount(ctx, valLogin, hash, now)
+	if errors.Is(err, domain.ErrLoginTaken) {
+		return domain.RegistrationResult{}, domain.ErrLoginTaken
+	} else if err != nil {
+		return domain.RegistrationResult{}, fmt.Errorf("create account: %w", err)
+	}
+	logger.From(ctx).InfoContext(ctx, "Account created", "principal_id", principal.ID)
+	return domain.RegistrationResult{
+		Login:   principal.Login,
+		Message: registrationMessage,
+	}, nil
 }
 
 func (s *Service) Login(context.Context, string, string) (domain.IssuedSession, error) {

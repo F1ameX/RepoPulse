@@ -31,14 +31,14 @@ func (u *Users) CreateAccount(ctx context.Context, login, passwordHash string, c
 		CreatedAt: createdAt,
 	}
 
-	_, err := u.pool.Exec(ctx, 
+	_, err := u.pool.Exec(ctx,
 		`INSERT INTO auth.principals 
 		(id, kind, login, password_hash, created_at)
 		VALUES ($1, 'account', $2, $3, $4)`,
 		p.ID, p.Login, p.PasswordHash, p.CreatedAt)
-	
-	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation{ //23505
-		return domain.Principal{}, domain.ErrLoginTaken 
+
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation { //23505
+		return domain.Principal{}, domain.ErrLoginTaken
 	}
 	if err != nil {
 		return domain.Principal{}, fmt.Errorf("insert account: %w", err)
@@ -52,11 +52,11 @@ func (u *Users) FindAccountByLogin(ctx context.Context, login string) (domain.Pr
 	var storedLogin, hash *string
 	err := u.pool.QueryRow(ctx,
 		`SELECT id, kind, login, password_hash, created_at
-	FROM auth.principals WHERE login = $1 AND kind = 'account'`, login, 
+	FROM auth.principals WHERE login = $1 AND kind = 'account'`, login,
 	).Scan(&p.ID, &p.Kind, &storedLogin, &hash, &p.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) { 
+	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Principal{}, domain.ErrInvalidCredentials
-	} else if err != nil{
+	} else if err != nil {
 		return domain.Principal{}, fmt.Errorf("find account: %w", err)
 	} else if storedLogin == nil || hash == nil {
 		return domain.Principal{}, fmt.Errorf("account  %s has no login or password", p.ID)

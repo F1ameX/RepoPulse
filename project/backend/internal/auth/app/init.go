@@ -22,8 +22,8 @@ import (
 )
 
 // newGRPCServer registers AuthService and the standard health service.
-// Guest scenarios use PostgreSQL; account registration/login/logout remain stubs.
-func newGRPCServer(ctx context.Context, pool *pgxpool.Pool, options domain.Options) (*grpc.Server, *health.Server) {
+// Login and logout remain stubs.
+func newGRPCServer(ctx context.Context, pool *pgxpool.Pool, options domain.Options, hasher auth.PasswordHasher) (*grpc.Server, *health.Server) {
 	log := logger.From(ctx)
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		// Handlers receive the service logger through the request context.
@@ -36,6 +36,7 @@ func newGRPCServer(ctx context.Context, pool *pgxpool.Pool, options domain.Optio
 		token.NewGenerator(),
 		func() time.Time { return time.Now().UTC() },
 		options,
+		hasher,
 	)))
 
 	healthServer := health.NewServer()

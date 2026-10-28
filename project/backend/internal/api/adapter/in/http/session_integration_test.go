@@ -64,7 +64,8 @@ func TestGuestHTTPGRPCValidationFlow(t *testing.T) {
 		}
 		return handler(ctx, req)
 	}))
-	authv1.RegisterAuthServiceServer(rpc, authgrpc.NewServer(authapp.NewService(store, nil, store, authtoken.NewGenerator(), func() time.Time { return now })))
+	authv1.RegisterAuthServiceServer(rpc, authgrpc.NewServer(authapp.NewService(store, nil, store, authtoken.NewGenerator(), func() time.Time { return now },
+		authdomain.Options{GuestSessionTTL: 24 * time.Hour, AccountSessionTTL: 168 * time.Hour}, nil)))
 	go func() { _ = rpc.Serve(listener) }()
 	defer rpc.Stop()
 	conn, err := grpc.NewClient("passthrough:///auth", grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }), grpc.WithTransportCredentials(insecure.NewCredentials()))

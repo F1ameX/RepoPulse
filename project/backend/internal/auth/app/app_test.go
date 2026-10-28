@@ -14,6 +14,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 	authv1 "github.com/F1ameX/RepoPulse/project/backend/pkg/proto/auth/v1"
 )
@@ -27,7 +28,7 @@ func TestServerHealthStubAndShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(logger.With(context.Background(), log))
 	defer cancel()
 	// The pool is only passed to repositories; the calls below do not reach the database.
-	server, healthServer := newGRPCServer(ctx, nil)
+	server, healthServer := newGRPCServer(ctx, nil, domain.Options{}, nil)
 	done := make(chan error, 1)
 	go func() { done <- serve(ctx, listener, server, healthServer, time.Second) }()
 
@@ -50,9 +51,9 @@ func TestServerHealthStubAndShutdown(t *testing.T) {
 		}
 	}
 
-	_, err = authv1.NewAuthServiceClient(conn).Register(callCtx, &authv1.Credentials{})
+	_, err = authv1.NewAuthServiceClient(conn).Logout(callCtx, &authv1.LogoutCommand{})
 	if status.Code(err) != codes.Unimplemented {
-		t.Fatalf("Register = %v", err)
+		t.Fatalf("Logout = %v", err)
 	}
 
 	cancel()

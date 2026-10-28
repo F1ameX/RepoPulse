@@ -136,6 +136,13 @@ HTTP-маршруты пока возвращают 501 NOT_IMPLEMENTED; health 
 | `GITHUB_TOKEN` | пусто | API; необязательный серверный токен GitHub, не логируется |
 | `AUTH_GRPC_ADDR` | `127.0.0.1:9090` | Auth; host:port gRPC-сервера |
 | `AUTH_DATABASE_URL` | — (обязательна) | Auth; строка подключения PostgreSQL, не логируется |
+| `AUTH_GUEST_SESSION_TTL` | `24h` | Auth; срок гостевой сессии, FR-27; меняется только для разработки |
+| `AUTH_ACCOUNT_SESSION_TTL` | `168h` | Auth; срок сессии аккаунта, FR-27; меняется только для разработки |
+| `AUTH_ARGON2_MEMORY_KIB` | `19456` | Auth; память Argon2id, 19456–262144 КиБ |
+| `AUTH_ARGON2_TIME` | `2` | Auth; число проходов Argon2id, 1–10 |
+| `AUTH_ARGON2_THREADS` | `1` | Auth; параллелизм Argon2id, 1–8 |
+| `AUTH_ARGON2_KEY_LEN` | `32` | Auth; длина ключа Argon2id, 16–64 байт |
+| `AUTH_ARGON2_SALT_LEN` | `16` | Auth; длина соли Argon2id, 16–64 байт |
 | `ANALYZER_DATABASE_URL` | обязательно | Analyzer; DSN общей PostgreSQL |
 | `ANALYZER_DATABASE_TIMEOUT` | `5s` | Analyzer; срок открытия подключения |
 

@@ -53,13 +53,9 @@ func apiError(t *testing.T, trailer metadata.MD) *commonv1.ApiError {
 
 func TestStubMethodsReturnNotImplemented(t *testing.T) {
 	// Stub scenarios do not touch their dependencies.
-	client := newClient(t, auth.NewService(nil, nil, nil, nil, nil))
+	client := newClient(t, auth.NewService(nil, nil, nil, nil, nil, domain.Options{}, nil))
 	ctx := metadata.AppendToOutgoingContext(context.Background(), grpcerr.RequestIDKey, "req-1")
 	calls := map[string]func(...grpc.CallOption) error{
-		"Register": func(o ...grpc.CallOption) error {
-			_, err := client.Register(ctx, &authv1.Credentials{Login: "flamex", Password: "correct horse battery"}, o...)
-			return err
-		},
 		"Login": func(o ...grpc.CallOption) error {
 			_, err := client.Login(ctx, &authv1.Credentials{Login: "flamex", Password: "correct horse battery"}, o...)
 			return err
@@ -120,6 +116,7 @@ func TestDomainErrorsMapToErrorFormat(t *testing.T) {
 			},
 		},
 		{name: "unavailable user", err: domain.ErrInvalidCredentials, code: codes.Unauthenticated, apiCode: "INVALID_CREDENTIALS"},
+		{name: "login taken", err: domain.ErrLoginTaken, code: codes.AlreadyExists, apiCode: "LOGIN_TAKEN"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

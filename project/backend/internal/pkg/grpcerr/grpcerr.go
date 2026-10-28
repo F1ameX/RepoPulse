@@ -61,6 +61,11 @@ func InvalidCredentials() *Error {
 	return New(codes.Unauthenticated, "INVALID_CREDENTIALS", "Неверный логин или пароль")
 }
 
+// LoginTaken reports that the normalized login is already registered.
+func LoginTaken() *Error {
+	return New(codes.AlreadyExists, "LOGIN_TAKEN", "Этот логин уже занят")
+}
+
 // NotImplemented marks a scaffold method; it does not confirm the feature exists.
 func NotImplemented() *Error {
 	return New(codes.Unimplemented, "NOT_IMPLEMENTED", "Method is not implemented yet")
