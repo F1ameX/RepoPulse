@@ -12,6 +12,7 @@ import (
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/analysis"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
+	apidomain "github.com/F1ameX/RepoPulse/project/backend/internal/api/domain"
 )
 
 type analysisScenarios struct {
@@ -83,8 +84,9 @@ func TestAnalysisReadFailureAndAuthUnavailableAreTransportErrors(t *testing.T) {
 		code             string
 		status           int
 	}{
-		{"auth unavailable", domain.ErrAuthUnavailable, nil, "AUTH_UNAVAILABLE", 503},
+		{"auth unavailable", apidomain.ErrAuthUnavailable, nil, "AUTH_UNAVAILABLE", 503},
 		{"session expired", domain.ErrSessionExpired, nil, "SESSION_EXPIRED", 401},
+		{"Auth session expired", apidomain.ErrSessionExpired, nil, "SESSION_EXPIRED", 401},
 		{"database read", nil, errors.New("private database detail"), "INTERNAL_ERROR", 500},
 		{"foreign or missing", nil, domain.ErrNotFound, "ANALYSIS_NOT_FOUND", 404},
 	} {
@@ -160,5 +162,61 @@ func TestCreateAnalysisPassesOnlyVerifiedContextAndReturnsAccepted(t *testing.T)
 	NewAnalysisHandler(nil, resolver, service, "http://localhost:5173").ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusAccepted || !strings.Contains(recorder.Body.String(), `"analysis_id":"`+id+`"`) || !strings.Contains(recorder.Body.String(), `"report_id":null`) {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+type combinedSessions struct{ guest apidomain.SessionInfo }
+
+func (s combinedSessions) GetSessionContext(context.Context, apidomain.SessionTokens) (apidomain.SessionContext, error) {
+	return apidomain.SessionContext{Guest: &s.guest}, nil
+}
+
+func (s combinedSessions) ContinueGuest(context.Context, apidomain.SessionTokens) (apidomain.IssuedSession, bool, error) {
+	return apidomain.IssuedSession{Token: "opaque", Session: s.guest}, false, nil
+}
+
+func TestAnalysisRoutesPreserveMainSessionRoutes(t *testing.T) {
+	id, requestID := domain.NewID(), domain.NewID()
+	service := analysisScenarios{
+		create: func(context.Context, analysis.CreateAnalysisCommand) (domain.Analysis, error) {
+			return domain.Analysis{ID: id, Status: "queued"}, nil
+		},
+		get: func(context.Context, analysis.GetAnalysisQuery) (domain.Analysis, error) {
+			return domain.Analysis{ID: id, Status: "queued", CreatedAt: time.Now().UTC()}, nil
+		},
+	}
+	resolver := contextResolverFunc(func(context.Context, SessionTokens) (domain.VerifiedContext, error) {
+		return activeGuestContext(), nil
+	})
+	handler := NewHandler(nil, resolver, Options{
+		Sessions:     combinedSessions{guest: apidomain.SessionInfo{Kind: "guest", ExpiresAt: time.Now().Add(time.Hour)}},
+		CookieSecure: false, PublicOrigin: "http://localhost:3000", Analyses: service,
+	})
+	for _, tc := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{"GET", "/api/v1/auth/session", "", http.StatusOK},
+		{"POST", "/api/v1/auth/guest-session", "", http.StatusOK},
+		{"POST", "/api/v1/analyses", `{"request_id":"` + requestID + `","repository_url":"https://github.com/owner/repo"}`, http.StatusAccepted},
+		{"GET", "/api/v1/analyses/" + id, "", http.StatusOK},
+	} {
+		t.Run(tc.path+tc.method, func(t *testing.T) {
+			request := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			request.Header.Set("Origin", "http://localhost:3000")
+			request.Header.Set("Content-Type", "application/json")
+			request.AddCookie(&http.Cookie{Name: "repopulse_guest", Value: "opaque"})
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != tc.status {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			if tc.path == "/api/v1/auth/guest-session" {
+				cookies := recorder.Result().Cookies()
+				if len(cookies) != 1 || cookies[0].Secure || !cookies[0].HttpOnly {
+					t.Fatal("main session cookie configuration was lost")
+				}
+			}
+		})
 	}
 }

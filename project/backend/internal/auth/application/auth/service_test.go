@@ -90,3 +90,17 @@ func TestCreateGuestSessionErrors(t *testing.T) {
 		}
 	})
 }
+
+func TestGuestTimestampsMatchPostgresPrecision(t *testing.T) {
+	guests := &fakeGuests{}
+	now := testNow.Add(123456789 * time.Nanosecond)
+	svc := NewService(guests, nil, nil, fakeGenerator{token: "raw-token", hash: "token-hash"}, func() time.Time { return now })
+	issued, err := svc.CreateGuestSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := now.UTC().Truncate(time.Microsecond)
+	if !guests.issuedAt.Equal(expected) || !issued.Session.ExpiresAt.Equal(expected.Add(24*time.Hour)) {
+		t.Fatal("initial response differs from the stored timestamp precision")
+	}
+}

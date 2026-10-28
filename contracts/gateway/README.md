@@ -8,8 +8,8 @@ schemas.json. [Все поля JSON/gRPC](../../docs/field-map.md),
 |---|---|---|---|
 | POST /api/v1/auth/register | Credentials | 201 RegistrationResult | Auth.Register(Credentials) |
 | POST /api/v1/auth/login | Credentials | 200 SessionInfo и account cookie | Auth.Login → IssuedSession |
-| POST /api/v1/auth/guest-session | тела нет; cookie проверяет Gateway | 201 новая / 200 действующая SessionInfo | ResolveContext; при необходимости CreateGuestSession(Empty) |
-| GET /api/v1/auth/session | cookie | 200 SessionContext | ResolveContext; ограничение текущего RPC описано в flow |
+| POST /api/v1/auth/guest-session | тела нет; cookie проверяет Gateway | 201 новая / 200 действующая SessionInfo | GetSessionContext; при необходимости CreateGuestSession(Empty) |
+| GET /api/v1/auth/session | cookie | 200 SessionContext | Auth.GetSessionContext(SessionTokens) |
 | POST /api/v1/auth/logout | тела нет; account cookie | 204 без тела, удаление account cookie | Auth.Logout(LogoutCommand) |
 | POST /api/v1/repositories/validate | ValidateRepositoryRequest | 200 ValidatedRepository | Analyzer.ValidateRepository(ValidateRepositoryCommand) |
 | POST /api/v1/analyses | CreateAnalysisRequest | 202 accepted / 200 reused: CreateAnalysisResponse | Analyzer.CreateAnalysis(CreateAnalysisCommand) |
@@ -38,6 +38,13 @@ cursor — непрозрачная строка Report, привязанная 
   Path=/api/v1, срок 168 часов без продления.
 - repopulse_guest — непрозрачный гостевой токен; те же атрибуты, браузерная cookie
   без Max-Age/Expires, серверный срок максимум 24 часа.
+- По умолчанию cookie имеет Secure. Только для локального HTTP в Compose задано
+  COOKIE_SECURE=false; при HTTPS используется true. HttpOnly, SameSite и Path сохраняются.
+- GET /auth/session без действующих cookie возвращает 200 с двумя null, не создавая
+  сессию. Frontend явно вызывает POST /auth/guest-session, затем повторяет GET,
+  чтобы подтвердить сохранение cookie. POST проверяет Origin по PUBLIC_ORIGIN.
+- Реализованы гостевые операции, проверка URL, принятие анализа и чтение его
+  статуса. Register/Login/Logout пока возвращают 501 NOT_IMPLEMENTED.
 - IssuedSession.token остаётся между Auth и Gateway; в JSON браузеру попадает
   только SessionInfo, токен устанавливается через Set-Cookie.
 - Запросы изменения состояния проверяют Origin/CSRF. Cookie не передаются в URL.
@@ -53,11 +60,12 @@ JSON использует snake_case, строки UUID и RFC3339 UTC для в
 
 Во всех HTTP-ошибках тело ErrorEnvelope с error.code, message, trace_id и
 field_errors. [Таблица HTTP/gRPC ошибок](../../docs/errors.md).
-Подключены POST /repositories/validate, POST /analyses и GET /analyses/{analysis_id}.
+Подключены GET /auth/session, POST /auth/guest-session,
+POST /repositories/validate, POST /analyses и GET /analyses/{analysis_id}.
 Остальные бизнес-маршруты текущего каркаса возвращают 501 NOT_IMPLEMENTED.
 Таблица выше для них описывает целевое поведение контрактов.
 
-Запуск требует Origin, совпадающего с API_ALLOWED_ORIGIN. При повторе принятой
+Запуск требует Origin, совпадающего с PUBLIC_ORIGIN. При повторе принятой
 отправки возвращаются прежний analysis_id и текущее сохранённое состояние;
 outcome остаётся accepted, HTTP — 202. Это не поиск подходящего старого отчёта:
 до реализации полного ключа актуальности новый request_id создаёт новый анализ.

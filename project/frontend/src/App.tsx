@@ -8,6 +8,7 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: <RepositoryInputPage />,
+    errorElement: <ErrorPage />,
   },
   {
     path: '/analysis/:id',
@@ -21,6 +22,10 @@ const router = createBrowserRouter([
   },
   {
     path: '/error',
+    element: <ErrorPage />,
+  },
+  {
+    path: '*',
     element: <ErrorPage />,
   },
 ]);

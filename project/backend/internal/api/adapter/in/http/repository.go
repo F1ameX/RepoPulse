@@ -13,7 +13,7 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/repository"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/in/http/dto"
-	authdomain "github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
+	apidomain "github.com/F1ameX/RepoPulse/project/backend/internal/api/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
@@ -21,7 +21,7 @@ type RepositoryValidator interface {
 	ValidateRepository(context.Context, repository.ValidateRepositoryCommand) (domain.ValidatedRepository, error)
 }
 
-type SessionTokens = authdomain.SessionTokens
+type SessionTokens = apidomain.SessionTokens
 
 // ContextResolver is implemented by an Auth adapter. Cookie presence alone does
 // not establish an identity; only Auth may produce a VerifiedContext.
@@ -51,13 +51,7 @@ func validateRepository(validator RepositoryValidator, resolver ContextResolver)
 			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "Ожидается JSON с единственным строковым полем repository_url")
 			return
 		}
-		tokens := SessionTokens{}
-		if cookie, err := r.Cookie("repopulse_session"); err == nil {
-			tokens.AccountToken = &cookie.Value
-		}
-		if cookie, err := r.Cookie("repopulse_guest"); err == nil {
-			tokens.GuestToken = &cookie.Value
-		}
+		tokens := sessionTokens(r)
 		if tokens.AccountToken == nil && tokens.GuestToken == nil {
 			writeValidationError(w, r, domain.ErrSessionRequired)
 			return
@@ -125,6 +119,11 @@ func decodeRepositoryURL(body []byte) (string, bool) {
 }
 
 func writeValidationError(w http.ResponseWriter, r *http.Request, err error) {
+	var sessionFailure *apidomain.Error
+	if errors.As(err, &sessionFailure) {
+		writeSessionError(w, err)
+		return
+	}
 	var failure *domain.Error
 	if !errors.As(err, &failure) {
 		logger.From(r.Context()).ErrorContext(r.Context(), "Repository validation failed", "code", "INTERNAL_ERROR")

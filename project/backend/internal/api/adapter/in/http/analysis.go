@@ -13,6 +13,7 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/analysis"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/in/http/dto"
+	apidomain "github.com/F1ameX/RepoPulse/project/backend/internal/api/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
@@ -21,12 +22,8 @@ type AnalysisService interface {
 	GetAnalysis(context.Context, analysis.GetAnalysisQuery) (domain.Analysis, error)
 }
 
-func createAnalysis(service AnalysisService, resolver ContextResolver, allowedOrigin string) http.HandlerFunc {
+func createAnalysis(service AnalysisService, resolver ContextResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if allowedOrigin == "" || r.Header.Get("Origin") != allowedOrigin {
-			writeError(w, http.StatusForbidden, "CSRF_REJECTED", "Запрос не прошёл проверку источника")
-			return
-		}
 		request, ok := decodeCreateAnalysis(w, r)
 		if !ok {
 			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "Ожидается JSON с полями request_id и repository_url")
@@ -101,18 +98,12 @@ func repositoryDTO(r domain.RepositoryMetadata) dto.RepositoryDTO {
 }
 
 func resolveAnalysisContext(r *http.Request, resolver ContextResolver) (domain.VerifiedContext, error) {
-	tokens := SessionTokens{}
-	if cookie, err := r.Cookie("repopulse_session"); err == nil {
-		tokens.AccountToken = &cookie.Value
-	}
-	if cookie, err := r.Cookie("repopulse_guest"); err == nil {
-		tokens.GuestToken = &cookie.Value
-	}
+	tokens := sessionTokens(r)
 	if tokens.AccountToken == nil && tokens.GuestToken == nil {
 		return domain.VerifiedContext{}, domain.ErrSessionRequired
 	}
 	if resolver == nil {
-		return domain.VerifiedContext{}, domain.ErrAuthUnavailable
+		return domain.VerifiedContext{}, apidomain.ErrAuthUnavailable
 	}
 	return resolver.ResolveContext(r.Context(), tokens)
 }
@@ -159,6 +150,11 @@ func decodeCreateAnalysis(w http.ResponseWriter, r *http.Request) (dto.CreateAna
 }
 
 func writeAnalysisError(w http.ResponseWriter, r *http.Request, err error) {
+	var sessionFailure *apidomain.Error
+	if errors.As(err, &sessionFailure) {
+		writeSessionError(w, err)
+		return
+	}
 	switch {
 	case errors.Is(err, domain.ErrSubmissionChanged):
 		writeError(w, http.StatusConflict, "SUBMISSION_CHANGED", "Запрос изменён. Отправьте его заново")

@@ -24,15 +24,20 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if settings.AuthTimeout+cfg.GitHubCheckTimeout+3*time.Second >= cfg.WriteTimeout {
-		return errors.New("HTTP_WRITE_TIMEOUT must exceed AUTH_RPC_TIMEOUT + GITHUB_CHECK_TIMEOUT + 3s")
+	if cfg.AuthRequestTimeout+cfg.GitHubCheckTimeout+3*time.Second >= cfg.WriteTimeout {
+		return errors.New("HTTP_WRITE_TIMEOUT must exceed AUTH_REQUEST_TIMEOUT + GITHUB_CHECK_TIMEOUT + 3s")
 	}
-	handler, closeDependencies, err := newAPIHandler(ctx, cfg, settings)
+	sessions, conn, err := newSessions(cfg)
+	if err != nil {
+		return fmt.Errorf("initialize Auth client: %w", err)
+	}
+	defer conn.Close()
+	handler, closeStorage, err := newAPIHandler(ctx, cfg, settings, sessions)
 	if err != nil {
 		return err
 	}
-	defer closeDependencies()
-	server := newHTTPServer(ctx, cfg)
+	defer closeStorage()
+	server := newHTTPServer(ctx, cfg, sessions)
 	server.Handler = handler
 	return runHTTP(ctx, server, cfg.ShutdownTimeout)
 }

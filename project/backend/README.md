@@ -28,10 +28,19 @@ Analyzer открывает PostgreSQL-хранилище; см.
 [пошаговый запуск](#запуск-analyzer-с-postgresql).
 Auth запускает gRPC-сервер, см. раздел «Auth Service».
 Каркас Analyzer запускается через `go run ./cmd/analyzer`.
-Подключены POST /repositories/validate, POST /analyses и GET /analyses/{analysis_id}.
+В С1 работают GET /api/v1/auth/session, POST /api/v1/auth/guest-session и
+POST /api/v1/repositories/validate через проверку cookie в Auth. В С2 добавлены
+POST /api/v1/analyses и GET /api/v1/analyses/{analysis_id} с тем же Auth-клиентом.
 Остальные бизнес-маршруты пока возвращают 501 NOT_IMPLEMENTED.
-Для cmd/api нужны общая PostgreSQL с применёнными миграциями, Auth и настройки
-ниже; автоматически миграции не запускаются.
+Валидация URL не создаёт анализ; job появляется только после принятия POST /analyses.
+
+Весь проект с PostgreSQL и автоматическим применением миграций запускается
+через [Docker Compose](../../README.md#docker--спринт-1). Goose устанавливается
+в отдельный контейнер; на хосте он нужен только для запуска вне Compose.
+
+Весь проект с PostgreSQL и автоматическим применением миграций запускается
+через [Docker Compose](../../README.md#docker--спринт-1). Goose устанавливается
+в отдельный контейнер; на хосте он нужен только для запуска вне Compose.
 
 ## Запуск Analyzer с PostgreSQL
 
@@ -117,37 +126,42 @@ Auth запускает gRPC-сервер, см. раздел «Auth Service».
 | `HTTP_ADDR` | `127.0.0.1:8080` | API |
 | `HTTP_READ_HEADER_TIMEOUT` | `5s` | API |
 | `HTTP_READ_TIMEOUT` | `15s` | API |
-| `HTTP_WRITE_TIMEOUT` | `35s` | API; больше суммы AUTH_RPC_TIMEOUT + GITHUB_CHECK_TIMEOUT + 3s |
+| `HTTP_WRITE_TIMEOUT` | `35s` | API; больше AUTH_REQUEST_TIMEOUT + GITHUB_CHECK_TIMEOUT + 3s |
 | `HTTP_IDLE_TIMEOUT` | `60s` | API |
 | `SHUTDOWN_TIMEOUT` | `10s` | API, Auth |
+| `AUTH_GRPC_TARGET` | `127.0.0.1:9090` | API; адрес gRPC Auth, в Compose `auth:9090` |
+| `AUTH_REQUEST_TIMEOUT` | `3s` | API; каждый RPC; суммарный бюджет Auth и GitHub должен помещаться в HTTP_WRITE_TIMEOUT |
+| `PUBLIC_ORIGIN` | `http://localhost:3000` | API; точный Origin frontend для POST гостя, проверки URL и запуска анализа |
+| `COOKIE_SECURE` | `true` | API; в локальном HTTP Compose — false, для HTTPS — true |
+| `GITHUB_CHECK_TIMEOUT` | `25s` | API; бюджет GitHub-проверки, меньше HTTP_WRITE_TIMEOUT |
+| `GITHUB_TOKEN` | пусто | API; необязательный серверный токен GitHub, не логируется |
 | `AUTH_GRPC_ADDR` | `127.0.0.1:9090` | Auth; host:port gRPC-сервера |
 | `AUTH_DATABASE_URL` | — (обязательна) | Auth; строка подключения PostgreSQL, не логируется |
 | `ANALYZER_DATABASE_URL` | обязательно | API и Analyzer; DSN общей PostgreSQL |
 | `ANALYZER_DATABASE_TIMEOUT` | `5s` | API и Analyzer; срок открытия подключения |
-| `AUTH_GRPC_TARGET` | `127.0.0.1:9090` | API; внутренний адрес Auth, без TLS как у текущего Auth-сервера |
-| `AUTH_RPC_TIMEOUT` | `3s` | API; срок проверки сессии |
-| `API_ALLOWED_ORIGIN` | `http://localhost:5173` | API; точное разрешённое значение Origin при POST /analyses |
-| `GITHUB_CHECK_TIMEOUT` | `25s` | API; бюджет предварительной проверки и принятия, максимум 25s |
-| `GITHUB_TOKEN` | пусто | API; необязательный сервисный токен GitHub, не логируется |
-| `ANALYZER_VERSIONS` | обязательно | API; JSON с восемью версиями из common.Versions; пример в .env.example |
+| `ANALYZER_VERSIONS` | обязательно | API; JSON с восемью версиями common.Versions, пример в .env.example |
 
 Неверные и явно пустые значения приводят к ошибке запуска.
 В PowerShell: `$env:HTTP_ADDR = "127.0.0.1:9090"; go run ./cmd/api`.
 В Bash: `HTTP_ADDR=127.0.0.1:9090 go run ./cmd/api`.
 
-ANALYZER_VERSIONS задаётся в окружении процесса как одна JSON-строка. В Bash
-нужны внешние одинарные кавычки, например `export ANALYZER_VERSIONS='{"schema":"mvp-contract-1.1.0","methodology":"rhs-mvp-1.1.0","scoring_config":"rhs-mvp-1.1.0","collector_profile":"github-mvp-1.1.0","secret_rules":"secrets-mvp-1.0.0","recommendation_catalog":"recommendations-mvp-1.0.0","explanation_schema":"catalog-selection-1.0.0","prompt":"catalog-selection-1.0.0"}'`.
-Укажите версии фактически выбранных правил: API фиксирует их при принятии,
-не придумывает актуальность и не подменяет версии при чтении.
+Для API запуска нужны ANALYZER_DATABASE_URL, применённые миграции и
+ANALYZER_VERSIONS. В Bash JSON задаётся с внешними одинарными кавычками:
+`export ANALYZER_VERSIONS='{"schema":"mvp-contract-1.1.0","methodology":"rhs-mvp-1.1.0","scoring_config":"rhs-mvp-1.1.0","collector_profile":"github-mvp-1.1.0","secret_rules":"secrets-mvp-1.0.0","recommendation_catalog":"recommendations-mvp-1.0.0","explanation_schema":"catalog-selection-1.0.0","prompt":"catalog-selection-1.0.0"}'`.
+Укажите версии фактически выбранных правил. API фиксирует их при принятии и
+не заменяет текущими при чтении. Docker Compose передаёт эти настройки API;
+вне Compose их задаёт разработчик, миграции применяются через Goose вручную.
 
-API резервирует отправку до GitHub; повтор owner/request_id не создаёт job.
+Отправка резервируется до GitHub: повтор owner/request_id не создаёт job.
 Повтор ещё проверяемой отправки даёт SUBMISSION_PENDING, смена URL —
-SUBMISSION_CHANGED. Чтение failed — HTTP 200; ошибка чтения — HTTP-ошибка.
-В текущей ветке нет исполнителя #18476 и HTTP чтения Report: новый анализ
-остаётся queued до подключения исполнителя. Для FR-28 данные sources/reasons,
-выборки и профиль передаются существующим Report-контрактом; API статуса не
-выдаёт вымышленные результаты сбора. Текущий Auth подтверждает только гостевые
-сессии; account cookie без подтверждённого user_id не превращается в гостя.
+SUBMISSION_CHANGED. Чтение failed возвращает HTTP 200; ошибка чтения —
+отдельную HTTP-ошибку. Используются общий PUBLIC_ORIGIN и AUTH_REQUEST_TIMEOUT.
+Текущий Auth подтверждает гостя; account cookie без подтверждения возвращает
+SESSION_EXPIRED и не превращается в гостевой запуск.
+В этой ветке ещё нет исполнителя #18476 и HTTP чтения Report: новый анализ
+остаётся queued до подключения исполнителя. Для FR-28 sources/reasons,
+выборки и ограничения профиля передаются существующим Report-контрактом;
+API статуса не выдаёт вымышленные результаты сбора.
 
 Логи пишутся в stdout в JSON. Логгер передаётся через контекст:
 `logger.With(ctx, log)` и `logger.From(ctx)`. Если его нет в контексте,
@@ -156,9 +170,9 @@ SUBMISSION_CHANGED. Чтение failed — HTTP 200; ошибка чтения 
 ## Auth Service
 
 gRPC-сервис по контракту [auth.proto](../../contracts/auth/v1/auth.proto):
-AuthService (Register, Login, CreateGuestSession, ResolveContext, Logout) и
+AuthService (Register, Login, CreateGuestSession, GetSessionContext, ResolveContext, Logout) и
 стандартный health-check `grpc.health.v1.Health`. Сейчас работают
-CreateGuestSession и гостевая часть ResolveContext; Register, Login и Logout
+CreateGuestSession, GetSessionContext и гостевая часть ResolveContext; Register, Login и Logout
 отвечают `UNIMPLEMENTED` с кодом `NOT_IMPLEMENTED`.
 
 ### Локальный запуск
@@ -179,7 +193,7 @@ CreateGuestSession и гостевая часть ResolveContext; Register, Logi
 
    ```sh
    go install github.com/pressly/goose/v3/cmd/goose@latest
-   goose -dir migrations/auth postgres "$AUTH_DATABASE_URL" up
+   goose -dir migrations/auth -table goose_auth_version postgres "$AUTH_DATABASE_URL" up
    ```
 
 3. Запуск сервиса:

@@ -12,11 +12,15 @@ type errorResponse = dto.ErrorResponse
 type apiError = dto.APIError
 type fieldError = dto.FieldError
 
-func NewHandler(validator RepositoryValidator, resolver ContextResolver) http.Handler {
-	return NewAnalysisHandler(validator, resolver, nil, "")
+func NewAnalysisHandler(validator RepositoryValidator, resolver ContextResolver, analyses AnalysisService, allowedOrigin string) http.Handler {
+	return NewHandler(validator, resolver, Options{CookieSecure: true, PublicOrigin: allowedOrigin, Analyses: analyses})
 }
 
-func NewAnalysisHandler(validator RepositoryValidator, resolver ContextResolver, analyses AnalysisService, allowedOrigin string) http.Handler {
+func NewHandler(validator RepositoryValidator, resolver ContextResolver, options ...Options) http.Handler {
+	cfg := Options{CookieSecure: true, PublicOrigin: "http://localhost:3000"}
+	if len(options) > 0 {
+		cfg = options[0]
+	}
 	mux := http.NewServeMux()
 	route := func(path, method string, handler http.HandlerFunc) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -34,20 +38,20 @@ func NewAnalysisHandler(validator RepositoryValidator, resolver ContextResolver,
 	}
 
 	route("/health", http.MethodGet, health)
-	if analyses == nil {
+	if cfg.Analyses == nil {
 		route("/api/v1/analyses", http.MethodPost, notImplemented)
 		route("/api/v1/analyses/{analysis_id}", http.MethodGet, notImplemented)
 	} else {
-		route("/api/v1/analyses", http.MethodPost, createAnalysis(analyses, resolver, allowedOrigin))
-		route("/api/v1/analyses/{analysis_id}", http.MethodGet, getAnalysis(analyses, resolver))
+		route("/api/v1/analyses", http.MethodPost, sameOrigin(cfg.PublicOrigin, createAnalysis(cfg.Analyses, resolver)))
+		route("/api/v1/analyses/{analysis_id}", http.MethodGet, getAnalysis(cfg.Analyses, resolver))
 	}
 	route("/api/v1/reports/{report_id}", http.MethodGet, notImplemented)
 	route("/api/v1/reports", http.MethodGet, notImplemented)
-	route("/api/v1/repositories/validate", http.MethodPost, validateRepository(validator, resolver))
+	route("/api/v1/repositories/validate", http.MethodPost, sameOrigin(cfg.PublicOrigin, validateRepository(validator, resolver)))
 	route("/api/v1/auth/register", http.MethodPost, notImplemented)
 	route("/api/v1/auth/login", http.MethodPost, notImplemented)
-	route("/api/v1/auth/guest-session", http.MethodPost, notImplemented)
-	route("/api/v1/auth/session", http.MethodGet, notImplemented)
+	route("/api/v1/auth/guest-session", http.MethodPost, sameOrigin(cfg.PublicOrigin, continueGuest(cfg.Sessions, cfg.CookieSecure)))
+	route("/api/v1/auth/session", http.MethodGet, getSession(cfg.Sessions))
 	route("/api/v1/auth/logout", http.MethodPost, notImplemented)
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "Route not found")

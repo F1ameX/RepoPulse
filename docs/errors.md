@@ -28,6 +28,7 @@ request_id отправки остаётся у клиента и в submissions
 | SUBMISSION_PENDING | 409 | ABORTED | Исходная отправка ещё проверяется. Безопасный повтор с тем же request_id; новый job не создаётся |
 | ANALYSIS_NOT_FOUND | 404 | NOT_FOUND | Анализ недоступен; неверный ID/чужой/отсутствующий объект одинаковы |
 | REPORT_NOT_FOUND | 404 | NOT_FOUND | Отчёт недоступен; неверный ID/чужой/отсутствующий объект одинаковы |
+| AUTH_UNAVAILABLE | 503 | UNAVAILABLE / DEADLINE_EXCEEDED | Auth недоступен или не ответил за AUTH_REQUEST_TIMEOUT; токены/адреса/внутренние сообщения не раскрываются |
 | INTERNAL_ERROR | 500 | INTERNAL | Не удалось выполнить операцию |
 | NOT_FOUND | 404 | NOT_FOUND | Неизвестный HTTP-маршрут каркаса, без метаданных ресурса |
 | METHOD_NOT_ALLOWED | 405 | UNIMPLEMENTED | Неподдерживаемый HTTP-метод, Allow header |

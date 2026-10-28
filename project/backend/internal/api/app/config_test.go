@@ -24,6 +24,8 @@ func TestDefaults(t *testing.T) {
 		WriteTimeout: 35 * time.Second, IdleTimeout: time.Minute,
 		ShutdownTimeout:    10 * time.Second,
 		GitHubCheckTimeout: 25 * time.Second,
+		AuthGRPCTarget:     "127.0.0.1:9090", AuthRequestTimeout: 3 * time.Second,
+		PublicOrigin: "http://localhost:3000", CookieSecure: true,
 	}
 	if cfg != want {
 		t.Fatalf("got %+v, want %+v", cfg, want)
@@ -36,6 +38,8 @@ func TestEnvironmentOverrides(t *testing.T) {
 		"HTTP_READ_HEADER_TIMEOUT": "1s", "HTTP_READ_TIMEOUT": "2s",
 		"HTTP_WRITE_TIMEOUT": "3s", "HTTP_IDLE_TIMEOUT": "4s", "SHUTDOWN_TIMEOUT": "500ms",
 		"GITHUB_CHECK_TIMEOUT": "2s", "GITHUB_TOKEN": "service-test-token",
+		"AUTH_GRPC_TARGET": "auth:9191", "AUTH_REQUEST_TIMEOUT": "500ms",
+		"PUBLIC_ORIGIN": "https://repopulse.example", "COOKIE_SECURE": "false",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -46,6 +50,8 @@ func TestEnvironmentOverrides(t *testing.T) {
 		WriteTimeout: 3 * time.Second, IdleTimeout: 4 * time.Second,
 		ShutdownTimeout:    500 * time.Millisecond,
 		GitHubCheckTimeout: 2 * time.Second, GitHubToken: "service-test-token",
+		AuthGRPCTarget: "auth:9191", AuthRequestTimeout: 500 * time.Millisecond,
+		PublicOrigin: "https://repopulse.example", CookieSecure: false,
 	}
 	if cfg != want {
 		t.Fatalf("got %+v, want %+v", cfg, want)
@@ -57,11 +63,14 @@ func TestInvalidEnvironmentFailsEarly(t *testing.T) {
 		{"HTTP_ADDR", ""}, {"HTTP_ADDR", "8080"},
 		{"HTTP_ADDR", "localhost:0"}, {"HTTP_ADDR", "localhost:65536"},
 		{"HTTP_ADDR", "localhost:http"},
+		{"AUTH_GRPC_TARGET", ""}, {"AUTH_GRPC_TARGET", ":9090"}, {"AUTH_GRPC_TARGET", "auth"}, {"AUTH_GRPC_TARGET", "auth:65536"},
+		{"PUBLIC_ORIGIN", ""}, {"PUBLIC_ORIGIN", "null"}, {"PUBLIC_ORIGIN", "https://site/path"}, {"PUBLIC_ORIGIN", "https://user@site"},
+		{"COOKIE_SECURE", ""}, {"COOKIE_SECURE", "invalid"},
 	}
 	for _, key := range []string{
 		"HTTP_READ_HEADER_TIMEOUT", "HTTP_READ_TIMEOUT", "HTTP_WRITE_TIMEOUT",
 		"HTTP_IDLE_TIMEOUT", "SHUTDOWN_TIMEOUT",
-		"GITHUB_CHECK_TIMEOUT",
+		"GITHUB_CHECK_TIMEOUT", "AUTH_REQUEST_TIMEOUT",
 	} {
 		for _, value := range []string{"", "0s", "-1s", "30", "invalid"} {
 			cases = append(cases, struct{ key, value string }{key, value})
@@ -80,6 +89,7 @@ func TestInvalidEnvironmentFailsEarly(t *testing.T) {
 func TestGitHubBudgetFitsHTTPResponseTimeout(t *testing.T) {
 	for _, values := range []map[string]string{
 		{"GITHUB_CHECK_TIMEOUT": "26s"},
+		{"AUTH_REQUEST_TIMEOUT": "10s"},
 		{"GITHUB_CHECK_TIMEOUT": "25s", "HTTP_WRITE_TIMEOUT": "25s"},
 	} {
 		if _, err := loadConfig(fromMap(values)); err == nil {

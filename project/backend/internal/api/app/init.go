@@ -7,21 +7,29 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/github"
 	analyzerrepo "github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/repository"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/analysis"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/repository"
 	httpapi "github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/in/http"
 	authclient "github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/out/auth"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/api/application/session"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
-	authv1 "github.com/F1ameX/RepoPulse/project/backend/pkg/proto/auth/v1"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-func newAPIHandler(ctx context.Context, cfg Config, settings AnalysisConfig) (http.Handler, func(), error) {
+func newSessions(cfg Config) (*session.Service, *grpc.ClientConn, error) {
+	conn, err := grpc.NewClient(cfg.AuthGRPCTarget, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, err
+	}
+	return session.NewService(authclient.NewClient(conn, cfg.AuthRequestTimeout)), conn, nil
+}
+
+// newAPIHandler extends the shared Auth/session routes with Analyzer scenarios.
+func newAPIHandler(ctx context.Context, cfg Config, settings AnalysisConfig, sessions *session.Service) (http.Handler, func(), error) {
 	databaseCtx, cancel := context.WithTimeout(ctx, settings.DatabaseTimeout)
 	defer cancel()
 	pool, err := pgxpool.New(databaseCtx, settings.DatabaseURL)
@@ -39,29 +47,28 @@ func newAPIHandler(ctx context.Context, cfg Config, settings AnalysisConfig) (ht
 		pool.Close()
 		return nil, nil, errors.New("apply auth/analyzer migrations before starting the analysis API")
 	}
-	connection, err := grpc.NewClient(settings.AuthTarget, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		pool.Close()
-		return nil, nil, errors.New("invalid Auth gRPC configuration")
-	}
-	closeDependencies := func() {
-		connection.Close()
-		pool.Close()
-	}
 	client := github.NewClient(nil, cfg.GitHubToken)
-	resolver := authclient.NewResolver(authv1.NewAuthServiceClient(connection), settings.AuthTimeout)
 	scenarios := analysis.NewService(analyzerrepo.NewPostgres(pool), client, settings.Versions, cfg.GitHubCheckTimeout)
-	handler := httpapi.NewAnalysisHandler(repository.NewValidator(client, cfg.GitHubCheckTimeout), resolver, scenarios, settings.AllowedOrigin)
-	return handler, closeDependencies, nil
+	handler := httpapi.NewHandler(repository.NewValidator(client, cfg.GitHubCheckTimeout), sessions, httpapi.Options{
+		Sessions: sessions, CookieSecure: cfg.CookieSecure, PublicOrigin: cfg.PublicOrigin, Analyses: scenarios,
+	})
+	return handler, pool.Close, nil
 }
 
-func newHTTPServer(ctx context.Context, cfg Config) *http.Server {
+func newHTTPServer(ctx context.Context, cfg Config, sessions ...*session.Service) *http.Server {
+	var resolver httpapi.ContextResolver
+	var service httpapi.Sessions
+	if len(sessions) > 0 && sessions[0] != nil {
+		resolver, service = sessions[0], sessions[0]
+	}
+	origin := cfg.PublicOrigin
+	if origin == "" {
+		origin = "http://localhost:3000"
+	}
 	validator := repository.NewValidator(github.NewClient(nil, cfg.GitHubToken), cfg.GitHubCheckTimeout)
 	return &http.Server{
-		Addr: cfg.HTTPAddr,
-		// Run installs the production handler from newAPIHandler. Keeping this
-		// isolated handler also allows transport lifecycle tests without a DB.
-		Handler:           httpapi.NewHandler(validator, nil),
+		Addr:              cfg.HTTPAddr,
+		Handler:           httpapi.NewHandler(validator, resolver, httpapi.Options{Sessions: service, CookieSecure: cfg.CookieSecure, PublicOrigin: origin}),
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
 		ReadTimeout:       cfg.ReadTimeout,
 		WriteTimeout:      cfg.WriteTimeout,

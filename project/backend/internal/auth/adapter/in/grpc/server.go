@@ -19,6 +19,7 @@ type Scenarios interface {
 	Register(ctx context.Context, login, password string) (domain.RegistrationResult, error)
 	Login(ctx context.Context, login, password string) (domain.IssuedSession, error)
 	CreateGuestSession(ctx context.Context) (domain.IssuedSession, error)
+	GetSessionContext(ctx context.Context, tokens domain.SessionTokens) (domain.SessionContext, error)
 	ResolveContext(ctx context.Context, tokens domain.SessionTokens) (domain.VerifiedContext, error)
 	Logout(ctx context.Context, accountToken string) error
 }
@@ -56,6 +57,21 @@ func (s *Server) CreateGuestSession(ctx context.Context, _ *commonv1.Empty) (*au
 		return nil, toError(err)
 	}
 	return toIssuedSession(issued), nil
+}
+
+func (s *Server) GetSessionContext(ctx context.Context, req *authv1.SessionTokens) (*authv1.SessionContext, error) {
+	result, err := s.scenarios.GetSessionContext(ctx, domain.SessionTokens{AccountToken: req.AccountToken, GuestToken: req.GuestToken})
+	if err != nil {
+		return nil, toError(err)
+	}
+	return &authv1.SessionContext{Account: toSessionInfo(result.Account), Guest: toSessionInfo(result.Guest)}, nil
+}
+
+func toSessionInfo(value *domain.SessionInfo) *authv1.SessionInfo {
+	if value == nil {
+		return nil
+	}
+	return &authv1.SessionInfo{Kind: string(value.Kind), Login: value.Login, ExpiresAt: timestamppb.New(value.ExpiresAt)}
 }
 
 func (s *Server) ResolveContext(ctx context.Context, req *authv1.SessionTokens) (*commonv1.VerifiedContext, error) {
