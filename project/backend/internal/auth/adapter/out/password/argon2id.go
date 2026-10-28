@@ -1,4 +1,4 @@
-// ppackage password is using for hashing and verifying passwords in auth service
+// Package password is using for hashing and verifying passwords in auth service
 package password
 
 import (
@@ -24,17 +24,31 @@ const (
 var b64 = base64.RawStdEncoding
 
 type Argon2id struct {
+	memory uint32
+	time uint32
+	threads uint8
+	keyLen uint32
+	saltLen uint32
+}
 
+func NewArgon2id(memory, time, threads, keyLen, saltLen int) *Argon2id{
+	return &Argon2id{
+		memory: uint32(memory),
+		time: uint32(time),
+		threads: uint8(threads),
+		keyLen: uint32(keyLen),
+		saltLen: uint32(saltLen),
+	}
 }
 
 func (pass * Argon2id) Hash(password string) (string, error) {
-	salt := make([]byte, saltLen)
+	salt := make([]byte, pass.saltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key := argon2.IDKey([]byte(password), salt, time, memory, threads, keyLen)
+	key := argon2.IDKey([]byte(password), salt, pass.time, pass.memory, pass.threads, pass.keyLen)
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
-		argon2.Version, memory, time, threads, b64.EncodeToString(salt), b64.EncodeToString(key)), nil
+		argon2.Version, pass.memory, pass.time, pass.threads, b64.EncodeToString(salt), b64.EncodeToString(key)), nil
 }
 
 func (pass * Argon2id) Verify(password, encoded string) (bool, error) {
