@@ -12,14 +12,6 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-//TODO: Вынести в конфигурацию
-const (
-	memory  = 16 * 1024 * 1024 // MiB
-	time    = 3
-	threads = 1 
-	keyLen  = 32
-	saltLen = 16
-)
 
 var b64 = base64.RawStdEncoding
 
