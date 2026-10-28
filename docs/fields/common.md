@@ -185,6 +185,9 @@ partial/unavailable/not_applicable требуют reason; complete не озна
 ## MetricInput
 
 Сохранённые нормализованные безопасные входы. В snapshot нет произвольного README, логов команд или значений секретов.
+При отсутствии результата коллектора сборщик сохраняет unavailable/null с
+reason.code=INPUT_NOT_COLLECTED. Это причина полноты входа, а не HTTP-ошибка.
+[Правила сборки и сохранения](../architecture/analyzer-inputs.md).
 
 | Поле | JSON: тип и значения | protobuf: тип и номер | Обязательное в JSON / null | Описание | Хранение |
 |---|---|---|---|---|---|

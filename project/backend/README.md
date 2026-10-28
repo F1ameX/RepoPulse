@@ -102,9 +102,14 @@ HTTP-маршруты пока возвращают 501 NOT_IMPLEMENTED; health 
    остановка — `Ctrl+C`, в логе появится `Service stopped`.
 
 Analyzer забирает принятые queued-задания из PostgreSQL и получает Git. Он
-не открывает HTTP/gRPC-порт: HTTP-запуск/статус — #18478. Нормализаторы входов
-(#18479), вычисления и объяснение подключаются через `worker.Processor` в
-`app.RunWithProcessor`. В штатном `cmd/analyzer` Processor пока отсутствует:
+не открывает HTTP/gRPC-порт: HTTP-запуск/статус — #18478. Сборка безопасных входов
+#18479 реализована в `application/snapshot`: `app.RunWithInputs` связывает
+реальные `snapshot.Collector` и `snapshot.Calculator` с исполнителем. Коллектор
+передаёт типизированные значения и состояния использованных scopes; калькулятор
+получает готовый снимок для расчёта без повторных запросов к источникам.
+[Правила сборки, неизвестности и подключения](../../docs/architecture/analyzer-inputs.md).
+Произвольный `worker.Processor` по-прежнему подключается через `app.RunWithProcessor`.
+В штатном `cmd/analyzer` коллекторы метрик и калькулятор пока отсутствуют:
 пригодного результата нет, поэтому job получает failed/ANALYSIS_FAILED,
 а не фиктивный completed. Статический сбор Git уже работает.
 `GET /health` на порту 8080 относится к API Gateway.

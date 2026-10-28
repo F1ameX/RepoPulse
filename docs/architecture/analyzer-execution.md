@@ -9,7 +9,9 @@
 ## Что подключено
 
 `cmd/analyzer` запускает очередь PostgreSQL и статический Git-коллектор.
-Нормализаторы #18479 и последующие расчёты подключаются через `worker.Processor`
+Сборщик снимка #18479 (`application/snapshot`) подключает коллекторы и калькулятор
+через `app.RunWithInputs`; [подключение и правила сборки](analyzer-inputs.md).
+Произвольные исполнители подключаются через `worker.Processor`
 в `app.RunWithProcessor`. Интерфейс объявлен у потребителя — в
 `internal/analyzer/application/worker`, реализации связываются в `app`.
 Processor получает принятый Analysis, структурные GitData и ограниченный
