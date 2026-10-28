@@ -2,19 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/services/api';
 import { repositoryService } from '@/services/repositoryService';
 import type { Report } from '@/types';
+import { safeMessage } from '@/lib/apiErrors';
 import { useOnlineStatus } from './useOnlineStatus';
-
-const SAFE_MESSAGES: Record<string, string> = {
-  REPORT_NOT_FOUND: 'Отчёт не найден.',
-  ANALYSIS_NOT_FOUND: 'Анализ не найден.',
-  AUTH_UNAVAILABLE: 'Сервис сессий временно недоступен.',
-  SESSION_REQUIRED: 'Требуется вход в систему.',
-  SESSION_EXPIRED: 'Сессия истекла. Войдите снова.',
-  UPSTREAM_RATE_LIMITED: 'Сервис временно ограничил запросы. Повторите позже.',
-  UPSTREAM_TIMEOUT: 'Сервис не ответил вовремя. Повторите позже.',
-  NETWORK_ERROR: 'Нет соединения с сервером.',
-  INTERNAL_ERROR: 'Сервис временно недоступен.',
-};
 
 function isAccessDenied(code: string): boolean {
   return (
@@ -25,13 +14,6 @@ function isAccessDenied(code: string): boolean {
     code === 'SESSION_EXPIRED' ||
     code === 'LOGIN_REQUIRED'
   );
-}
-
-function safeMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    return SAFE_MESSAGES[error.code] ?? 'Не удалось загрузить отчёт.';
-  }
-  return 'Не удалось загрузить отчёт.';
 }
 
 export type ReportState<T = Report> =
@@ -84,7 +66,11 @@ export function useReport<T = Report>(reportId: string | null | undefined) {
       if (isAccessDenied(code)) {
         setState({ kind: 'hidden', reportId, code });
       } else {
-        setState({ kind: 'error', reportId, message: safeMessage(error) });
+        setState({
+          kind: 'error',
+          reportId,
+          message: safeMessage(error, 'Не удалось загрузить отчёт.'),
+        });
       }
     } finally {
       if (attemptRef.current === attempt) inFlightRef.current = false;

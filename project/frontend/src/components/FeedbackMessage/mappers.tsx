@@ -3,26 +3,7 @@ import type { FeedbackView } from './FeedbackMessage';
 import type { SubmissionState } from '@/hooks/useAnalysisSubmission';
 import type { AnalysisStatusState } from '@/hooks/useAnalysisStatus';
 import type { ReportState } from '@/hooks/useReport';
-
-const SAFE_REASONS: Record<string, string> = {
-  ANALYSIS_FAILED: 'Анализ завершился ошибкой. Запустите его заново.',
-  ANALYSIS_NOT_FOUND: 'Анализ не найден.',
-  REPORT_NOT_FOUND: 'Отчёт не найден.',
-  REPORT_SAVE_FAILED: 'Не удалось сохранить отчёт.',
-  REPOSITORY_NOT_FOUND_OR_PRIVATE: 'Репозиторий недоступен.',
-  VALIDATION_FAILED: 'Сервер отклонил параметры запроса.',
-  SESSION_REQUIRED: 'Требуется вход в систему.',
-  SESSION_EXPIRED: 'Сессия истекла. Войдите снова.',
-  UPSTREAM_RATE_LIMITED: 'Сервис временно ограничил запросы. Повторите позже.',
-  UPSTREAM_TIMEOUT: 'Сервис не ответил вовремя. Повторите позже.',
-  NETWORK_ERROR: 'Нет соединения с сервером.',
-  INTERNAL_ERROR: 'Сервис временно недоступен.',
-};
-
-function safeReason(code: string | null | undefined): string {
-  if (!code) return 'Не удалось выполнить операцию. Повторите позже.';
-  return SAFE_REASONS[code] ?? 'Не удалось выполнить операцию. Повторите позже.';
-}
+import { safeMessageByCode } from '@/lib/apiErrors';
 
 export interface SubmissionActions {
   retrySame: () => void;
@@ -160,7 +141,7 @@ export function statusFeedback(
       if (status === 'failed') {
         return {
           variant: 'error',
-          message: reasonCode ? safeReason(reasonCode) : 'Анализ завершился ошибкой.',
+          message: reasonCode ? safeMessageByCode(reasonCode, 'Анализ завершился ошибкой.') : 'Анализ завершился ошибкой.',
           hint: `Подтверждено: ${formatUtc(updatedAt)}`,
         };
       }

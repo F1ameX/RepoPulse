@@ -2,25 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/services/api';
 import { repositoryService } from '@/services/repositoryService';
 import type { AnalysisStatusValue } from '@/services/repositoryService';
+import { safeMessage } from '@/lib/apiErrors';
 import { useOnlineStatus } from './useOnlineStatus';
-
-const SAFE_MESSAGES: Record<string, string> = {
-  ANALYSIS_NOT_FOUND: 'Анализ не найден.',
-  AUTH_UNAVAILABLE: 'Сервис сессий временно недоступен. Повторите позже.',
-  SESSION_REQUIRED: 'Требуется вход в систему.',
-  SESSION_EXPIRED: 'Сессия истекла. Войдите снова.',
-  UPSTREAM_RATE_LIMITED: 'Сервис временно ограничил запросы. Повторите позже.',
-  UPSTREAM_TIMEOUT: 'Сервис не ответил вовремя. Повторите позже.',
-  NETWORK_ERROR: 'Нет соединения с сервером.',
-  INTERNAL_ERROR: 'Сервис временно недоступен.',
-};
-
-function safeMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    return SAFE_MESSAGES[error.code] ?? 'Не удалось проверить статус анализа.';
-  }
-  return 'Не удалось проверить статус анализа.';
-}
 
 export interface ConfirmedStatus {
   status: AnalysisStatusValue;
@@ -103,7 +86,7 @@ export function useAnalysisStatus(analysisId: string | null | undefined) {
         setState({
           kind: 'error',
           analysisId,
-          message: safeMessage(error),
+          message: safeMessage(error, 'Не удалось проверить статус анализа.'),
           lastConfirmed: lastConfirmedRef.current,
         });
       }

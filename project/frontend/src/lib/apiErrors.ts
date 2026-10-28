@@ -1,6 +1,7 @@
 import { ApiError } from '@/services/api';
 
 export const SAFE_MESSAGES: Record<string, string> = {
+  DEFAULT: 'Не удалось выполнить операцию. Повторите позже.',
   ANALYSIS_FAILED: 'Анализ завершился ошибкой. Запустите его заново.',
   ANALYSIS_NOT_FOUND: 'Анализ не найден.',
   AUTH_UNAVAILABLE: 'Сервис сессий временно недоступен. Повторите позже.',
@@ -18,9 +19,17 @@ export const SAFE_MESSAGES: Record<string, string> = {
   CSRF_REJECTED: 'Запрос отклонён. Обновите страницу.',
 };
 
-export function safeMessage(error: unknown, fallback = 'Не удалось выполнить операцию. Повторите позже.'): string {
+export function safeMessage(error: unknown, fallback = SAFE_MESSAGES.DEAFULT): string {
   if (error instanceof ApiError) {
     return SAFE_MESSAGES[error.code] ?? fallback;
   }
   return fallback;
+}
+
+export function safeMessageByCode(
+  code: string | null | undefined, 
+  fallback = SAFE_MESSAGES.DEFAULT
+): string {
+  if (!code) return fallback;
+  return SAFE_MESSAGES[code] ?? fallback;
 }
