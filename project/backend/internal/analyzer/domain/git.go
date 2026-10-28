@@ -19,5 +19,7 @@ type GitFile struct {
 type GitCommit struct {
 	SHA         string
 	CommittedAt time.Time
-	Main        bool
+	// Main is nil when a bounded/interrupted traversal cannot establish
+	// membership. False requires a complete walk of the main revision.
+	Main *bool
 }

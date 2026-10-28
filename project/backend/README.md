@@ -141,7 +141,7 @@ Analyzer забирает принятые queued-задания из PostgreSQL
 | `ANALYZER_DATABASE_TIMEOUT` | `5s` | Analyzer; срок открытия подключения |
 | `ANALYZER_POLL_INTERVAL` | `1s` | Пауза пустой очереди, максимум 1 минута |
 | `ANALYZER_TIMEOUT` | `320s` | Общий срок job, включая Git, обработку, объяснение и сохранение |
-| `ANALYZER_GIT_TIMEOUT` | `60s` | Срок получения Git; также ограничен общим сроком job |
+| `ANALYZER_GIT_TIMEOUT` | `60s` | Вся фаза Git: сеть и локальное чтение дерева/истории; входит в общий срок job |
 | `ANALYZER_GIT_MAX_BYTES` | `104857600` | Прочитанные из сети Git-данные, байты |
 | `ANALYZER_GIT_MAX_PATHS` | `50000` | Пути дерева зафиксированной ревизии |
 | `ANALYZER_GIT_MAX_COMMITS` | `10000` | Уникальные коммиты из объявленных heads/tags и зафиксированной ревизии |

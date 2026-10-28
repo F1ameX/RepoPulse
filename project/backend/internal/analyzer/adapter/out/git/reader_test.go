@@ -157,8 +157,11 @@ func TestRealGitIsReadWithoutCheckout(t *testing.T) {
 	}
 	foundOld, foundSymlink, foundUnmerged := false, false, false
 	for _, commit := range data.Commits {
+		if commit.Main == nil {
+			t.Fatal("main membership is unknown after a complete traversal")
+		}
 		foundOld = foundOld || commit.SHA == old
-		foundUnmerged = foundUnmerged || !commit.Main
+		foundUnmerged = foundUnmerged || !*commit.Main
 	}
 	for _, file := range data.Files {
 		if file.Path == "README.md" {
@@ -191,6 +194,11 @@ func TestRealGitIsReadWithoutCheckout(t *testing.T) {
 	// pinned revision supplied later to the publisher.
 	*data.Repository.CommitSHA = strings.Repeat("b", 40)
 	*data.Sources[0].Sample.Collected = 0
+	previousMain := *session.Data().Commits[0].Main
+	*data.Commits[0].Main = !previousMain
+	if *session.Data().Commits[0].Main != previousMain {
+		t.Fatal("main membership is mutable through the public view")
+	}
 	if *session.Data().Repository.CommitSHA != *metadata.CommitSHA || *session.Data().Sources[0].Sample.Collected == 0 {
 		t.Fatal("collector data is mutable through its public view")
 	}
