@@ -1,0 +1,24 @@
+{
+  "analysis_id": "7f02db0b-88ab-44eb-8a9c-dc13ffdc8f63",
+  "repository": {
+    "platform": "github",
+    "github_id": "42",
+    "canonical_url": "https://github.com/example/repo",
+    "owner": "Example",
+    "name": "Repo",
+    "default_branch": "main",
+    "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "status": "failed",
+  "stage": "saving",
+  "created_at": "2026-10-28T10:00:00Z",
+  "started_at": "2026-10-28T10:00:01Z",
+  "completed_at": "2026-10-28T10:00:30Z",
+  "report_id": null,
+  "error": {
+    "code": "REPORT_SAVE_FAILED",
+    "message": "Не удалось сохранить результат анализа",
+    "trace_id": "worker-diagnostic-id",
+    "field_errors": []
+  }
+}

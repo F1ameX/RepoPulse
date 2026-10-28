@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
@@ -19,7 +20,21 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return runHTTP(ctx, newHTTPServer(ctx, cfg), cfg.ShutdownTimeout)
+	settings, err := loadAnalysisConfig(os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	if settings.AuthTimeout+cfg.GitHubCheckTimeout+3*time.Second >= cfg.WriteTimeout {
+		return errors.New("HTTP_WRITE_TIMEOUT must exceed AUTH_RPC_TIMEOUT + GITHUB_CHECK_TIMEOUT + 3s")
+	}
+	handler, closeDependencies, err := newAPIHandler(ctx, cfg, settings)
+	if err != nil {
+		return err
+	}
+	defer closeDependencies()
+	server := newHTTPServer(ctx, cfg)
+	server.Handler = handler
+	return runHTTP(ctx, server, cfg.ShutdownTimeout)
 }
 
 func runHTTP(ctx context.Context, server *http.Server, shutdownTimeout time.Duration) error {

@@ -191,6 +191,7 @@
             "SUBMISSION_PENDING",
             "SESSION_REQUIRED",
             "SESSION_EXPIRED",
+            "AUTH_UNAVAILABLE",
             "LOGIN_REQUIRED",
             "INVALID_CREDENTIALS",
             "LOGIN_TAKEN",

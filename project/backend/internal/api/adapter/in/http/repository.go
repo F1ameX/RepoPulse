@@ -13,6 +13,7 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/repository"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/in/http/dto"
+	authdomain "github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
@@ -20,10 +21,7 @@ type RepositoryValidator interface {
 	ValidateRepository(context.Context, repository.ValidateRepositoryCommand) (domain.ValidatedRepository, error)
 }
 
-type SessionTokens struct {
-	AccountToken *string
-	GuestToken   *string
-}
+type SessionTokens = authdomain.SessionTokens
 
 // ContextResolver is implemented by an Auth adapter. Cookie presence alone does
 // not establish an identity; only Auth may produce a VerifiedContext.

@@ -15,3 +15,7 @@ HTTP DTO и gRPC-сообщения реализуются отдельно; 0, 
 [Движение данных между компонентами](architecture/data-flow.md).
 
 [Ошибки HTTP/gRPC](errors.md).
+
+`ApiError.code` включает `AUTH_UNAVAILABLE` (HTTP 503), общий для подключённых
+HTTP-операций. OpenAPI использует общий enum по ссылке;
+[пример ответа](../contracts/examples/auth-unavailable.json).

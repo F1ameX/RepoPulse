@@ -53,5 +53,12 @@ JSON использует snake_case, строки UUID и RFC3339 UTC для в
 
 Во всех HTTP-ошибках тело ErrorEnvelope с error.code, message, trace_id и
 field_errors. [Таблица HTTP/gRPC ошибок](../../docs/errors.md).
-Нереализованные обработчики текущего каркаса возвращают 501 NOT_IMPLEMENTED;
-таблица выше описывает целевое поведение контрактов.
+Подключены POST /repositories/validate, POST /analyses и GET /analyses/{analysis_id}.
+Остальные бизнес-маршруты текущего каркаса возвращают 501 NOT_IMPLEMENTED.
+Таблица выше для них описывает целевое поведение контрактов.
+
+Запуск требует Origin, совпадающего с API_ALLOWED_ORIGIN. При повторе принятой
+отправки возвращаются прежний analysis_id и текущее сохранённое состояние;
+outcome остаётся accepted, HTTP — 202. Это не поиск подходящего старого отчёта:
+до реализации полного ключа актуальности новый request_id создаёт новый анализ.
+Ошибка доступности Auth — HTTP 503 AUTH_UNAVAILABLE; анализ при этом не создаётся.

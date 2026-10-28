@@ -21,7 +21,7 @@ func TestDefaults(t *testing.T) {
 	want := Config{
 		HTTPAddr:          "127.0.0.1:8080",
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second,
-		WriteTimeout: 30 * time.Second, IdleTimeout: time.Minute,
+		WriteTimeout: 35 * time.Second, IdleTimeout: time.Minute,
 		ShutdownTimeout:    10 * time.Second,
 		GitHubCheckTimeout: 25 * time.Second,
 	}

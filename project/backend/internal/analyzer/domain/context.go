@@ -5,6 +5,7 @@ import "time"
 var (
 	ErrSessionRequired = &Error{Code: "SESSION_REQUIRED", Message: "Нужна действующая сессия"}
 	ErrSessionExpired  = &Error{Code: "SESSION_EXPIRED", Message: "Срок действия сессии истёк"}
+	ErrAuthUnavailable = &Error{Code: "AUTH_UNAVAILABLE", Message: "Сервис сессий временно недоступен. Повторите попытку позже"}
 )
 
 // VerifiedContext contains identities and expiry times verified by Auth. It is

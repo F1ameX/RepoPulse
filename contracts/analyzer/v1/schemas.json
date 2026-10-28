@@ -93,7 +93,7 @@
             "string",
             "null"
           ],
-          "description": "null для нового анализа, ID прежнего отчёта для reused.",
+          "description": "null при первоначальном принятии нового анализа; ID отчёта для reused и для повтора уже завершившегося анализа.",
           "format": "uuid"
         },
         "status": {

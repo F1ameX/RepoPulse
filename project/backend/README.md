@@ -28,8 +28,10 @@ Analyzer открывает PostgreSQL-хранилище; см.
 [пошаговый запуск](#запуск-analyzer-с-postgresql).
 Auth запускает gRPC-сервер, см. раздел «Auth Service».
 Каркас Analyzer запускается через `go run ./cmd/analyzer`.
-Бизнес-обработчики подключаются в следующих задачах. HTTP-маршруты из OpenAPI
-пока возвращают 501 NOT_IMPLEMENTED; health работает самостоятельно.
+Подключены POST /repositories/validate, POST /analyses и GET /analyses/{analysis_id}.
+Остальные бизнес-маршруты пока возвращают 501 NOT_IMPLEMENTED.
+Для cmd/api нужны общая PostgreSQL с применёнными миграциями, Auth и настройки
+ниже; автоматически миграции не запускаются.
 
 ## Запуск Analyzer с PostgreSQL
 
@@ -115,17 +117,37 @@ Auth запускает gRPC-сервер, см. раздел «Auth Service».
 | `HTTP_ADDR` | `127.0.0.1:8080` | API |
 | `HTTP_READ_HEADER_TIMEOUT` | `5s` | API |
 | `HTTP_READ_TIMEOUT` | `15s` | API |
-| `HTTP_WRITE_TIMEOUT` | `30s` | API |
+| `HTTP_WRITE_TIMEOUT` | `35s` | API; больше суммы AUTH_RPC_TIMEOUT + GITHUB_CHECK_TIMEOUT + 3s |
 | `HTTP_IDLE_TIMEOUT` | `60s` | API |
 | `SHUTDOWN_TIMEOUT` | `10s` | API, Auth |
 | `AUTH_GRPC_ADDR` | `127.0.0.1:9090` | Auth; host:port gRPC-сервера |
 | `AUTH_DATABASE_URL` | — (обязательна) | Auth; строка подключения PostgreSQL, не логируется |
-| `ANALYZER_DATABASE_URL` | обязательно | Analyzer; DSN общей PostgreSQL |
-| `ANALYZER_DATABASE_TIMEOUT` | `5s` | Analyzer; срок открытия подключения |
+| `ANALYZER_DATABASE_URL` | обязательно | API и Analyzer; DSN общей PostgreSQL |
+| `ANALYZER_DATABASE_TIMEOUT` | `5s` | API и Analyzer; срок открытия подключения |
+| `AUTH_GRPC_TARGET` | `127.0.0.1:9090` | API; внутренний адрес Auth, без TLS как у текущего Auth-сервера |
+| `AUTH_RPC_TIMEOUT` | `3s` | API; срок проверки сессии |
+| `API_ALLOWED_ORIGIN` | `http://localhost:5173` | API; точное разрешённое значение Origin при POST /analyses |
+| `GITHUB_CHECK_TIMEOUT` | `25s` | API; бюджет предварительной проверки и принятия, максимум 25s |
+| `GITHUB_TOKEN` | пусто | API; необязательный сервисный токен GitHub, не логируется |
+| `ANALYZER_VERSIONS` | обязательно | API; JSON с восемью версиями из common.Versions; пример в .env.example |
 
 Неверные и явно пустые значения приводят к ошибке запуска.
 В PowerShell: `$env:HTTP_ADDR = "127.0.0.1:9090"; go run ./cmd/api`.
 В Bash: `HTTP_ADDR=127.0.0.1:9090 go run ./cmd/api`.
+
+ANALYZER_VERSIONS задаётся в окружении процесса как одна JSON-строка. В Bash
+нужны внешние одинарные кавычки, например `export ANALYZER_VERSIONS='{"schema":"mvp-contract-1.1.0","methodology":"rhs-mvp-1.1.0","scoring_config":"rhs-mvp-1.1.0","collector_profile":"github-mvp-1.1.0","secret_rules":"secrets-mvp-1.0.0","recommendation_catalog":"recommendations-mvp-1.0.0","explanation_schema":"catalog-selection-1.0.0","prompt":"catalog-selection-1.0.0"}'`.
+Укажите версии фактически выбранных правил: API фиксирует их при принятии,
+не придумывает актуальность и не подменяет версии при чтении.
+
+API резервирует отправку до GitHub; повтор owner/request_id не создаёт job.
+Повтор ещё проверяемой отправки даёт SUBMISSION_PENDING, смена URL —
+SUBMISSION_CHANGED. Чтение failed — HTTP 200; ошибка чтения — HTTP-ошибка.
+В текущей ветке нет исполнителя #18476 и HTTP чтения Report: новый анализ
+остаётся queued до подключения исполнителя. Для FR-28 данные sources/reasons,
+выборки и профиль передаются существующим Report-контрактом; API статуса не
+выдаёт вымышленные результаты сбора. Текущий Auth подтверждает только гостевые
+сессии; account cookie без подтверждённого user_id не превращается в гостя.
 
 Логи пишутся в stdout в JSON. Логгер передаётся через контекст:
 `logger.With(ctx, log)` и `logger.From(ctx)`. Если его нет в контексте,

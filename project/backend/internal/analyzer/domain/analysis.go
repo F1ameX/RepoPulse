@@ -67,11 +67,31 @@ type Analysis struct {
 	Window       Window
 	Versions     Versions
 	Status       string
+	Stage        *string
+	Failure      *Failure
 	CreatedAt    time.Time
 	StartedAt    *time.Time
 	DeadlineAt   *time.Time
 	CompletedAt  *time.Time
 	ReportID     *string
+}
+
+// Failure is persisted independently from an error reading an analysis.
+// Transport adapters expose only recognized codes and safe catalog messages.
+type Failure struct {
+	Code    string `json:"code"`
+	TraceID string `json:"trace_id"`
+}
+
+type Submission struct {
+	ID           string
+	RequestID    string
+	Owner        Owner
+	CanonicalURL string
+	AssessmentAt time.Time
+	State        string
+	AnalysisID   *string
+	Failure      *Failure
 }
 
 var uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")

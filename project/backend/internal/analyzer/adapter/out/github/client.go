@@ -156,7 +156,7 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, int, http.Header
 			} else {
 				err = domain.ErrRepositoryCheck
 			}
-		case status != http.StatusOK && status != http.StatusMovedPermanently && status != http.StatusTemporaryRedirect:
+		case status != http.StatusOK && status != http.StatusMovedPermanently && status != http.StatusTemporaryRedirect && status != http.StatusConflict:
 			err = domain.ErrRepositoryCheck
 		}
 		if !retry || attempt == 1 {

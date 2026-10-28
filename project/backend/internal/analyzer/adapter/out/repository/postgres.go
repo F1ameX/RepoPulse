@@ -20,17 +20,17 @@ func NewPostgres(pool *pgxpool.Pool) *Postgres { return &Postgres{pool: pool} }
 
 const analysisSelect = `SELECT a.id::text, a.submission_id::text, s.request_id::text,
 	a.owner_id::text, p.kind, a.repository, a.assessment_at, a.window_from, a.window_until,
-	a.versions, a.status, a.created_at, a.started_at, a.deadline_at, a.completed_at, a.report_id::text
+	a.versions, a.status, a.created_at, a.started_at, a.deadline_at, a.completed_at, a.report_id::text, a.stage, a.error
 	FROM analyzer.analyses a
 	JOIN analyzer.submissions s ON s.id = a.submission_id
 	JOIN auth.principals p ON p.id = a.owner_id`
 
 func scanAnalysis(row pgx.Row) (domain.Analysis, error) {
 	var a domain.Analysis
-	var repository, versions []byte
+	var repository, versions, failure []byte
 	if err := row.Scan(&a.ID, &a.SubmissionID, &a.RequestID, &a.Owner.ID, &a.Owner.Kind, &repository,
 		&a.AssessmentAt, &a.Window.From, &a.Window.Until, &versions, &a.Status, &a.CreatedAt,
-		&a.StartedAt, &a.DeadlineAt, &a.CompletedAt, &a.ReportID); err != nil {
+		&a.StartedAt, &a.DeadlineAt, &a.CompletedAt, &a.ReportID, &a.Stage, &failure); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return a, domain.ErrNotFound
 		}
@@ -41,6 +41,9 @@ func scanAnalysis(row pgx.Row) (domain.Analysis, error) {
 	}
 	if err := json.Unmarshal(versions, &a.Versions); err != nil {
 		return a, fmt.Errorf("decode versions: %w", err)
+	}
+	if len(failure) > 0 && json.Unmarshal(failure, &a.Failure) != nil {
+		return a, domain.ErrInvalidData
 	}
 	a.AssessmentAt, a.CreatedAt = domain.UTC(a.AssessmentAt), domain.UTC(a.CreatedAt)
 	a.Window.From, a.Window.Until = domain.UTC(a.Window.From), domain.UTC(a.Window.Until)
@@ -61,7 +64,7 @@ func (p *Postgres) Create(ctx context.Context, a domain.Analysis) (domain.Analys
 	if err := a.Validate(); err != nil {
 		return domain.Analysis{}, err
 	}
-	if a.Status != "queued" || a.StartedAt != nil || a.DeadlineAt != nil || a.CompletedAt != nil || a.ReportID != nil {
+	if a.Status != "queued" || a.Stage != nil || a.Failure != nil || a.StartedAt != nil || a.DeadlineAt != nil || a.CompletedAt != nil || a.ReportID != nil {
 		return domain.Analysis{}, domain.ErrInvalidTransition
 	}
 	tx, err := p.pool.Begin(ctx)

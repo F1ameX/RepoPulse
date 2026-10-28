@@ -4,26 +4,19 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/in/http/dto"
 )
 
-type errorResponse struct {
-	Error apiError `json:"error"`
-}
-
-type apiError struct {
-	Code        string       `json:"code"`
-	Message     string       `json:"message"`
-	TraceID     string       `json:"trace_id"`
-	FieldErrors []fieldError `json:"field_errors"`
-}
-
-type fieldError struct {
-	Field   string `json:"field"`
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
+type errorResponse = dto.ErrorResponse
+type apiError = dto.APIError
+type fieldError = dto.FieldError
 
 func NewHandler(validator RepositoryValidator, resolver ContextResolver) http.Handler {
+	return NewAnalysisHandler(validator, resolver, nil, "")
+}
+
+func NewAnalysisHandler(validator RepositoryValidator, resolver ContextResolver, analyses AnalysisService, allowedOrigin string) http.Handler {
 	mux := http.NewServeMux()
 	route := func(path, method string, handler http.HandlerFunc) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -41,8 +34,13 @@ func NewHandler(validator RepositoryValidator, resolver ContextResolver) http.Ha
 	}
 
 	route("/health", http.MethodGet, health)
-	route("/api/v1/analyses", http.MethodPost, notImplemented)
-	route("/api/v1/analyses/{analysis_id}", http.MethodGet, notImplemented)
+	if analyses == nil {
+		route("/api/v1/analyses", http.MethodPost, notImplemented)
+		route("/api/v1/analyses/{analysis_id}", http.MethodGet, notImplemented)
+	} else {
+		route("/api/v1/analyses", http.MethodPost, createAnalysis(analyses, resolver, allowedOrigin))
+		route("/api/v1/analyses/{analysis_id}", http.MethodGet, getAnalysis(analyses, resolver))
+	}
 	route("/api/v1/reports/{report_id}", http.MethodGet, notImplemented)
 	route("/api/v1/reports", http.MethodGet, notImplemented)
 	route("/api/v1/repositories/validate", http.MethodPost, validateRepository(validator, resolver))

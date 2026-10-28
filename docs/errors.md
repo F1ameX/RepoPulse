@@ -17,6 +17,7 @@ request_id отправки остаётся у клиента и в submissions
 | INVALID_CREDENTIALS | 401 | UNAUTHENTICATED | Неверный логин или пароль; неизвестный логин не раскрывается |
 | LOGIN_TAKEN | 409 | ALREADY_EXISTS | Этот логин уже занят |
 | SESSION_REQUIRED / SESSION_EXPIRED | 401 | UNAUTHENTICATED | Нужен действующий контекст; истечение не переключает прежнюю операцию на гостя |
+| AUTH_UNAVAILABLE | 503 | UNAVAILABLE | Сервис сессий временно недоступен; не неверный пароль и не failed-анализ |
 | LOGIN_REQUIRED | 401 | UNAUTHENTICATED | Войдите, чтобы открыть историю отчётов; до проверки существования конкретного объекта |
 | CSRF_REJECTED | 403 | PERMISSION_DENIED | Запрос не прошёл проверку источника |
 | REPOSITORY_NOT_FOUND_OR_PRIVATE | 404 | NOT_FOUND | Публичный репозиторий недоступен; private/404/подтверждённый запрет одинаковы |
@@ -37,6 +38,12 @@ AnalysisStatus.error. Чтение сохранённого failed-статус�
 Сбой чтения статуса/отчёта возвращает транспортную ошибку и не меняет анализ.
 Сбой независимого источника может дать partial-отчёт вместо failed;
 у метрик сохраняются reason.code/message/cannot_conclude.
+
+В POST /analyses некорректный UUID отправки даёт VALIDATION_FAILED с
+`field_errors: [{"field":"request_id","code":"INVALID_FORMAT","message":"request_id должен быть UUID отправки"}]`.
+Некорректный JSON, неизвестные/дублирующиеся поля и null вместо строк отклоняются
+до вызова Auth и Analyzer. Недоступность Auth возвращается отдельно как
+AUTH_UNAVAILABLE и не фиксируется в AnalysisStatus.error.
 
 Ошибка формата URL до принятия анализа не создаёт job. Нормализация и порядок
 проверок повторяются на сервере по документу №888. В частности, запрещены port,
