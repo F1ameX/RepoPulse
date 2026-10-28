@@ -9,9 +9,13 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
 )
 
+// fakeTokens keeps sessions by token hash, like auth.sessions.
 type fakeTokens struct {
-	created []domain.Session
-	err     error
+	created  []domain.Session
+	err      error // returned by CreateSession
+	sessions map[string]domain.Session
+	findErr  error
+	revoked  []string // session IDs passed to RevokeSession
 }
 
 func (f *fakeTokens) CreateSession(_ context.Context, session domain.Session) (domain.Session, error) {
@@ -23,11 +27,28 @@ func (f *fakeTokens) CreateSession(_ context.Context, session domain.Session) (d
 	return session, nil
 }
 
-func (f *fakeTokens) FindSessionByTokenHash(context.Context, string) (domain.Session, error) {
-	return domain.Session{}, domain.ErrSessionNotFound
+func (f *fakeTokens) FindSessionByTokenHash(_ context.Context, hash string) (domain.Session, error) {
+	if f.findErr != nil {
+		return domain.Session{}, f.findErr
+	}
+	session, ok := f.sessions[hash]
+	if !ok {
+		return domain.Session{}, domain.ErrSessionNotFound
+	}
+	return session, nil
 }
 
-func (f *fakeTokens) RevokeSession(context.Context, string, time.Time) error { return nil }
+func (f *fakeTokens) RevokeSession(_ context.Context, id string, at time.Time) (bool, error) {
+	f.revoked = append(f.revoked, id)
+	for hash, session := range f.sessions {
+		if session.ID == id && session.RevokedAt == nil {
+			session.RevokedAt = &at
+			f.sessions[hash] = session
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 var storedAccount = domain.Principal{
 	ID: "account-id", Kind: domain.KindAccount, Login: "flamex", PasswordHash: "stored-hash",

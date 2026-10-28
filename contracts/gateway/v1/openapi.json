@@ -40,6 +40,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "security": [],
@@ -71,7 +74,7 @@
             },
             "headers": {
               "Set-Cookie": {
-                "description": "repopulse_session: HttpOnly; Secure; SameSite=Lax; Path=/api/v1; Max-Age=604800.",
+                "description": "repopulse_session: HttpOnly; Secure; SameSite=Lax; Path=/api/v1; Max-Age и Expires до expires_at сессии (по умолчанию 604800 — ровно 7 суток, без продления).",
                 "schema": {
                   "type": "string"
                 }
@@ -91,6 +94,12 @@
             "$ref": "#/components/responses/Error"
           },
           "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
             "$ref": "#/components/responses/Error"
           }
         },

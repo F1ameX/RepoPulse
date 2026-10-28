@@ -53,8 +53,8 @@ Owner сохраняется в submissions/analyses/snapshot/report и не м�
 
 Для GET /auth/session добавлен отдельный RPC GetSessionContext(SessionTokens).
 Gateway явно преобразует SessionInfo в HTTP DTO и не читает БД Auth.
-В С1 Auth возвращает сведения о гостевой сессии; аккаунтные сценарии ещё не
-реализованы. Отсутствующие, истёкшие и отозванные guest cookie дают guest=null.
+Auth возвращает сведения об аккаунте (kind, нормализованный login, expires_at) и
+о госте. Отсутствующие, истёкшие и отозванные cookie дают null в своём поле.
 GET без действующих сессий возвращает 200 с account=null и guest=null.
 Предъявленная account cookie без подтверждения Auth даёт 401 SESSION_EXPIRED,
 даже при действующем госте. Frontend не перехватывает эту ошибку для смены владельца.
@@ -64,8 +64,28 @@ GET без действующих сессий возвращает 200 с accou
 POST повторно использует действующего гостя: тот же токен и первоначальный срок,
 ответ 200 вместо 201. Cookie HttpOnly, SameSite=Lax, Path=/api/v1, без Max-Age/Expires.
 Secure включён по умолчанию; COOKIE_SECURE=false используется только для локального
-HTTP в Compose. POST guest-session и repositories/validate требуют Origin,
-точно совпадающий с PUBLIC_ORIGIN; чужой/отсутствующий Origin даёт CSRF_REJECTED.
+HTTP в Compose. POST guest-session, repositories/validate, auth/register, auth/login
+и auth/logout требуют Origin, точно совпадающий с PUBLIC_ORIGIN; чужой или
+отсутствующий Origin даёт CSRF_REJECTED.
+
+Регистрация и вход (FR-27). Auth нормализует и проверяет поля, проверка занятости
+и учётных данных идёт только после прохождения формата обоими полями. Регистрация
+создаёт ровно один аккаунт: уникальность нормализованного login обеспечивает UNIQUE
+в auth.principals, конкурентная вставка получает LOGIN_TAKEN; сессия не создаётся.
+Пароль хэшируется Argon2id после NFC. Неизвестный login и неверный пароль дают
+одинаковый INVALID_CREDENTIALS; для неизвестного login выполняется проверка против
+хэша-пустышки, чтобы время ответа не раскрывало существование аккаунта. Сбой БД,
+хэша или Auth — INTERNAL_ERROR либо AUTH_UNAVAILABLE, не «неверный пароль».
+
+Каждый вход создаёт новую независимую account session на AUTH_ACCOUNT_SESSION_TTL
+(по умолчанию 168 часов) без продления; в момент expires_at сессия уже недействительна.
+Гостевой контекст при входе не меняется: ResolveContext возвращает оба контекста,
+а Analyzer выбирает владельца новой операции — аккаунт, если он действителен.
+
+Выход отзывает только предъявленную account session (revoked_at), не трогая другие
+сессии аккаунта и гостя. Повтор, отсутствующая или неизвестная cookie — успех без
+изменений; первоначальное время отзыва сохраняется. Отозванный токен больше не
+проходит ResolveContext и GetSessionContext.
 
 
 ## Проверка URL и отправка анализа

@@ -46,6 +46,16 @@ func (u *fakeUsers) CreateAccount(_ context.Context, login, hash string, created
 	return domain.Principal{ID: "account-id", Kind: domain.KindAccount, Login: login, PasswordHash: hash, CreatedAt: createdAt}, nil
 }
 
+func (u *fakeUsers) FindAccountByID(_ context.Context, id string) (domain.Principal, error) {
+	switch {
+	case u.findErr != nil:
+		return domain.Principal{}, u.findErr
+	case u.account == nil || u.account.ID != id:
+		return domain.Principal{}, domain.ErrPrincipalNotFound
+	}
+	return *u.account, nil
+}
+
 func (u *fakeUsers) FindAccountByLogin(_ context.Context, login string) (domain.Principal, error) {
 	u.login = login
 	switch {

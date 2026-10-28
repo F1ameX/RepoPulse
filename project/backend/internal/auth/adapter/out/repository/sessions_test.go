@@ -52,3 +52,43 @@ func TestCreateAccountSessionAndFindByHash(t *testing.T) {
 		t.Fatalf("unknown hash: err = %v, want ErrSessionNotFound", err)
 	}
 }
+
+func TestRevokeSessionIsIdempotentAndKeepsFirstTime(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	account, err := NewUsers(pool).CreateAccount(ctx, uniqueLogin("revoke"), "hash", time.Now().UTC().Truncate(time.Microsecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := NewSessions(pool)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	newSession := func() domain.Session {
+		s, err := sessions.CreateSession(ctx, domain.Session{PrincipalID: account.ID, Kind: domain.KindAccount,
+			TokenHash: "token-" + uuid.NewString(), IssuedAt: now, ExpiresAt: now.Add(time.Hour)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	current, other := newSession(), newSession()
+
+	revoked, err := sessions.RevokeSession(ctx, current.ID, now)
+	if err != nil || !revoked {
+		t.Fatalf("first revoke = %v, %v; want true", revoked, err)
+	}
+	revoked, err = sessions.RevokeSession(ctx, current.ID, now.Add(time.Minute))
+	if err != nil || revoked {
+		t.Fatalf("repeated revoke = %v, %v; want false without error", revoked, err)
+	}
+	found, err := sessions.FindSessionByTokenHash(ctx, current.TokenHash)
+	if err != nil || found.RevokedAt == nil || !found.RevokedAt.Equal(now) {
+		t.Fatalf("revoked_at = %v, %v; want the first revocation time", found.RevokedAt, err)
+	}
+	untouched, err := sessions.FindSessionByTokenHash(ctx, other.TokenHash)
+	if err != nil || untouched.RevokedAt != nil {
+		t.Fatalf("independent session was revoked: %+v, %v", untouched, err)
+	}
+	if revoked, err := sessions.RevokeSession(ctx, uuid.NewString(), now); err != nil || revoked {
+		t.Fatalf("unknown session = %v, %v; want false without error", revoked, err)
+	}
+}

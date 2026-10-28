@@ -16,7 +16,6 @@ import (
 const registrationMessage = "Аккаунт создан. Войдите в систему"
 
 // Service is the entry point to Auth business logic.
-// Login and logout remain scaffold operations.
 type Service struct {
 	guests    GuestRepository
 	users     UserRepository
@@ -41,6 +40,32 @@ func NewService(guests GuestRepository, users UserRepository, tokens TokenReposi
 			return hasher.Hash("repopulse-timing-equalizer")
 		}),
 	}
+}
+
+func (s *Service) activeSession(ctx context.Context, token *string, kind domain.Kind) (*domain.Session, error) {
+	if token == nil || *token == "" {
+		return nil, nil
+	}
+
+	session, err := s.tokens.FindSessionByTokenHash(ctx, s.generator.Hash(*token))
+	if errors.Is(err, domain.ErrSessionNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("find %s session: %w", kind, err)
+	}
+	if session.Kind != kind {
+		return nil, nil
+	}
+
+	if session.RevokedAt != nil {
+		return nil, nil
+	}
+
+	if !s.now().Before(session.ExpiresAt) {
+		return nil, nil
+	}
+
+	return &session, nil
 }
 
 // Register validates the credentials (FR-27), stores the account with the
@@ -146,34 +171,81 @@ func (s *Service) CreateGuestSession(ctx context.Context) (domain.IssuedSession,
 
 func (s *Service) ResolveContext(ctx context.Context, tokens domain.SessionTokens) (domain.VerifiedContext, error) {
 	var verified domain.VerifiedContext
-	if tokens.GuestToken != nil {
-		session, err := s.tokens.FindSessionByTokenHash(ctx, s.generator.Hash(*tokens.GuestToken))
-		switch {
-		case errors.Is(err, domain.ErrSessionNotFound):
-			// неизвестный токен: гостя нет
-		case err != nil:
-			return domain.VerifiedContext{}, fmt.Errorf("find guest session: %w", err)
-		case session.Kind == domain.KindGuest && session.RevokedAt == nil && s.now().Before(session.ExpiresAt):
-			verified.GuestSessionID = &session.PrincipalID
-			verified.GuestExpiresAt = &session.ExpiresAt
-		}
+
+	account, err := s.activeSession(ctx, tokens.AccountToken, domain.KindAccount)
+	if err != nil {
+		return domain.VerifiedContext{}, err
+	}
+	if account != nil {
+		verified.UserID = &account.PrincipalID
+		verified.AccountExpiresAt = &account.ExpiresAt
+	}
+
+	guest, err := s.activeSession(ctx, tokens.GuestToken, domain.KindGuest)
+	if err != nil {
+		return domain.VerifiedContext{}, err
+	}
+	if guest != nil {
+		verified.GuestSessionID = &guest.PrincipalID
+		verified.GuestExpiresAt = &guest.ExpiresAt
 	}
 
 	return verified, nil
 }
 
+// GetSessionContext describes the valid account and guest sessions for the UI
+// without tokens or IDs. The account login is read from the principal.
 func (s *Service) GetSessionContext(ctx context.Context, tokens domain.SessionTokens) (domain.SessionContext, error) {
-	verified, err := s.ResolveContext(ctx, tokens)
+	var result domain.SessionContext
+
+	account, err := s.activeSession(ctx, tokens.AccountToken, domain.KindAccount)
 	if err != nil {
 		return domain.SessionContext{}, err
 	}
-	result := domain.SessionContext{}
-	if verified.GuestSessionID != nil && verified.GuestExpiresAt != nil {
-		result.Guest = &domain.SessionInfo{Kind: domain.KindGuest, ExpiresAt: *verified.GuestExpiresAt}
+	if account != nil {
+		principal, err := s.users.FindAccountByID(ctx, account.PrincipalID)
+		if err != nil {
+			// A session always references an existing principal (FK), so a
+			// missing account is a data failure rather than "not signed in".
+			return domain.SessionContext{}, fmt.Errorf("find account of session: %w", err)
+		}
+		result.Account = &domain.SessionInfo{Kind: domain.KindAccount, Login: &principal.Login, ExpiresAt: account.ExpiresAt}
+	}
+
+	guest, err := s.activeSession(ctx, tokens.GuestToken, domain.KindGuest)
+	if err != nil {
+		return domain.SessionContext{}, err
+	}
+	if guest != nil {
+		result.Guest = &domain.SessionInfo{Kind: domain.KindGuest, ExpiresAt: guest.ExpiresAt}
 	}
 	return result, nil
 }
 
-func (s *Service) Logout(context.Context, string) error {
-	return domain.ErrNotImplemented
+// Logout revokes only the presented account session. It is idempotent: an
+// absent, unknown, already revoked or expired token succeeds without changes.
+// Guest sessions and other sessions of the same account are never revoked here.
+func (s *Service) Logout(ctx context.Context, accountToken string) error {
+	if accountToken == "" {
+		return nil
+	}
+	session, err := s.tokens.FindSessionByTokenHash(ctx, s.generator.Hash(accountToken))
+	if errors.Is(err, domain.ErrSessionNotFound) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("find account session: %w", err)
+	}
+	if session.Kind != domain.KindAccount {
+		return nil
+	}
+	revoked, err := s.tokens.RevokeSession(ctx, session.ID, s.now().UTC().Truncate(time.Microsecond))
+	if err != nil {
+		return err
+	}
+	if revoked {
+		logger.From(ctx).InfoContext(ctx, "Session revoked",
+			"principal_id", session.PrincipalID,
+			"session_id", session.ID)
+	}
+	return nil
 }

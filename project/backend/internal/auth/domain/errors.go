@@ -7,6 +7,9 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	// ErrLoginTaken is returned by account creation for an already used normalized login.
 	ErrLoginTaken = errors.New("login taken")
+	// ErrPrincipalNotFound is returned when no account has the requested ID.
+	// For a found session this means inconsistent data, not a normal outcome.
+	ErrPrincipalNotFound = errors.New("principal not found")
 	// ErrSessionNotFound is returned when no session matches a token hash.
 	ErrSessionNotFound = errors.New("session not found")
 	// ErrNotImplemented marks scaffold operations.

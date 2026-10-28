@@ -66,3 +66,21 @@ func (u *Users) FindAccountByLogin(ctx context.Context, login string) (domain.Pr
 
 	return p, nil
 }
+
+func (u *Users) FindAccountByID(ctx context.Context, id string) (domain.Principal, error) {
+	var p domain.Principal
+	var storedLogin, hash *string
+	err := u.pool.QueryRow(ctx,
+		`SELECT id, kind, login, password_hash, created_at
+		FROM auth.principals WHERE id = $1 AND kind = 'account'`, id,
+	).Scan(&p.ID, &p.Kind, &storedLogin, &hash, &p.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Principal{}, domain.ErrPrincipalNotFound
+	} else if err != nil {
+		return domain.Principal{}, fmt.Errorf("find account by id: %w", err)
+	} else if storedLogin == nil || hash == nil {
+		return domain.Principal{}, fmt.Errorf("account %s has no login or password", p.ID)
+	}
+	p.Login, p.PasswordHash = *storedLogin, *hash
+	return p, nil
+}

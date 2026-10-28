@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/application/auth"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/grpcerr"
 	authv1 "github.com/F1ameX/RepoPulse/project/backend/pkg/proto/auth/v1"
@@ -51,28 +50,19 @@ func apiError(t *testing.T, trailer metadata.MD) *commonv1.ApiError {
 	return &api
 }
 
-func TestStubMethodsReturnNotImplemented(t *testing.T) {
-	// Stub scenarios do not touch their dependencies.
-	client := newClient(t, auth.NewService(nil, nil, nil, nil, nil, domain.Options{}, nil))
+// Every Auth method is implemented; the mapping of a scaffold error and the
+// trace propagation are still part of the shared error format.
+func TestNotImplementedKeepsTraceID(t *testing.T) {
+	client := newClient(t, fakeScenarios{loginErr: domain.ErrNotImplemented})
 	ctx := metadata.AppendToOutgoingContext(context.Background(), grpcerr.RequestIDKey, "req-1")
-	calls := map[string]func(...grpc.CallOption) error{
-		"Logout": func(o ...grpc.CallOption) error {
-			_, err := client.Logout(ctx, &authv1.LogoutCommand{AccountToken: "token"}, o...)
-			return err
-		},
+	var trailer metadata.MD
+	_, err := client.Login(ctx, &authv1.Credentials{}, grpc.Trailer(&trailer))
+	if status.Code(err) != codes.Unimplemented {
+		t.Fatalf("status = %v", err)
 	}
-	for name, call := range calls {
-		t.Run(name, func(t *testing.T) {
-			var trailer metadata.MD
-			err := call(grpc.Trailer(&trailer))
-			if status.Code(err) != codes.Unimplemented {
-				t.Fatalf("status = %v", err)
-			}
-			api := apiError(t, trailer)
-			if api.GetCode() != "NOT_IMPLEMENTED" || api.GetTraceId() != "req-1" {
-				t.Fatalf("ApiError = %v", api)
-			}
-		})
+	api := apiError(t, trailer)
+	if api.GetCode() != "NOT_IMPLEMENTED" || api.GetTraceId() != "req-1" {
+		t.Fatalf("ApiError = %v", api)
 	}
 }
 

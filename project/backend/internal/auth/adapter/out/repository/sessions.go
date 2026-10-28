@@ -58,8 +58,14 @@ func (r *Sessions) FindSessionByTokenHash(ctx context.Context, tokenHash string)
 	return s, nil
 }
 
-func (r *Sessions) RevokeSession(ctx context.Context, sessionID string, at time.Time) error {
-	return domain.ErrNotImplemented
+func (r *Sessions) RevokeSession(ctx context.Context, sessionID string, at time.Time) (bool, error) {
+	// revoked_at IS NULL makes a repeated logout a no-op that keeps the first revocation time.
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE auth.sessions SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL`, sessionID, at)
+	if err != nil {
+		return false, fmt.Errorf("revoke session: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
 func (r *Sessions) CreateGuestSession(ctx context.Context, hash string, issuedAt, expiresAt time.Time) (domain.Session, error) {

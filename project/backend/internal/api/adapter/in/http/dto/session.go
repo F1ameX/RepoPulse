@@ -11,6 +11,11 @@ type SessionInfo struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+type RegistrationResult struct {
+	Login   string `json:"login"`
+	Message string `json:"message"`
+}
+
 type SessionContext struct {
 	Account *SessionInfo `json:"account"`
 	Guest   *SessionInfo `json:"guest"`

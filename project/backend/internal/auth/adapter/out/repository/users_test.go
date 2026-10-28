@@ -104,3 +104,23 @@ func TestConcurrentCreateAccountCreatesOneAccount(t *testing.T) {
 		t.Fatalf("created = %d, rows = %d; want exactly one account", created, rows)
 	}
 }
+
+func TestFindAccountByID(t *testing.T) {
+	users := NewUsers(testPool(t))
+	ctx := context.Background()
+	login := uniqueLogin("byid")
+	created, err := users.CreateAccount(ctx, login, "stored-hash", time.Now().UTC().Truncate(time.Microsecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, err := users.FindAccountByID(ctx, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found.ID != created.ID || found.Login != login || found.Kind != domain.KindAccount {
+		t.Fatalf("found = %+v, want %+v", found, created)
+	}
+	if _, err := users.FindAccountByID(ctx, uuid.NewString()); !errors.Is(err, domain.ErrPrincipalNotFound) {
+		t.Fatalf("unknown id: err = %v, want ErrPrincipalNotFound", err)
+	}
+}

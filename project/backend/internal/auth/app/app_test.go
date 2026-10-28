@@ -9,10 +9,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/status"
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
@@ -51,8 +49,8 @@ func TestServerHealthStubAndShutdown(t *testing.T) {
 		}
 	}
 
-	_, err = authv1.NewAuthServiceClient(conn).Logout(callCtx, &authv1.LogoutCommand{})
-	if status.Code(err) != codes.Unimplemented {
+	// Logout without a token is an idempotent success and needs no database.
+	if _, err = authv1.NewAuthServiceClient(conn).Logout(callCtx, &authv1.LogoutCommand{}); err != nil {
 		t.Fatalf("Logout = %v", err)
 	}
 
