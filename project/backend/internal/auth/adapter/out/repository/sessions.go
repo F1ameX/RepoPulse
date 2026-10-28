@@ -23,7 +23,18 @@ func NewSessions(pool *pgxpool.Pool) *Sessions {
 }
 
 func (r *Sessions) CreateSession(ctx context.Context, session domain.Session) (domain.Session, error) {
-	return domain.Session{}, domain.ErrNotImplemented
+	session.ID = uuid.NewString()
+
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO auth.sessions
+		(id, principal_id, kind, token_hash, issued_at, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6)`, session.ID, session.PrincipalID,
+		session.Kind, session.TokenHash, session.IssuedAt, session.ExpiresAt)
+	if err != nil {
+		return domain.Session{}, fmt.Errorf("insert new session: %w", err)
+	}
+	return session, nil
+
 }
 
 func (r *Sessions) FindSessionByTokenHash(ctx context.Context, tokenHash string) (domain.Session, error) {

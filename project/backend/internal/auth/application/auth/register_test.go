@@ -10,8 +10,11 @@ import (
 )
 
 type fakeHasher struct {
-	hashed []string
-	err    error
+	hashed    []string
+	err       error
+	verified  []string // encoded hashes passed to Verify
+	match     bool
+	verifyErr error
 }
 
 func (h *fakeHasher) Hash(password string) (string, error) {
@@ -19,7 +22,10 @@ func (h *fakeHasher) Hash(password string) (string, error) {
 	return "hash-of-password", h.err
 }
 
-func (h *fakeHasher) Verify(string, string) (bool, error) { return false, nil }
+func (h *fakeHasher) Verify(_, encoded string) (bool, error) {
+	h.verified = append(h.verified, encoded)
+	return h.match, h.verifyErr
+}
 
 type fakeUsers struct {
 	calls     int
@@ -27,6 +33,8 @@ type fakeUsers struct {
 	hash      string
 	createdAt time.Time
 	err       error
+	account   *domain.Principal // returned by FindAccountByLogin; nil means unknown login
+	findErr   error
 }
 
 func (u *fakeUsers) CreateAccount(_ context.Context, login, hash string, createdAt time.Time) (domain.Principal, error) {
@@ -38,8 +46,15 @@ func (u *fakeUsers) CreateAccount(_ context.Context, login, hash string, created
 	return domain.Principal{ID: "account-id", Kind: domain.KindAccount, Login: login, PasswordHash: hash, CreatedAt: createdAt}, nil
 }
 
-func (u *fakeUsers) FindAccountByLogin(context.Context, string) (domain.Principal, error) {
-	return domain.Principal{}, domain.ErrInvalidCredentials
+func (u *fakeUsers) FindAccountByLogin(_ context.Context, login string) (domain.Principal, error) {
+	u.login = login
+	switch {
+	case u.findErr != nil:
+		return domain.Principal{}, u.findErr
+	case u.account == nil:
+		return domain.Principal{}, domain.ErrInvalidCredentials
+	}
+	return *u.account, nil
 }
 
 func newRegisterService(users *fakeUsers, hasher *fakeHasher) *Service {

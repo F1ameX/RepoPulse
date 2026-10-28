@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
@@ -24,6 +25,7 @@ type Service struct {
 	now       func() time.Time
 	opt       domain.Options
 	hasher    PasswordHasher
+	dummyHash func() (string, error)
 }
 
 func NewService(guests GuestRepository, users UserRepository, tokens TokenRepository, generator TokenGenerator, now func() time.Time, opt domain.Options, hasher PasswordHasher) *Service {
@@ -35,6 +37,9 @@ func NewService(guests GuestRepository, users UserRepository, tokens TokenReposi
 		now:       now,
 		opt:       opt,
 		hasher:    hasher,
+		dummyHash: sync.OnceValues(func() (string, error) {
+			return hasher.Hash("repopulse-timing-equalizer")
+		}),
 	}
 }
 
@@ -64,8 +69,56 @@ func (s *Service) Register(ctx context.Context, login string, password string) (
 	}, nil
 }
 
-func (s *Service) Login(context.Context, string, string) (domain.IssuedSession, error) {
-	return domain.IssuedSession{}, domain.ErrNotImplemented
+func (s *Service) Login(ctx context.Context, login string, password string) (domain.IssuedSession, error) {
+	valLogin, valPassword, err := domain.ValidateCredentials(login, password)
+	if err != nil {
+		return domain.IssuedSession{}, err // *domain.ValidationError with field errors
+	}
+	principal, err := s.users.FindAccountByLogin(ctx, valLogin)
+	if errors.Is(err, domain.ErrInvalidCredentials) {
+		// Spend the same Argon2id work as for an existing login, so the response
+		// time does not reveal whether the login is registered. The principal is
+		// empty here, so its PasswordHash cannot be used.
+		if dummy, hashErr := s.dummyHash(); hashErr == nil {
+			_, _ = s.hasher.Verify(valPassword, dummy)
+		}
+		return domain.IssuedSession{}, domain.ErrInvalidCredentials
+	} else if err != nil {
+		return domain.IssuedSession{}, fmt.Errorf("find account: %w", err)
+	}
+
+	ok, err := s.hasher.Verify(valPassword, principal.PasswordHash)
+	if err != nil {
+		return domain.IssuedSession{}, fmt.Errorf("validate password: %w", err)
+	}
+	if !ok {
+		return domain.IssuedSession{}, domain.ErrInvalidCredentials
+	}
+
+	token, hash, err := s.generator.Generate()
+	if err != nil {
+		return domain.IssuedSession{}, fmt.Errorf("token and hash generation: %w", err)
+	}
+
+	now := s.now().UTC().Truncate(time.Microsecond)
+	session, err := s.tokens.CreateSession(ctx, domain.Session{PrincipalID: principal.ID,
+		Kind: domain.KindAccount, TokenHash: hash, IssuedAt: now,
+		ExpiresAt: now.Add(s.opt.AccountSessionTTL),
+	})
+	if err != nil {
+		return domain.IssuedSession{}, fmt.Errorf("create account session: %w", err)
+	}
+	logger.From(ctx).InfoContext(ctx, "Account session created",
+		"principal_id", session.PrincipalID,
+		"session_id", session.ID,
+		"expires_at", session.ExpiresAt,
+	)
+
+	return domain.IssuedSession{Token: token, Session: domain.SessionInfo{
+		Kind:      session.Kind,
+		Login:     &principal.Login,
+		ExpiresAt: session.ExpiresAt,
+	}}, nil
 }
 
 func (s *Service) CreateGuestSession(ctx context.Context) (domain.IssuedSession, error) {

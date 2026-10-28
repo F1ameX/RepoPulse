@@ -56,10 +56,6 @@ func TestStubMethodsReturnNotImplemented(t *testing.T) {
 	client := newClient(t, auth.NewService(nil, nil, nil, nil, nil, domain.Options{}, nil))
 	ctx := metadata.AppendToOutgoingContext(context.Background(), grpcerr.RequestIDKey, "req-1")
 	calls := map[string]func(...grpc.CallOption) error{
-		"Login": func(o ...grpc.CallOption) error {
-			_, err := client.Login(ctx, &authv1.Credentials{Login: "flamex", Password: "correct horse battery"}, o...)
-			return err
-		},
 		"Logout": func(o ...grpc.CallOption) error {
 			_, err := client.Logout(ctx, &authv1.LogoutCommand{AccountToken: "token"}, o...)
 			return err
