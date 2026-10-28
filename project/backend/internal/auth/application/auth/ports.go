@@ -39,7 +39,9 @@ type TokenGenerator interface {
 	Hash(token string) string
 }
 
-// Clock is useful for testing in edge of 24 hours
-type Clock interface {
-	Now() time.Time
+// PasswordHasher generates hash from authenticated user`s password to store it in DB.
+// Also PasswordHasher is used to verify users password
+type PasswordHasher interface {
+	Hash(password string) (string, error)
+	Verify(password, encoded string) (bool, error)
 }
