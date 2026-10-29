@@ -128,7 +128,7 @@ func (p *Postgres) Start(ctx context.Context, id string, at, deadline time.Time)
 	if !deadline.After(at) {
 		return domain.ErrInvalidData
 	}
-	tag, err := p.pool.Exec(ctx, `UPDATE analyzer.analyses SET status='running', started_at=$2, deadline_at=$3
+	tag, err := p.pool.Exec(ctx, `UPDATE analyzer.analyses SET status='running', stage='collecting_git', started_at=$2, deadline_at=$3
 		WHERE id=$1 AND status='queued' AND created_at <= $2`, id, domain.UTC(at), domain.UTC(deadline))
 	if err != nil {
 		return fmt.Errorf("start analysis: %w", err)

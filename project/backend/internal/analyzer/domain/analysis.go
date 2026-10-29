@@ -20,6 +20,7 @@ var (
 	ErrSubmissionPending = errors.New("submission is pending")
 	ErrUnverifiedOwner   = errors.New("verified session required")
 	ErrExpiredOwner      = errors.New("verified session expired")
+	ErrQueueEmpty        = errors.New("analysis queue is empty")
 )
 
 type Owner struct {
@@ -27,8 +28,8 @@ type Owner struct {
 	ID   string `json:"id"`
 }
 
-// RepositoryMetadata is the accepted immutable descriptor, including its pinned
-// revision, rather than a repository URL-validation response.
+// RepositoryMetadata describes the accepted repository. Known values cannot be
+// replaced; the Git collector may fill a previously unknown branch/SHA once.
 type RepositoryMetadata struct {
 	Platform      string  `json:"platform"`
 	GitHubID      string  `json:"github_id"`
@@ -55,8 +56,8 @@ type Versions struct {
 	Prompt                string `json:"prompt"`
 }
 
-// Analysis is persisted at acceptance. There is deliberately no metadata update
-// operation: subsequent writes may only start execution or publish its result.
+// Analysis is persisted at acceptance. Owner, assessment/window and versions
+// remain fixed throughout execution; only unknown Git revision fields may be filled.
 type Analysis struct {
 	ID           string
 	SubmissionID string

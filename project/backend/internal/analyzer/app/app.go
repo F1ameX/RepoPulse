@@ -4,25 +4,32 @@ package app
 import (
 	"context"
 
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/worker"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 )
 
 const Name = "analyzer-service"
 
-// Run opens Analyzer storage. Worker scheduling and incoming operations are
-// connected by subsequent tasks; migrations are never run at process startup.
-func Run(ctx context.Context) error {
+// Run starts the persistent Analyzer queue and Git collector. Real processors
+// are connected through RunWithProcessor; migrations are applied externally.
+func Run(ctx context.Context) error { return RunWithProcessor(ctx, nil) }
+
+// RunWithProcessor is wired to real normalization/calculation adapters as those
+// neighboring tasks land. No fixture or fabricated result is used in production.
+func RunWithProcessor(ctx context.Context, processor worker.Processor) error {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return err
 	}
-	_, closeStorage, err := OpenStorage(ctx, cfg)
+	runner, closeStorage, err := OpenWorker(ctx, cfg, processor)
 	if err != nil {
 		return err
 	}
 	defer closeStorage()
-	logger.From(ctx).InfoContext(ctx, "Analysis storage ready")
-	<-ctx.Done()
+	logger.From(ctx).InfoContext(ctx, "Analyzer queue ready")
+	if err := runner.Run(ctx, cfg.PollInterval); err != nil {
+		return err
+	}
 	logger.From(ctx).InfoContext(ctx, "Service stopped")
 	return nil
 }

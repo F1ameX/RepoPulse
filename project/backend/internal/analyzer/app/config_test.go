@@ -34,3 +34,18 @@ func TestStorageConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkerProfileCannotBeExpandedByEnvironment(t *testing.T) {
+	for key, value := range map[string]string{
+		"ANALYZER_TIMEOUT": "321s", "ANALYZER_GIT_TIMEOUT": "61s",
+		"ANALYZER_GIT_MAX_BYTES": "104857601", "ANALYZER_GIT_MAX_PATHS": "50001",
+		"ANALYZER_GIT_MAX_COMMITS": "10001", "ANALYZER_POLL_INTERVAL": "0s",
+	} {
+		t.Run(key, func(t *testing.T) {
+			env := map[string]string{"ANALYZER_DATABASE_URL": "postgres://localhost/test", key: value}
+			if _, err := loadConfig(func(k string) (string, bool) { v, ok := env[k]; return v, ok }); err == nil {
+				t.Fatal("collector budget expanded or disabled")
+			}
+		})
+	}
+}
