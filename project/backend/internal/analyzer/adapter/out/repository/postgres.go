@@ -66,7 +66,7 @@ func (p *Postgres) Create(ctx context.Context, a domain.Analysis) (domain.Analys
 	if err := a.Validate(); err != nil {
 		return domain.Analysis{}, err
 	}
-	if a.Status != "queued" || a.StartedAt != nil || a.DeadlineAt != nil || a.CompletedAt != nil || a.ReportID != nil {
+	if a.Status != "queued" || a.Stage != nil || a.Error != nil || a.StartedAt != nil || a.DeadlineAt != nil || a.CompletedAt != nil || a.ReportID != nil {
 		return domain.Analysis{}, domain.ErrInvalidTransition
 	}
 	tx, err := p.pool.Begin(ctx)

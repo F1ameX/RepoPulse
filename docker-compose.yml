@@ -40,6 +40,9 @@ services:
       AUTH_GRPC_TARGET: auth:9090
       PUBLIC_ORIGIN: http://localhost:3000
       COOKIE_SECURE: "false"
+      ANALYZER_DATABASE_URL: postgres://repopulse:repopulse@postgres:5432/repopulse?sslmode=disable
+      ANALYZER_VERSIONS: >-
+        {"schema":"mvp-contract-1.1.0","methodology":"rhs-mvp-1.1.0","scoring_config":"rhs-mvp-1.1.0","collector_profile":"github-mvp-1.1.0","secret_rules":"secrets-mvp-1.0.0","recommendation_catalog":"recommendations-mvp-1.0.0","explanation_schema":"catalog-selection-1.0.0","prompt":"catalog-selection-1.0.0"}
     depends_on:
       auth:
         condition: service_started

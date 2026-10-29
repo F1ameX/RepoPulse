@@ -72,7 +72,7 @@ func loadConfig(lookup func(string) (string, bool)) (Config, error) {
 	}{
 		{"HTTP_READ_HEADER_TIMEOUT", "5s", &cfg.ReadHeaderTimeout},
 		{"HTTP_READ_TIMEOUT", "15s", &cfg.ReadTimeout},
-		{"HTTP_WRITE_TIMEOUT", "30s", &cfg.WriteTimeout},
+		{"HTTP_WRITE_TIMEOUT", "35s", &cfg.WriteTimeout},
 		{"HTTP_IDLE_TIMEOUT", "60s", &cfg.IdleTimeout},
 		{"SHUTDOWN_TIMEOUT", "10s", &cfg.ShutdownTimeout},
 		{"GITHUB_CHECK_TIMEOUT", "25s", &cfg.GitHubCheckTimeout},

@@ -49,7 +49,7 @@ HTTP публикует только модели, на которые ссыл�
 |---|---|---|---|---|---|
 | `CreateAnalysisResponse.outcome` | `string; accepted, reused` | `string` #1 | да / нет | accepted — принято новое задание; reused — выбран ранее сохранённый отчёт. | — |
 | `CreateAnalysisResponse.analysis_id` | `string (uuid)` | `string` #2 | да / нет | Стабильный ID принятого анализа либо анализа переиспользуемого отчёта. | — |
-| `CreateAnalysisResponse.report_id` | `string (uuid) / null` | `optional string` #3 | да / да | null для нового анализа, ID прежнего отчёта для reused. | — |
+| `CreateAnalysisResponse.report_id` | `string (uuid) / null` | `optional string` #3 | да / да | null при первоначальном принятии; ID отчёта для reused и повтора уже завершившегося анализа. | — |
 | `CreateAnalysisResponse.status` | `string; queued, running, completed, failed` | `string` #4 | да / нет | Текущее состояние принятого анализа; для reused — completed. | — |
 | `CreateAnalysisResponse.repository` | `Repository` | `repopulse.common.v1.Repository` #5 | да / нет | Идентичность GitHub-репозитория и зафиксированная ревизия; структура Repository. | — |
 

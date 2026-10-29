@@ -39,7 +39,7 @@ HTTP публикует только модели, на которые ссыл�
 
 | Поле | JSON: тип и значения | protobuf: тип и номер | Обязательное в JSON / null | Описание | Хранение |
 |---|---|---|---|---|---|
-| `ApiError.code` | `string; VALIDATION_FAILED, URL_REQUIRED, URL_TOO_LONG, INVALID_REPOSITORY_URL, UNSUPPORTED_PLATFORM, REPOSITORY_NOT_FOUND_OR_PRIVATE, REPOSITORY_CHECK_FAILED, SUBMISSION_CHANGED, SUBMISSION_PENDING, SESSION_REQUIRED, SESSION_EXPIRED, LOGIN_REQUIRED, INVALID_CREDENTIALS, LOGIN_TAKEN, ANALYSIS_NOT_FOUND, REPORT_NOT_FOUND, UPSTREAM_RATE_LIMITED, UPSTREAM_TIMEOUT, BUDGET_EXCEEDED, ANALYSIS_FAILED, REPORT_SAVE_FAILED, CSRF_REJECTED, INTERNAL_ERROR, METHOD_NOT_ALLOWED, NOT_IMPLEMENTED, NOT_FOUND` | `string` #1 | да / нет | Стабильный UPPER_SNAKE_CASE код; см. errors.md. | — |
+| `ApiError.code` | `string; VALIDATION_FAILED, URL_REQUIRED, URL_TOO_LONG, INVALID_REPOSITORY_URL, UNSUPPORTED_PLATFORM, REPOSITORY_NOT_FOUND_OR_PRIVATE, REPOSITORY_CHECK_FAILED, SUBMISSION_CHANGED, SUBMISSION_PENDING, SESSION_REQUIRED, SESSION_EXPIRED, AUTH_UNAVAILABLE, LOGIN_REQUIRED, INVALID_CREDENTIALS, LOGIN_TAKEN, ANALYSIS_NOT_FOUND, REPORT_NOT_FOUND, UPSTREAM_RATE_LIMITED, UPSTREAM_TIMEOUT, BUDGET_EXCEEDED, ANALYSIS_FAILED, REPORT_SAVE_FAILED, CSRF_REJECTED, INTERNAL_ERROR, METHOD_NOT_ALLOWED, NOT_IMPLEMENTED, NOT_FOUND` | `string` #1 | да / нет | Стабильный UPPER_SNAKE_CASE код; см. errors.md. | — |
 | `ApiError.message` | `string` | `string` #2 | да / нет | Безопасное пользовательское сообщение. | — |
 | `ApiError.trace_id` | `string` | `string` #3 | да / нет | Диагностический идентификатор; не ключ идемпотентности. | — |
 | `ApiError.field_errors` | `array<FieldError>` | `repeated FieldError` #4 | да / нет | Ошибки отдельных полей; пустой список при общей ошибке. | — |

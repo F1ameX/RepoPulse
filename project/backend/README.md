@@ -32,6 +32,12 @@ Auth запускает gRPC-сервер, см. раздел «Auth Service».
 и POST /api/v1/repositories/validate через Auth. Остальные HTTP-маршруты пока
 возвращают 501 NOT_IMPLEMENTED; health работает самостоятельно.
 Валидация URL не создаёт анализ: POST /analyses реализуется отдельно.
+Analyzer запускается через `go run ./cmd/analyzer`.
+В С1 работают GET /api/v1/auth/session, POST /api/v1/auth/guest-session и
+POST /api/v1/repositories/validate через проверку cookie в Auth. В С2 добавлены
+POST /api/v1/analyses и GET /api/v1/analyses/{analysis_id} с тем же Auth-клиентом.
+Остальные бизнес-маршруты пока возвращают 501 NOT_IMPLEMENTED.
+Валидация URL не создаёт анализ; job появляется только после принятия POST /analyses.
 
 Весь проект с PostgreSQL и автоматическим применением миграций запускается
 через [Docker Compose](../../README.md#docker). Goose устанавливается
@@ -126,12 +132,12 @@ Analyzer забирает принятые queued-задания из PostgreSQL
 | `HTTP_ADDR` | `127.0.0.1:8080` | API |
 | `HTTP_READ_HEADER_TIMEOUT` | `5s` | API |
 | `HTTP_READ_TIMEOUT` | `15s` | API |
-| `HTTP_WRITE_TIMEOUT` | `30s` | API |
+| `HTTP_WRITE_TIMEOUT` | `35s` | API; больше AUTH_REQUEST_TIMEOUT + GITHUB_CHECK_TIMEOUT + 3s |
 | `HTTP_IDLE_TIMEOUT` | `60s` | API |
 | `SHUTDOWN_TIMEOUT` | `10s` | API, Auth |
 | `AUTH_GRPC_TARGET` | `127.0.0.1:9090` | API; адрес gRPC Auth, в Compose `auth:9090` |
 | `AUTH_REQUEST_TIMEOUT` | `3s` | API; каждый RPC; суммарный бюджет Auth и GitHub должен помещаться в HTTP_WRITE_TIMEOUT |
-| `PUBLIC_ORIGIN` | `http://localhost:3000` | API; точный Origin frontend для POST гостя, регистрации, входа, выхода и проверки URL |
+| `PUBLIC_ORIGIN` | `http://localhost:3000` | API; точный Origin frontend для POST гостя, регистрации, входа, выхода и проверки URL и анализа |
 | `COOKIE_SECURE` | `true` | API; в локальном HTTP Compose — false, для HTTPS — true |
 | `GITHUB_CHECK_TIMEOUT` | `25s` | API; бюджет GitHub-проверки, меньше HTTP_WRITE_TIMEOUT |
 | `GITHUB_TOKEN` | пусто | API; необязательный серверный токен GitHub, не логируется |
@@ -144,6 +150,11 @@ Analyzer забирает принятые queued-задания из PostgreSQL
 | `AUTH_ARGON2_THREADS` | `1` | Auth; параллелизм Argon2id, 1–8 |
 | `AUTH_ARGON2_KEY_LEN` | `32` | Auth; длина ключа Argon2id, 16–64 байт |
 | `AUTH_ARGON2_SALT_LEN` | `16` | Auth; длина соли Argon2id, 16–64 байт |
+| `ANALYZER_DATABASE_URL` | обязательно | API и Analyzer; DSN общей PostgreSQL |
+| `ANALYZER_DATABASE_TIMEOUT` | `5s` | API и Analyzer; срок открытия подключения |
+| `ANALYZER_VERSIONS` | обязательно | API; JSON с восемью версиями common.Versions, пример в .env.example |
+
+Неверные и явно пустые значения приводят к ошибке запуска.
 | `ANALYZER_DATABASE_URL` | обязательно | Analyzer; DSN общей PostgreSQL |
 | `ANALYZER_DATABASE_TIMEOUT` | `5s` | Analyzer; срок открытия подключения |
 | `ANALYZER_POLL_INTERVAL` | `1s` | Пауза пустой очереди, максимум 1 минута |
@@ -158,6 +169,24 @@ Analyzer забирает принятые queued-задания из PostgreSQL
 числовых параметров приводят к ошибке запуска.
 В PowerShell: `$env:HTTP_ADDR = "127.0.0.1:9090"; go run ./cmd/api`.
 В Bash: `HTTP_ADDR=127.0.0.1:9090 go run ./cmd/api`.
+
+Для API запуска нужны ANALYZER_DATABASE_URL, применённые миграции и
+ANALYZER_VERSIONS. В Bash JSON задаётся с внешними одинарными кавычками:
+`export ANALYZER_VERSIONS='{"schema":"mvp-contract-1.1.0","methodology":"rhs-mvp-1.1.0","scoring_config":"rhs-mvp-1.1.0","collector_profile":"github-mvp-1.1.0","secret_rules":"secrets-mvp-1.0.0","recommendation_catalog":"recommendations-mvp-1.0.0","explanation_schema":"catalog-selection-1.0.0","prompt":"catalog-selection-1.0.0"}'`.
+Укажите версии фактически выбранных правил. API фиксирует их при принятии и
+не заменяет текущими при чтении. Docker Compose передаёт эти настройки API;
+вне Compose их задаёт разработчик, миграции применяются через Goose вручную.
+
+Отправка резервируется до GitHub: повтор owner/request_id не создаёт job.
+Повтор ещё проверяемой отправки даёт SUBMISSION_PENDING, смена URL —
+SUBMISSION_CHANGED. Чтение failed возвращает HTTP 200; ошибка чтения —
+отдельную HTTP-ошибку. Используются общий PUBLIC_ORIGIN и AUTH_REQUEST_TIMEOUT.
+Текущий Auth подтверждает гостя; account cookie без подтверждения возвращает
+SESSION_EXPIRED и не превращается в гостевой запуск.
+В этой ветке ещё нет исполнителя #18476 и HTTP чтения Report: новый анализ
+остаётся queued до подключения исполнителя. Для FR-28 sources/reasons,
+выборки и ограничения профиля передаются существующим Report-контрактом;
+API статуса не выдаёт вымышленные результаты сбора.
 
 Логи пишутся в stdout в JSON. Логгер передаётся через контекст:
 `logger.With(ctx, log)` и `logger.From(ctx)`. Если его нет в контексте,

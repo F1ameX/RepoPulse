@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "AUTH_UNAVAILABLE",
+    "message": "Сервис сессий временно недоступен. Повторите попытку позже",
+    "trace_id": "diagnostic-request-id",
+    "field_errors": []
+  }
+}

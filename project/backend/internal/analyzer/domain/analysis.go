@@ -77,6 +77,24 @@ type Analysis struct {
 	ReportID     *string
 }
 
+// SubmissionFailure records a failed preflight, before any analysis job exists.
+// Terminal job failures use the shared AnalysisFailure model from job.go.
+type SubmissionFailure struct {
+	Code    string `json:"code"`
+	TraceID string `json:"trace_id"`
+}
+
+type Submission struct {
+	ID           string
+	RequestID    string
+	Owner        Owner
+	CanonicalURL string
+	AssessmentAt time.Time
+	State        string
+	AnalysisID   *string
+	Failure      *SubmissionFailure
+}
+
 var uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 var shaPattern = regexp.MustCompile("^[0-9a-f]{40}$")
 

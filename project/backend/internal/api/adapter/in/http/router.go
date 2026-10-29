@@ -4,23 +4,16 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/in/http/dto"
 )
 
-type errorResponse struct {
-	Error apiError `json:"error"`
-}
+type errorResponse = dto.ErrorResponse
+type apiError = dto.APIError
+type fieldError = dto.FieldError
 
-type apiError struct {
-	Code        string       `json:"code"`
-	Message     string       `json:"message"`
-	TraceID     string       `json:"trace_id"`
-	FieldErrors []fieldError `json:"field_errors"`
-}
-
-type fieldError struct {
-	Field   string `json:"field"`
-	Code    string `json:"code"`
-	Message string `json:"message"`
+func NewAnalysisHandler(validator RepositoryValidator, resolver ContextResolver, analyses AnalysisService, allowedOrigin string) http.Handler {
+	return NewHandler(validator, resolver, Options{CookieSecure: true, PublicOrigin: allowedOrigin, Analyses: analyses})
 }
 
 func NewHandler(validator RepositoryValidator, resolver ContextResolver, options ...Options) http.Handler {
@@ -45,8 +38,13 @@ func NewHandler(validator RepositoryValidator, resolver ContextResolver, options
 	}
 
 	route("/health", http.MethodGet, health)
-	route("/api/v1/analyses", http.MethodPost, notImplemented)
-	route("/api/v1/analyses/{analysis_id}", http.MethodGet, notImplemented)
+	if cfg.Analyses == nil {
+		route("/api/v1/analyses", http.MethodPost, notImplemented)
+		route("/api/v1/analyses/{analysis_id}", http.MethodGet, notImplemented)
+	} else {
+		route("/api/v1/analyses", http.MethodPost, sameOrigin(cfg.PublicOrigin, createAnalysis(cfg.Analyses, resolver)))
+		route("/api/v1/analyses/{analysis_id}", http.MethodGet, getAnalysis(cfg.Analyses, resolver))
+	}
 	route("/api/v1/reports/{report_id}", http.MethodGet, notImplemented)
 	route("/api/v1/reports", http.MethodGet, notImplemented)
 	route("/api/v1/repositories/validate", http.MethodPost, sameOrigin(cfg.PublicOrigin, validateRepository(validator, resolver)))
