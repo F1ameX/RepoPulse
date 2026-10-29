@@ -36,14 +36,16 @@ func scanAnalysis(row pgx.Row) (domain.Analysis, error) {
 		}
 		return a, fmt.Errorf("read analysis: %w", err)
 	}
+	if failure != nil {
+		if err := json.Unmarshal(failure, &a.Error); err != nil {
+			return a, fmt.Errorf("decode failure: %w", err)
+		}
+	}
 	if err := json.Unmarshal(repository, &a.Repository); err != nil {
 		return a, fmt.Errorf("decode repository: %w", err)
 	}
 	if err := json.Unmarshal(versions, &a.Versions); err != nil {
 		return a, fmt.Errorf("decode versions: %w", err)
-	}
-	if len(failure) > 0 && json.Unmarshal(failure, &a.Failure) != nil {
-		return a, domain.ErrInvalidData
 	}
 	a.AssessmentAt, a.CreatedAt = domain.UTC(a.AssessmentAt), domain.UTC(a.CreatedAt)
 	a.Window.From, a.Window.Until = domain.UTC(a.Window.From), domain.UTC(a.Window.Until)
@@ -64,7 +66,7 @@ func (p *Postgres) Create(ctx context.Context, a domain.Analysis) (domain.Analys
 	if err := a.Validate(); err != nil {
 		return domain.Analysis{}, err
 	}
-	if a.Status != "queued" || a.Stage != nil || a.Failure != nil || a.StartedAt != nil || a.DeadlineAt != nil || a.CompletedAt != nil || a.ReportID != nil {
+	if a.Status != "queued" || a.Stage != nil || a.Error != nil || a.StartedAt != nil || a.DeadlineAt != nil || a.CompletedAt != nil || a.ReportID != nil {
 		return domain.Analysis{}, domain.ErrInvalidTransition
 	}
 	tx, err := p.pool.Begin(ctx)

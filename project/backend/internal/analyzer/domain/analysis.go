@@ -66,9 +66,9 @@ type Analysis struct {
 	AssessmentAt time.Time
 	Window       Window
 	Versions     Versions
-	Status       string
 	Stage        *string
-	Failure      *Failure
+	Error        *AnalysisFailure
+	Status       string
 	CreatedAt    time.Time
 	StartedAt    *time.Time
 	DeadlineAt   *time.Time
@@ -76,9 +76,9 @@ type Analysis struct {
 	ReportID     *string
 }
 
-// Failure is persisted independently from an error reading an analysis.
-// Transport adapters expose only recognized codes and safe catalog messages.
-type Failure struct {
+// SubmissionFailure records a failed preflight, before any analysis job exists.
+// Terminal job failures use the shared AnalysisFailure model from job.go.
+type SubmissionFailure struct {
 	Code    string `json:"code"`
 	TraceID string `json:"trace_id"`
 }
@@ -91,7 +91,7 @@ type Submission struct {
 	AssessmentAt time.Time
 	State        string
 	AnalysisID   *string
-	Failure      *Failure
+	Failure      *SubmissionFailure
 }
 
 var uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")

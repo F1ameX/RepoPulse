@@ -14,7 +14,7 @@ import (
 type Store interface {
 	ReserveSubmission(context.Context, domain.Submission) (domain.Submission, bool, error)
 	AcceptSubmission(context.Context, domain.Analysis) (domain.Analysis, error)
-	RejectSubmission(context.Context, string, domain.Failure) error
+	RejectSubmission(context.Context, string, domain.SubmissionFailure) error
 	Get(context.Context, string) (domain.Analysis, error)
 }
 
@@ -99,7 +99,7 @@ func (s *Service) CreateAnalysis(ctx context.Context, command CreateAnalysisComm
 		// Finalize the reserved outcome even when the source exhausted its budget.
 		finish, stop := context.WithTimeout(context.WithoutCancel(work), 3*time.Second)
 		defer stop()
-		if saveErr := s.store.RejectSubmission(finish, submission.ID, domain.Failure{Code: errorCode(failure)}); saveErr != nil {
+		if saveErr := s.store.RejectSubmission(finish, submission.ID, domain.SubmissionFailure{Code: errorCode(failure)}); saveErr != nil {
 			return domain.Analysis{}, saveErr
 		}
 		return domain.Analysis{}, failure

@@ -75,18 +75,11 @@ func getAnalysis(service AnalysisService, resolver ContextResolver) http.Handler
 			CompletedAt: result.CompletedAt, ReportID: result.ReportID,
 		}
 		if result.Status == "failed" {
-			code, message := "ANALYSIS_FAILED", "Не удалось выполнить анализ"
-			traceID := ""
-			if result.Failure != nil {
-				traceID = result.Failure.TraceID
-				switch result.Failure.Code {
-				case "BUDGET_EXCEEDED":
-					code, message = "BUDGET_EXCEEDED", "Превышен бюджет выполнения анализа"
-				case "REPORT_SAVE_FAILED":
-					code, message = "REPORT_SAVE_FAILED", "Не удалось сохранить результат анализа"
-				}
+			failure := domain.Failure("ANALYSIS_FAILED", "")
+			if result.Error != nil {
+				failure = domain.Failure(result.Error.Code, result.Error.TraceID)
 			}
-			response.Error = &apiError{Code: code, Message: message, TraceID: traceID, FieldErrors: []fieldError{}}
+			response.Error = &apiError{Code: failure.Code, Message: failure.Message, TraceID: failure.TraceID, FieldErrors: []fieldError{}}
 		}
 		writeJSON(w, http.StatusOK, response)
 	}

@@ -81,7 +81,7 @@ func TestSubmissionReservationPreventsDuplicateGitHubAndJobs(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored, err := service.GetAnalysis(t.Context(), analysis.GetAnalysisQuery{Context: verified, AnalysisID: firstID})
-	if err != nil || stored.Failure == nil || stored.Failure.Code != "REPORT_SAVE_FAILED" || stored.Stage == nil || *stored.Stage != "saving" {
+	if err != nil || stored.Error == nil || stored.Error.Code != "REPORT_SAVE_FAILED" || stored.Stage == nil || *stored.Stage != "saving" {
 		t.Fatalf("persisted terminal status=%+v error=%#v", stored, err)
 	}
 }

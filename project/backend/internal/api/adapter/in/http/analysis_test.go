@@ -35,7 +35,7 @@ func TestAnalysisHTTPPreservesNullableFieldsAndFailedIsReadable(t *testing.T) {
 			a := domain.Analysis{ID: id, Status: state, CreatedAt: time.Now().UTC(),
 				Repository: domain.RepositoryMetadata{Platform: "github", GitHubID: "42", CanonicalURL: "https://github.com/owner/repo", Owner: "Owner", Name: "Repo"}}
 			if state == "failed" {
-				a.Failure = &domain.Failure{Code: "BUDGET_EXCEEDED", TraceID: "original-diagnostic-id"}
+				a.Error = &domain.AnalysisFailure{Code: "BUDGET_EXCEEDED", TraceID: "original-diagnostic-id"}
 			}
 			if state == "completed" {
 				reportID, at := domain.NewID(), time.Now().UTC()
@@ -109,6 +109,50 @@ func TestAnalysisReadFailureAndAuthUnavailableAreTransportErrors(t *testing.T) {
 			}
 			if tc.authErr != nil && calls != 0 {
 				t.Fatal("analysis read before successful Auth verification")
+			}
+		})
+	}
+}
+
+func TestAnalysisHTTPUsesWorkerErrorModelAndSanitizesStoredDetails(t *testing.T) {
+	for _, tc := range []struct{ storedCode, publicCode string }{
+		{"BUDGET_EXCEEDED", "BUDGET_EXCEEDED"},
+		{"REPORT_SAVE_FAILED", "REPORT_SAVE_FAILED"},
+		{"UNKNOWN_PROVIDER_ERROR", "ANALYSIS_FAILED"},
+	} {
+		t.Run(tc.storedCode, func(t *testing.T) {
+			var failure domain.AnalysisFailure
+			stored := `{"code":"` + tc.storedCode + `","message":"private provider detail","trace_id":"worker-trace","field_errors":[{"field":"repository_url","code":"DEBUG","message":"token-must-not-leak"}]}`
+			if err := json.Unmarshal([]byte(stored), &failure); err != nil {
+				t.Fatal(err)
+			}
+			id := domain.NewID()
+			service := analysisScenarios{get: func(context.Context, analysis.GetAnalysisQuery) (domain.Analysis, error) {
+				return domain.Analysis{
+					ID: id, Status: "failed", CreatedAt: time.Now().UTC(), Error: &failure,
+					Repository: domain.RepositoryMetadata{Platform: "github", GitHubID: "42", CanonicalURL: "https://github.com/owner/repo", Owner: "Owner", Name: "Repo"},
+				}, nil
+			}}
+			resolver := contextResolverFunc(func(context.Context, SessionTokens) (domain.VerifiedContext, error) {
+				return activeGuestContext(), nil
+			})
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/analyses/"+id, nil)
+			request.AddCookie(&http.Cookie{Name: "repopulse_guest", Value: "opaque"})
+			recorder := httptest.NewRecorder()
+			NewAnalysisHandler(nil, resolver, service, "http://localhost:5173").ServeHTTP(recorder, request)
+			var response struct {
+				Status string   `json:"status"`
+				Error  apiError `json:"error"`
+			}
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if recorder.Code != http.StatusOK || response.Status != "failed" || response.Error.Code != tc.publicCode ||
+				response.Error.TraceID != "worker-trace" || response.Error.Message == "" || response.Error.FieldErrors == nil || len(response.Error.FieldErrors) != 0 {
+				t.Fatalf("worker failure was not mapped safely: status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			if strings.Contains(recorder.Body.String(), "private") || strings.Contains(recorder.Body.String(), "must-not-leak") {
+				t.Fatal("stored provider details leaked into the HTTP response")
 			}
 		})
 	}

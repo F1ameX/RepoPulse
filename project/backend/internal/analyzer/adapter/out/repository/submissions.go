@@ -45,7 +45,7 @@ func (p *Postgres) AcceptSubmission(ctx context.Context, a domain.Analysis) (dom
 	if err := a.Validate(); err != nil {
 		return domain.Analysis{}, err
 	}
-	if a.Status != "queued" || a.Stage != nil || a.Failure != nil || a.ReportID != nil ||
+	if a.Status != "queued" || a.Stage != nil || a.Error != nil || a.ReportID != nil ||
 		a.StartedAt != nil || a.CompletedAt != nil || a.DeadlineAt != nil {
 		return domain.Analysis{}, domain.ErrInvalidTransition
 	}
@@ -94,7 +94,7 @@ func (p *Postgres) AcceptSubmission(ctx context.Context, a domain.Analysis) (dom
 	return a, nil
 }
 
-func (p *Postgres) RejectSubmission(ctx context.Context, id string, failure domain.Failure) error {
+func (p *Postgres) RejectSubmission(ctx context.Context, id string, failure domain.SubmissionFailure) error {
 	data, _ := json.Marshal(failure)
 	tag, err := p.pool.Exec(ctx, `UPDATE analyzer.submissions SET state='rejected',error=$2
 		WHERE id=$1 AND state='pending' AND analysis_id IS NULL`, id, data)

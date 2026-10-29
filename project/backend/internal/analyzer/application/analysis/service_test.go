@@ -47,7 +47,7 @@ func (m *memoryStore) AcceptSubmission(ctx context.Context, a domain.Analysis) (
 	return a, nil
 }
 
-func (m *memoryStore) RejectSubmission(_ context.Context, id string, failure domain.Failure) error {
+func (m *memoryStore) RejectSubmission(_ context.Context, id string, failure domain.SubmissionFailure) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for key, s := range m.submissions {
@@ -102,11 +102,11 @@ func TestReplayPrecedesMutableGitHubAndPreservesTerminalResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first.Status, first.Failure = "failed", &domain.Failure{Code: "BUDGET_EXCEEDED"}
+	first.Status, first.Error = "failed", &domain.AnalysisFailure{Code: "BUDGET_EXCEEDED"}
 	store.analyses[first.ID] = first
 	command.Request.RepositoryURL = repository.CanonicalURL
 	again, err := service.CreateAnalysis(t.Context(), command)
-	if err != nil || again.ID != first.ID || again.Status != "failed" || again.Failure.Code != "BUDGET_EXCEEDED" || calls != 1 {
+	if err != nil || again.ID != first.ID || again.Status != "failed" || again.Error == nil || again.Error.Code != "BUDGET_EXCEEDED" || calls != 1 {
 		t.Fatalf("replay=%+v error=%#v calls=%d", again, err, calls)
 	}
 	command.Request.RepositoryURL = "https://github.com/owner/other"
