@@ -43,8 +43,8 @@ cursor — непрозрачная строка Report, привязанная 
 - GET /auth/session без действующих cookie возвращает 200 с двумя null, не создавая
   сессию. Frontend явно вызывает POST /auth/guest-session, затем повторяет GET,
   чтобы подтвердить сохранение cookie. POST проверяет Origin по PUBLIC_ORIGIN.
-- В С1 реализованы гостевые операции и проверка URL. Register/Login/Logout и
-  создание анализа пока возвращают 501 NOT_IMPLEMENTED.
+- Реализованы гостевые операции, проверка URL, принятие анализа и чтение его
+  статуса. Register/Login/Logout пока возвращают 501 NOT_IMPLEMENTED.
 - IssuedSession.token остаётся между Auth и Gateway; в JSON браузеру попадает
   только SessionInfo, токен устанавливается через Set-Cookie.
 - Запросы изменения состояния проверяют Origin/CSRF. Cookie не передаются в URL.
@@ -60,5 +60,13 @@ JSON использует snake_case, строки UUID и RFC3339 UTC для в
 
 Во всех HTTP-ошибках тело ErrorEnvelope с error.code, message, trace_id и
 field_errors. [Таблица HTTP/gRPC ошибок](../../docs/errors.md).
-Нереализованные обработчики текущего каркаса возвращают 501 NOT_IMPLEMENTED;
-таблица выше описывает целевое поведение контрактов.
+Подключены GET /auth/session, POST /auth/guest-session,
+POST /repositories/validate, POST /analyses и GET /analyses/{analysis_id}.
+Остальные бизнес-маршруты текущего каркаса возвращают 501 NOT_IMPLEMENTED.
+Таблица выше для них описывает целевое поведение контрактов.
+
+Запуск требует Origin, совпадающего с PUBLIC_ORIGIN. При повторе принятой
+отправки возвращаются прежний analysis_id и текущее сохранённое состояние;
+outcome остаётся accepted, HTTP — 202. Это не поиск подходящего старого отчёта:
+до реализации полного ключа актуальности новый request_id создаёт новый анализ.
+Ошибка доступности Auth — HTTP 503 AUTH_UNAVAILABLE; анализ при этом не создаётся.

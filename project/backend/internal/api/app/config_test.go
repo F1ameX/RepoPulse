@@ -21,7 +21,7 @@ func TestDefaults(t *testing.T) {
 	want := Config{
 		HTTPAddr:          "127.0.0.1:8080",
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second,
-		WriteTimeout: 30 * time.Second, IdleTimeout: time.Minute,
+		WriteTimeout: 35 * time.Second, IdleTimeout: time.Minute,
 		ShutdownTimeout:    10 * time.Second,
 		GitHubCheckTimeout: 25 * time.Second,
 		AuthGRPCTarget:     "127.0.0.1:9090", AuthRequestTimeout: 3 * time.Second,
@@ -89,7 +89,7 @@ func TestInvalidEnvironmentFailsEarly(t *testing.T) {
 func TestGitHubBudgetFitsHTTPResponseTimeout(t *testing.T) {
 	for _, values := range []map[string]string{
 		{"GITHUB_CHECK_TIMEOUT": "26s"},
-		{"AUTH_REQUEST_TIMEOUT": "5s"},
+		{"AUTH_REQUEST_TIMEOUT": "10s"},
 		{"GITHUB_CHECK_TIMEOUT": "25s", "HTTP_WRITE_TIMEOUT": "25s"},
 	} {
 		if _, err := loadConfig(fromMap(values)); err == nil {

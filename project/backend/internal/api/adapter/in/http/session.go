@@ -19,6 +19,7 @@ type Options struct {
 	Sessions     Sessions
 	CookieSecure bool
 	PublicOrigin string
+	Analyses     AnalysisService
 }
 
 func sessionTokens(r *http.Request) domain.SessionTokens {
