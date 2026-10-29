@@ -20,21 +20,26 @@ func NewPostgres(pool *pgxpool.Pool) *Postgres { return &Postgres{pool: pool} }
 
 const analysisSelect = `SELECT a.id::text, a.submission_id::text, s.request_id::text,
 	a.owner_id::text, p.kind, a.repository, a.assessment_at, a.window_from, a.window_until,
-	a.versions, a.status, a.created_at, a.started_at, a.deadline_at, a.completed_at, a.report_id::text
+	a.versions, a.status, a.created_at, a.started_at, a.deadline_at, a.completed_at, a.report_id::text, a.stage, a.error
 	FROM analyzer.analyses a
 	JOIN analyzer.submissions s ON s.id = a.submission_id
 	JOIN auth.principals p ON p.id = a.owner_id`
 
 func scanAnalysis(row pgx.Row) (domain.Analysis, error) {
 	var a domain.Analysis
-	var repository, versions []byte
+	var repository, versions, failure []byte
 	if err := row.Scan(&a.ID, &a.SubmissionID, &a.RequestID, &a.Owner.ID, &a.Owner.Kind, &repository,
 		&a.AssessmentAt, &a.Window.From, &a.Window.Until, &versions, &a.Status, &a.CreatedAt,
-		&a.StartedAt, &a.DeadlineAt, &a.CompletedAt, &a.ReportID); err != nil {
+		&a.StartedAt, &a.DeadlineAt, &a.CompletedAt, &a.ReportID, &a.Stage, &failure); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return a, domain.ErrNotFound
 		}
 		return a, fmt.Errorf("read analysis: %w", err)
+	}
+	if failure != nil {
+		if err := json.Unmarshal(failure, &a.Error); err != nil {
+			return a, fmt.Errorf("decode failure: %w", err)
+		}
 	}
 	if err := json.Unmarshal(repository, &a.Repository); err != nil {
 		return a, fmt.Errorf("decode repository: %w", err)
@@ -123,7 +128,7 @@ func (p *Postgres) Start(ctx context.Context, id string, at, deadline time.Time)
 	if !deadline.After(at) {
 		return domain.ErrInvalidData
 	}
-	tag, err := p.pool.Exec(ctx, `UPDATE analyzer.analyses SET status='running', started_at=$2, deadline_at=$3
+	tag, err := p.pool.Exec(ctx, `UPDATE analyzer.analyses SET status='running', stage='collecting_git', started_at=$2, deadline_at=$3
 		WHERE id=$1 AND status='queued' AND created_at <= $2`, id, domain.UTC(at), domain.UTC(deadline))
 	if err != nil {
 		return fmt.Errorf("start analysis: %w", err)
