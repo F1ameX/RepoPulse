@@ -18,10 +18,12 @@ type UserRepository interface {
 	// CreateAccount creates exactly one account for a normalized login.
 	// It returns domain.ErrLoginTaken when the login is used, including
 	// concurrent registrations of the same login.
-	CreateAccount(ctx context.Context, login, passwordHash string) (domain.Principal, error)
+	CreateAccount(ctx context.Context, login, passwordHash string, createdAt time.Time) (domain.Principal, error)
 	// FindAccountByLogin looks up a normalized login. It returns
 	// domain.ErrInvalidCredentials when the account does not exist.
 	FindAccountByLogin(ctx context.Context, login string) (domain.Principal, error)
+	// FindAccountByID returns the account principal or domain.ErrPrincipalNotFound.
+	FindAccountByID(ctx context.Context, id string) (domain.Principal, error)
 }
 
 // TokenRepository stores session credentials (auth.sessions) by token hash.
@@ -29,8 +31,9 @@ type TokenRepository interface {
 	CreateSession(ctx context.Context, session domain.Session) (domain.Session, error)
 	// FindSessionByTokenHash returns domain.ErrSessionNotFound for an unknown hash.
 	FindSessionByTokenHash(ctx context.Context, tokenHash string) (domain.Session, error)
-	// RevokeSession is idempotent: revoking an already revoked session succeeds.
-	RevokeSession(ctx context.Context, sessionID string, at time.Time) error
+	// RevokeSession is idempotent: revoking an already revoked session succeeds
+	// and keeps the original revocation time. It reports whether this call revoked it.
+	RevokeSession(ctx context.Context, sessionID string, at time.Time) (bool, error)
 }
 
 // TokenGenerator generates token and its hash for guest user
@@ -39,7 +42,9 @@ type TokenGenerator interface {
 	Hash(token string) string
 }
 
-// Clock is useful for testing in edge of 24 hours
-type Clock interface {
-	Now() time.Time
+// PasswordHasher generates hash from authenticated user`s password to store it in DB.
+// Also PasswordHasher is used to verify users password
+type PasswordHasher interface {
+	Hash(password string) (string, error)
+	Verify(password, encoded string) (bool, error)
 }

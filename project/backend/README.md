@@ -27,6 +27,11 @@ migrations/report                          отчёты и история
 Analyzer открывает PostgreSQL и исполняет очередь; см.
 [пошаговый запуск](#запуск-analyzer-с-postgresql).
 Auth запускает gRPC-сервер, см. раздел «Auth Service».
+Каркас Analyzer запускается через `go run ./cmd/analyzer`.
+Работают GET /api/v1/auth/session, POST /api/v1/auth/{guest-session,register,login,logout}
+и POST /api/v1/repositories/validate через Auth. Остальные HTTP-маршруты пока
+возвращают 501 NOT_IMPLEMENTED; health работает самостоятельно.
+Валидация URL не создаёт анализ: POST /analyses реализуется отдельно.
 Analyzer запускается через `go run ./cmd/analyzer`.
 В С1 работают GET /api/v1/auth/session, POST /api/v1/auth/guest-session и
 POST /api/v1/repositories/validate через проверку cookie в Auth. В С2 добавлены
@@ -132,12 +137,19 @@ Analyzer забирает принятые queued-задания из PostgreSQL
 | `SHUTDOWN_TIMEOUT` | `10s` | API, Auth |
 | `AUTH_GRPC_TARGET` | `127.0.0.1:9090` | API; адрес gRPC Auth, в Compose `auth:9090` |
 | `AUTH_REQUEST_TIMEOUT` | `3s` | API; каждый RPC; суммарный бюджет Auth и GitHub должен помещаться в HTTP_WRITE_TIMEOUT |
-| `PUBLIC_ORIGIN` | `http://localhost:3000` | API; точный Origin frontend для POST гостя, проверки URL и запуска анализа |
+| `PUBLIC_ORIGIN` | `http://localhost:3000` | API; точный Origin frontend для POST гостя, регистрации, входа, выхода, проверки URL и запуска анализа |
 | `COOKIE_SECURE` | `true` | API; в локальном HTTP Compose — false, для HTTPS — true |
 | `GITHUB_CHECK_TIMEOUT` | `25s` | API; бюджет GitHub-проверки, меньше HTTP_WRITE_TIMEOUT |
 | `GITHUB_TOKEN` | пусто | API; необязательный серверный токен GitHub, не логируется |
 | `AUTH_GRPC_ADDR` | `127.0.0.1:9090` | Auth; host:port gRPC-сервера |
 | `AUTH_DATABASE_URL` | — (обязательна) | Auth; строка подключения PostgreSQL, не логируется |
+| `AUTH_GUEST_SESSION_TTL` | `24h` | Auth; срок гостевой сессии, FR-27; меняется только для разработки |
+| `AUTH_ACCOUNT_SESSION_TTL` | `168h` | Auth; срок сессии аккаунта, FR-27; меняется только для разработки |
+| `AUTH_ARGON2_MEMORY_KIB` | `19456` | Auth; память Argon2id, 19456–262144 КиБ |
+| `AUTH_ARGON2_TIME` | `2` | Auth; число проходов Argon2id, 1–10 |
+| `AUTH_ARGON2_THREADS` | `1` | Auth; параллелизм Argon2id, 1–8 |
+| `AUTH_ARGON2_KEY_LEN` | `32` | Auth; длина ключа Argon2id, 16–64 байт |
+| `AUTH_ARGON2_SALT_LEN` | `16` | Auth; длина соли Argon2id, 16–64 байт |
 | `ANALYZER_DATABASE_URL` | обязательно | API и Analyzer; DSN общей PostgreSQL |
 | `ANALYZER_DATABASE_TIMEOUT` | `5s` | API и Analyzer; срок открытия подключения |
 | `ANALYZER_VERSIONS` | обязательно | API; JSON с восемью версиями common.Versions, пример в .env.example |
@@ -184,9 +196,9 @@ API статуса не выдаёт вымышленные результаты
 
 gRPC-сервис по контракту [auth.proto](../../contracts/auth/v1/auth.proto):
 AuthService (Register, Login, CreateGuestSession, GetSessionContext, ResolveContext, Logout) и
-стандартный health-check `grpc.health.v1.Health`. Сейчас работают
-CreateGuestSession, GetSessionContext и гостевая часть ResolveContext; Register, Login и Logout
-отвечают `UNIMPLEMENTED` с кодом `NOT_IMPLEMENTED`.
+стандартный health-check `grpc.health.v1.Health`. Все методы реализованы:
+регистрация и вход по FR-27 (пароль — Argon2id), гостевые и аккаунтные сессии,
+идемпотентный выход с отзывом только текущей сессии.
 
 ### Локальный запуск
 
@@ -249,6 +261,36 @@ grpcurl -plaintext -import-path ../../contracts -proto auth/v1/auth.proto \
 grpcurl -plaintext -import-path ../../contracts -proto auth/v1/auth.proto \
   -d '{"guest_token": "<token из ответа выше>"}' \
   127.0.0.1:9090 repopulse.auth.v1.AuthService/ResolveContext
+
+# Регистрация (без входа) и вход: token — значение cookie repopulse_session
+grpcurl -plaintext -import-path ../../contracts -proto auth/v1/auth.proto \
+  -d '{"login": "FlameX", "password": "correct horse battery"}' \
+  127.0.0.1:9090 repopulse.auth.v1.AuthService/Register
+grpcurl -plaintext -import-path ../../contracts -proto auth/v1/auth.proto \
+  -d '{"login": "flamex", "password": "correct horse battery"}' \
+  127.0.0.1:9090 repopulse.auth.v1.AuthService/Login
+
+# Аккаунт: userId и accountExpiresAt; выход отзывает только эту сессию
+grpcurl -plaintext -import-path ../../contracts -proto auth/v1/auth.proto \
+  -d '{"account_token": "<token из Login>"}' \
+  127.0.0.1:9090 repopulse.auth.v1.AuthService/ResolveContext
+grpcurl -plaintext -import-path ../../contracts -proto auth/v1/auth.proto \
+  -d '{"account_token": "<token из Login>"}' \
+  127.0.0.1:9090 repopulse.auth.v1.AuthService/Logout
+```
+
+Через Gateway (HTTP) те же сценарии проверяются curl. Запросы изменения состояния
+требуют `Origin`, равный `PUBLIC_ORIGIN`; для локального HTTP запустите API с
+`COOKIE_SECURE=false`, иначе curl не отправит Secure-cookie обратно:
+
+```sh
+O='Origin: http://localhost:3000'; J='Content-Type: application/json'
+curl -i -H "$O" -H "$J" -d '{"login":"FlameX","password":"correct horse battery"}' \
+  http://127.0.0.1:8080/api/v1/auth/register                       # 201, cookie нет
+curl -i -c jar -H "$O" -H "$J" -d '{"login":"flamex","password":"correct horse battery"}' \
+  http://127.0.0.1:8080/api/v1/auth/login                          # 200, repopulse_session
+curl -i -b jar http://127.0.0.1:8080/api/v1/auth/session           # account.login = flamex
+curl -i -b jar -c jar -H "$O" -X POST http://127.0.0.1:8080/api/v1/auth/logout   # 204
 ```
 
 Для неизвестного, истёкшего или отозванного токена ResolveContext возвращает

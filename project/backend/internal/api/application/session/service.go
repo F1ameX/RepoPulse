@@ -13,6 +13,9 @@ type Auth interface {
 	GetSessionContext(context.Context, domain.SessionTokens) (domain.SessionContext, error)
 	CreateGuestSession(context.Context) (domain.IssuedSession, error)
 	ResolveContext(context.Context, domain.SessionTokens) (analyzerdomain.VerifiedContext, error)
+	Register(ctx context.Context, login, password string) (domain.RegistrationResult, error)
+	Login(ctx context.Context, login, password string) (domain.IssuedSession, error)
+	Logout(ctx context.Context, accountToken string) error
 }
 
 type Service struct{ auth Auth }
@@ -54,4 +57,24 @@ func (s *Service) ResolveContext(ctx context.Context, tokens domain.SessionToken
 		return analyzerdomain.VerifiedContext{}, domain.ErrSessionExpired
 	}
 	return verified, nil
+}
+
+// Register creates an account; validation, normalization and uniqueness are Auth's.
+// It neither signs the user in nor touches existing cookies.
+func (s *Service) Register(ctx context.Context, login, password string) (domain.RegistrationResult, error) {
+	return s.auth.Register(ctx, login, password)
+}
+
+// Login issues a new account session; the guest context is left as is.
+func (s *Service) Login(ctx context.Context, login, password string) (domain.IssuedSession, error) {
+	return s.auth.Login(ctx, login, password)
+}
+
+// Logout revokes the presented account session only. Without an account cookie
+// there is nothing to revoke, which is a successful idempotent logout.
+func (s *Service) Logout(ctx context.Context, tokens domain.SessionTokens) error {
+	if tokens.AccountToken == nil || *tokens.AccountToken == "" {
+		return nil
+	}
+	return s.auth.Logout(ctx, *tokens.AccountToken)
 }
