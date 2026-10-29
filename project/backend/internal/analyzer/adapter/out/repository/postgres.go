@@ -36,6 +36,11 @@ func scanAnalysis(row pgx.Row) (domain.Analysis, error) {
 		}
 		return a, fmt.Errorf("read analysis: %w", err)
 	}
+	if failure != nil {
+		if err := json.Unmarshal(failure, &a.Error); err != nil {
+			return a, fmt.Errorf("decode failure: %w", err)
+		}
+	}
 	if err := json.Unmarshal(repository, &a.Repository); err != nil {
 		return a, fmt.Errorf("decode repository: %w", err)
 	}
@@ -126,7 +131,7 @@ func (p *Postgres) Start(ctx context.Context, id string, at, deadline time.Time)
 	if !deadline.After(at) {
 		return domain.ErrInvalidData
 	}
-	tag, err := p.pool.Exec(ctx, `UPDATE analyzer.analyses SET status='running', started_at=$2, deadline_at=$3
+	tag, err := p.pool.Exec(ctx, `UPDATE analyzer.analyses SET status='running', stage='collecting_git', started_at=$2, deadline_at=$3
 		WHERE id=$1 AND status='queued' AND created_at <= $2`, id, domain.UTC(at), domain.UTC(deadline))
 	if err != nil {
 		return fmt.Errorf("start analysis: %w", err)

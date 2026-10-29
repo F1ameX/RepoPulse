@@ -204,7 +204,9 @@ SHA/refs, точных границ окна, отпечатков всех ис
 
 Фоновый исполнитель внутри Analyzer забирает queued-задание короткой транзакцией
 с FOR UPDATE SKIP LOCKED и меняет статус на running. После commit выполняется I/O.
-Это логика Analyzer; SQL-функций и триггеров в миграциях нет.
+Это логика Analyzer; SQL-функций и триггеров в миграциях нет. Реализация
+исполнителя — `application/worker`, очередь — `adapter/out/repository`,
+безопасный Git — `adapter/out/git`. [Порядок выполнения и текущие границы](analyzer-execution.md).
 
 Допустимые переходы: queued → running/failed; running → completed/failed.
 Терминальные состояния неизменяемы. Подтверждённые этапы: collecting_git,

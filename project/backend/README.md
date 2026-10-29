@@ -11,11 +11,11 @@ Go 1.26. API Gateway обслуживает HTTP. Auth отвечает за с�
 ```text
 cmd/api, cmd/auth, cmd/report, cmd/analyzer  точки входа
 internal/api                              HTTP Gateway
-internal/auth                             gRPC-каркас Auth Service
+internal/auth                             gRPC Auth Service
 internal/report                           каркас Report
 internal/pkg/grpcerr                      формат gRPC-ошибок
 pkg/proto                                 код, сгенерированный из contracts
-internal/analyzer                          модели, сценарии и PostgreSQL-хранилище
+internal/analyzer                         очередь, безопасный Git и PostgreSQL-хранилище
 migrations/auth                            идентичности и сессии
 migrations/analyzer                        очередь и снимки
 migrations/report                          отчёты и история
@@ -24,10 +24,10 @@ migrations/report                          отчёты и история
 Из `project/backend`: `go run ./cmd/api`. Проверка процесса:
 `curl http://127.0.0.1:8080/health` → `200 {"status":"ok"}`.
 Остановка — Ctrl+C. Report пока инициализирует логгер и ждёт завершения.
-Analyzer открывает PostgreSQL-хранилище; см.
+Analyzer открывает PostgreSQL и исполняет очередь; см.
 [пошаговый запуск](#запуск-analyzer-с-postgresql).
 Auth запускает gRPC-сервер, см. раздел «Auth Service».
-Каркас Analyzer запускается через `go run ./cmd/analyzer`.
+Analyzer запускается через `go run ./cmd/analyzer`.
 В С1 работают GET /api/v1/auth/session, POST /api/v1/auth/guest-session и
 POST /api/v1/repositories/validate через проверку cookie в Auth. В С2 добавлены
 POST /api/v1/analyses и GET /api/v1/analyses/{analysis_id} с тем же Auth-клиентом.
@@ -35,16 +35,13 @@ POST /api/v1/analyses и GET /api/v1/analyses/{analysis_id} с тем же Auth-
 Валидация URL не создаёт анализ; job появляется только после принятия POST /analyses.
 
 Весь проект с PostgreSQL и автоматическим применением миграций запускается
-через [Docker Compose](../../README.md#docker--спринт-1). Goose устанавливается
-в отдельный контейнер; на хосте он нужен только для запуска вне Compose.
-
-Весь проект с PostgreSQL и автоматическим применением миграций запускается
-через [Docker Compose](../../README.md#docker--спринт-1). Goose устанавливается
+через [Docker Compose](../../README.md#docker). Goose устанавливается
 в отдельный контейнер; на хосте он нужен только для запуска вне Compose.
 
 ## Запуск Analyzer с PostgreSQL
 
-Нужны Go 1.26, запущенная PostgreSQL 17 и её утилиты `psql`/`createdb` в PATH.
+Для запуска вне Docker нужны Go 1.26, Git в PATH, запущенная PostgreSQL 17
+и её утилиты `psql`/`createdb` в PATH.
 Ниже команды для PowerShell, начиная из корня репозитория. В примере PostgreSQL
 слушает `127.0.0.1:5432`, административная роль — `postgres`, база и роль
 приложения — `repopulse`. Если у вас другие параметры, замените их в командах и DSN.
@@ -102,13 +99,17 @@ POST /api/v1/analyses и GET /api/v1/analyses/{analysis_id} с тем же Auth-
    ```
 
    Успешный запуск подтверждает JSON-лог с `service: analyzer-service` и
-   `msg: Analysis storage ready`. Процесс остаётся запущенным и ожидает завершения;
+   `msg: Analyzer queue ready`. Процесс опрашивает очередь;
    остановка — `Ctrl+C`, в логе появится `Service stopped`.
 
-На этом этапе процесс Analyzer проверяет БД и открывает хранилище. Он ещё не
-открывает HTTP/gRPC-порт и не запускает анализ репозитория. `GET /health`
-на порту 8080 относится к отдельно запущенному API Gateway. Проверка операций
-чтения/записи описана в разделе [«Хранение анализа»](#хранение-анализа).
+Analyzer забирает принятые queued-задания из PostgreSQL и получает Git. Он
+не открывает HTTP/gRPC-порт: HTTP-запуск/статус — #18478. Нормализаторы входов
+(#18479), вычисления и объяснение подключаются через `worker.Processor` в
+`app.RunWithProcessor`. В штатном `cmd/analyzer` Processor пока отсутствует:
+пригодного результата нет, поэтому job получает failed/ANALYSIS_FAILED,
+а не фиктивный completed. Статический сбор Git уже работает.
+`GET /health` на порту 8080 относится к API Gateway.
+[Очередь, лимиты, подключение Processor и проверки](../../docs/architecture/analyzer-execution.md).
 
 Если запуск завершается с `ANALYZER_DATABASE_URL is required`, проверьте окружение
 текущего терминала. `analyzer database is unavailable` означает, что нужно проверить
@@ -142,6 +143,18 @@ POST /api/v1/analyses и GET /api/v1/analyses/{analysis_id} с тем же Auth-
 | `ANALYZER_VERSIONS` | обязательно | API; JSON с восемью версиями common.Versions, пример в .env.example |
 
 Неверные и явно пустые значения приводят к ошибке запуска.
+| `ANALYZER_DATABASE_URL` | обязательно | Analyzer; DSN общей PostgreSQL |
+| `ANALYZER_DATABASE_TIMEOUT` | `5s` | Analyzer; срок открытия подключения |
+| `ANALYZER_POLL_INTERVAL` | `1s` | Пауза пустой очереди, максимум 1 минута |
+| `ANALYZER_TIMEOUT` | `320s` | Общий срок job, включая Git, обработку, объяснение и сохранение |
+| `ANALYZER_GIT_TIMEOUT` | `60s` | Вся фаза Git: сеть и локальное чтение дерева/истории; входит в общий срок job |
+| `ANALYZER_GIT_MAX_BYTES` | `104857600` | Прочитанные из сети Git-данные, байты |
+| `ANALYZER_GIT_MAX_PATHS` | `50000` | Пути дерева зафиксированной ревизии |
+| `ANALYZER_GIT_MAX_COMMITS` | `10000` | Уникальные коммиты из объявленных heads/tags и зафиксированной ревизии |
+| `ANALYZER_TEMP_DIR` | системная временная директория | Родитель временных bare-репозиториев |
+
+Лимиты профиля можно только уменьшать. Неверные и явно пустые значения
+числовых параметров приводят к ошибке запуска.
 В PowerShell: `$env:HTTP_ADDR = "127.0.0.1:9090"; go run ./cmd/api`.
 В Bash: `HTTP_ADDR=127.0.0.1:9090 go run ./cmd/api`.
 
@@ -289,15 +302,17 @@ JSON Schema и `.proto` разделены по сервисам в `contracts/`
 Внутренние сценарии `internal/analyzer/application/storage` связаны с PostgreSQL
 адаптером через `app.OpenStorage`. Для `go run ./cmd/analyzer` задайте
 `ANALYZER_DATABASE_URL` и заранее примените [миграции](migrations/README.md).
-Процесс проверяет соединение и ожидает завершения. HTTP, исполнение очереди,
-сбор реальных входов и история профиля подключаются отдельными задачами.
+Процесс проверяет соединение и исполняет очередь через `application/worker`.
+HTTP, нормализация реальных входов и история профиля подключаются отдельными задачами.
 
 - `CreateAccepted` сохраняет уже проверенный репозиторий, серверные UUID,
   Owner из доверенного Auth VerifiedContext, момент оценки, окно 140 дней и версии.
   Повтор пары Owner/request_id возвращает прежний анализ; другой URL отклоняется.
   Это операция хранения принятого задания, а не полный HTTP CreateAnalysis:
   резервация отправки до GitHub и обработка переноса URL относятся к его оркестрации.
-- `Start` переводит queued в running и фиксирует срок исполнения.
+- `Start` — прежняя одиночная операция перевода queued в running. Фоновый
+  исполнитель использует атомарный `Claim` с `FOR UPDATE SKIP LOCKED`,
+  фиксацией collecting_git, started_at и deadline_at.
 - `Complete` принимает только типизированные входы и вычисленный результат.
   Metadata снимка/отчёта формируется из сохранённого анализа. Под блокировкой строки
   одна транзакция записывает snapshot, зависимости, уязвимости, report и completed.
@@ -316,7 +331,8 @@ raw_value SEC_SECRETS отклоняется. Коллекторы и расчё
 Интеграционные тесты используют `REPOPULSE_TEST_DATABASE_URL` подключения к
 тестовой PostgreSQL с правом CREATE DATABASE. Для каждого прогона создаётся
 отдельная БД `repopulse_storage_<случайный UUID>`, применяются foundation Up,
-проверяются round trip, доступ, гонки и rollback, затем Down/Up и удаление этой БД.
+проверяются round trip, доступ, гонки, rollback, конкурентная очередь и
+однократная публикация частичного результата, затем Down/Up и удаление этой БД.
 Без переменной этот тест пропускается; CI поднимает PostgreSQL 17 и запускает его
 вместе с `go test -race`. Не указывайте производственную БД.
 
