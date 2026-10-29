@@ -18,10 +18,10 @@ function isAccessDenied(code: string): boolean {
 
 export type ReportState<T = Report> =
   | { kind: 'idle' }
-  | { kind: 'loading'; reportId: string }
+  | { kind: 'loading'; reportId: string; data: T | null; loadedAt: string | null }
   | { kind: 'loaded'; reportId: string; data: T; loadedAt: string }
-  | { kind: 'error'; reportId: string; message: string }
-  | { kind: 'offline'; reportId: string }
+  | { kind: 'error'; reportId: string; message: string; data: T | null; loadedAt: string | null }
+  | { kind: 'offline'; reportId: string; data: T | null; loadedAt: string | null }
   | { kind: 'hidden'; reportId: string; code: string };
 
 export function useReport<T = Report>(reportId: string | null | undefined) {
@@ -29,10 +29,12 @@ export function useReport<T = Report>(reportId: string | null | undefined) {
   const [state, setState] = useState<ReportState<T>>({ kind: 'idle' });
   const inFlightRef = useRef(false);
   const attemptRef = useRef(0);
+  const lastLoadedRef = useRef<{ data: T; loadedAt: string } | null>(null);
 
   useEffect(() => {
     attemptRef.current += 1;
     inFlightRef.current = false;
+    lastLoadedRef.current = null;
     setState({ kind: 'idle' });
   }, [reportId]);
 
@@ -41,7 +43,12 @@ export function useReport<T = Report>(reportId: string | null | undefined) {
     if (inFlightRef.current) return;
 
     if (!online) {
-      setState({ kind: 'offline', reportId });
+      setState({
+        kind: 'offline',
+        reportId,
+        data: lastLoadedRef.current?.data ?? null,
+        loadedAt: lastLoadedRef.current?.loadedAt ?? null,
+      });
       return;
     }
 
@@ -49,27 +56,32 @@ export function useReport<T = Report>(reportId: string | null | undefined) {
     const attempt = ++attemptRef.current;
     const controller = new AbortController();
 
-    setState({ kind: 'loading', reportId });
+    setState({
+      kind: 'loading',
+      reportId,
+      data: lastLoadedRef.current?.data ?? null,
+      loadedAt: lastLoadedRef.current?.loadedAt ?? null,
+    });
 
     try {
       const data = await repositoryService.getReport(reportId, controller.signal);
       if (attemptRef.current !== attempt) return;
-      setState({
-        kind: 'loaded',
-        reportId,
-        data: data as T,
-        loadedAt: new Date().toISOString(),
-      });
+      const loadedAt = new Date().toISOString();
+      lastLoadedRef.current = { data: data as T, loadedAt };
+      setState({ kind: 'loaded', reportId, data: data as T, loadedAt });
     } catch (error) {
       if (attemptRef.current !== attempt) return;
       const code = error instanceof ApiError ? error.code : 'INTERNAL_ERROR';
       if (isAccessDenied(code)) {
+        lastLoadedRef.current = null;
         setState({ kind: 'hidden', reportId, code });
       } else {
         setState({
           kind: 'error',
           reportId,
           message: safeMessage(error, 'Не удалось загрузить отчёт.'),
+          data: lastLoadedRef.current?.data ?? null,
+          loadedAt: lastLoadedRef.current?.loadedAt ?? null,
         });
       }
     } finally {

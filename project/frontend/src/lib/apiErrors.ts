@@ -19,7 +19,7 @@ export const SAFE_MESSAGES: Record<string, string> = {
   CSRF_REJECTED: 'Запрос отклонён. Обновите страницу.',
 };
 
-export function safeMessage(error: unknown, fallback = SAFE_MESSAGES.DEAFULT): string {
+export function safeMessage(error: unknown, fallback = SAFE_MESSAGES.DEFAULT): string {
   if (error instanceof ApiError) {
     return SAFE_MESSAGES[error.code] ?? fallback;
   }

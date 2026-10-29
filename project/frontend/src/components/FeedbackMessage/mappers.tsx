@@ -198,6 +198,12 @@ export function reportFeedback(
   state: ReportState,
   actions: ReportActions,
 ): FeedbackView | null {
+  const lastLoadedHint =
+    (state.kind === 'loading' || state.kind === 'error' || state.kind === 'offline') &&
+    state.loadedAt
+      ? `Показаны сохранённые данные от ${formatUtc(state.loadedAt)}`
+      : undefined;
+
   switch (state.kind) {
     case 'idle':
     case 'loaded':
@@ -207,13 +213,15 @@ export function reportFeedback(
       return {
         variant: 'info',
         icon: false,
-        message: 'Загружаем отчёт…',
+        message: state.data ? 'Обновляем отчёт…' : 'Загружаем отчёт…',
+        hint: lastLoadedHint,
       };
 
     case 'offline':
       return {
         variant: 'warning',
         message: 'Нет соединения с сервером. Загрузка приостановлена.',
+        hint: lastLoadedHint,
         actions: (
           <Button variant="secondary" size="sm" onClick={actions.onReload}>
             Повторить загрузку
@@ -225,6 +233,7 @@ export function reportFeedback(
       return {
         variant: 'warning',
         message: state.message,
+        hint: lastLoadedHint,
         actions: (
           <Button variant="secondary" size="sm" onClick={actions.onReload}>
             Повторить загрузку
@@ -237,7 +246,7 @@ export function reportFeedback(
         variant: 'error',
         message: ['SESSION_REQUIRED', 'SESSION_EXPIRED', 'LOGIN_REQUIRED'].includes(state.code)
           ? 'Сессия истекла. Войдите снова'
-          : 'Анализ недоступен',
+          : 'Отчёт недоступен',
       };
   }
 }
