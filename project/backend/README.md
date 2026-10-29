@@ -137,7 +137,7 @@ Analyzer забирает принятые queued-задания из PostgreSQL
 | `SHUTDOWN_TIMEOUT` | `10s` | API, Auth |
 | `AUTH_GRPC_TARGET` | `127.0.0.1:9090` | API; адрес gRPC Auth, в Compose `auth:9090` |
 | `AUTH_REQUEST_TIMEOUT` | `3s` | API; каждый RPC; суммарный бюджет Auth и GitHub должен помещаться в HTTP_WRITE_TIMEOUT |
-| `PUBLIC_ORIGIN` | `http://localhost:3000` | API; точный Origin frontend для POST гостя, регистрации, входа, выхода и проверки URL и анализа |
+| `PUBLIC_ORIGIN` | `http://localhost:3000` | API; точный Origin frontend для POST гостя, регистрации, входа, выхода, проверки URL и запуска анализа |
 | `COOKIE_SECURE` | `true` | API; в локальном HTTP Compose — false, для HTTPS — true |
 | `GITHUB_CHECK_TIMEOUT` | `25s` | API; бюджет GitHub-проверки, меньше HTTP_WRITE_TIMEOUT |
 | `GITHUB_TOKEN` | пусто | API; необязательный серверный токен GitHub, не логируется |

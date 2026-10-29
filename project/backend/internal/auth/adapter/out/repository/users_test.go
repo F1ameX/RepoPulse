@@ -4,31 +4,81 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
 )
 
-// testPool connects to a separate test database with the auth migration applied.
-// The test is skipped when AUTH_TEST_DATABASE_URL is not set.
+// authMigrations is the auth migration directory relative to this package.
+const authMigrations = "../../../../../migrations/auth"
+
+// testPool creates a disposable database on the REPOPULSE_TEST_DATABASE_URL
+// server, applies the Up part of every auth migration and drops the database
+// after the test. The shared database is never modified, so the test works on
+// an empty CI PostgreSQL and on a developer database alike.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	url := os.Getenv("REPOPULSE_TEST_DATABASE_URL")
-	if url == "" {
+	dsn := os.Getenv("REPOPULSE_TEST_DATABASE_URL")
+	if dsn == "" {
 		t.Skip("REPOPULSE_TEST_DATABASE_URL is not set")
 	}
-	pool, err := pgxpool.New(context.Background(), url)
+	ctx := context.Background()
+	admin, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal("invalid test database configuration")
+	}
+	name := "repopulse_auth_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	quoted := pgx.Identifier{name}.Sanitize()
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+quoted); err != nil {
+		admin.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := admin.Exec(ctx, "DROP DATABASE "+quoted+" WITH (FORCE)"); err != nil {
+			t.Errorf("drop isolated test database: %v", err)
+		}
+		admin.Close()
+	})
+
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal("invalid test database configuration")
+	}
+	cfg.ConnConfig.Database = name
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(pool.Close)
-	if err := pool.Ping(context.Background()); err != nil {
-		t.Fatal(err)
+	t.Cleanup(pool.Close) // runs before the DROP above
+
+	files, err := filepath.Glob(filepath.Join(authMigrations, "*.sql"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("auth migrations not found: %v", err)
+	}
+	sort.Strings(files)
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		up, _, ok := strings.Cut(string(data), "-- +goose Down")
+		if !ok {
+			t.Fatalf("%s has no Down section", file)
+		}
+		if _, err := pool.Exec(ctx, strings.TrimPrefix(up, "-- +goose Up")); err != nil {
+			t.Fatalf("apply %s: %v", file, err)
+		}
 	}
 	return pool
 }

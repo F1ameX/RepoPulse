@@ -43,14 +43,12 @@ cursor — непрозрачная строка Report, привязанная 
 - GET /auth/session без действующих cookie возвращает 200 с двумя null, не создавая
   сессию. Frontend явно вызывает POST /auth/guest-session, затем повторяет GET,
   чтобы подтвердить сохранение cookie. POST проверяет Origin по PUBLIC_ORIGIN.
-- Реализованы гостевые операции, проверка URL и Register/Login/Logout.
-  Создание анализа пока возвращает 501 NOT_IMPLEMENTED.
 - POST register/login/logout проверяют Origin по PUBLIC_ORIGIN. Login ставит
   repopulse_session с Max-Age/Expires до expires_at сессии; guest cookie не меняется.
   Logout идемпотентен: 204 и удаление account cookie, в том числе без cookie и при
   повторе. Если Auth не подтвердил отзыв, возвращается ошибка, cookie сохраняется.
 - Реализованы гостевые операции, проверка URL, принятие анализа и чтение его
-  статуса. Register/Login/Logout пока возвращают 501 NOT_IMPLEMENTED.
+  статуса, Register/Login/Logout.
 - IssuedSession.token остаётся между Auth и Gateway; в JSON браузеру попадает
   только SessionInfo, токен устанавливается через Set-Cookie.
 - Запросы изменения состояния проверяют Origin/CSRF. Cookie не передаются в URL.

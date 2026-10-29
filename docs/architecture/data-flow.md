@@ -64,9 +64,9 @@ GET без действующих сессий возвращает 200 с accou
 POST повторно использует действующего гостя: тот же токен и первоначальный срок,
 ответ 200 вместо 201. Cookie HttpOnly, SameSite=Lax, Path=/api/v1, без Max-Age/Expires.
 Secure включён по умолчанию; COOKIE_SECURE=false используется только для локального
-HTTP в Compose. POST guest-session, repositories/validate, auth/register, auth/login
-и auth/logout требуют Origin, точно совпадающий с PUBLIC_ORIGIN; чужой или
-отсутствующий Origin даёт CSRF_REJECTED.
+HTTP в Compose. POST guest-session, repositories/validate, analyses, auth/register,
+auth/login и auth/logout требуют Origin, точно совпадающий с PUBLIC_ORIGIN; чужой
+или отсутствующий Origin даёт CSRF_REJECTED.
 
 Регистрация и вход (FR-27). Auth нормализует и проверяет поля, проверка занятости
 и учётных данных идёт только после прохождения формата обоими полями. Регистрация

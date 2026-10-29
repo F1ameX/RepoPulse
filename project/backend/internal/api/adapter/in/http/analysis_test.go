@@ -215,6 +215,16 @@ func (s combinedSessions) GetSessionContext(context.Context, apidomain.SessionTo
 	return apidomain.SessionContext{Guest: &s.guest}, nil
 }
 
+// Account operations are not exercised by the analysis contract test.
+func (s combinedSessions) Register(context.Context, string, string) (apidomain.RegistrationResult, error) {
+	return apidomain.RegistrationResult{}, apidomain.ErrInternal
+}
+func (s combinedSessions) Login(context.Context, string, string) (apidomain.IssuedSession, error) {
+	return apidomain.IssuedSession{}, apidomain.ErrInternal
+}
+func (s combinedSessions) Logout(context.Context, apidomain.SessionTokens) error {
+	return apidomain.ErrInternal
+}
 func (s combinedSessions) ContinueGuest(context.Context, apidomain.SessionTokens) (apidomain.IssuedSession, bool, error) {
 	return apidomain.IssuedSession{Token: "opaque", Session: s.guest}, false, nil
 }
