@@ -18,9 +18,9 @@ import (
 // The test is skipped when AUTH_TEST_DATABASE_URL is not set.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	url := os.Getenv("AUTH_TEST_DATABASE_URL")
+	url := os.Getenv("REPOPULSE_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("AUTH_TEST_DATABASE_URL is not set")
+		t.Skip("REPOPULSE_TEST_DATABASE_URL is not set")
 	}
 	pool, err := pgxpool.New(context.Background(), url)
 	if err != nil {
