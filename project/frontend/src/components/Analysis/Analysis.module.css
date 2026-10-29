@@ -1,0 +1,196 @@
+.page {
+  --color-text: #1a1613;
+  --color-primary: #1a1613;
+  --color-primary-hover: #39312b;
+  --color-info: var(--color-text);
+  --radius: 12px;
+  --page-inset: 10%;
+  --block-gap: 48px;
+  min-height: 100svh;
+  flex: 1;
+  background: #fdf8f3;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+.header {
+  padding: 15px 4%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+}
+.logo {
+  color: inherit;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-decoration: none;
+}
+.page a {
+  color: inherit;
+}
+.page button,
+.newAnalysis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 7px 20px;
+  border: 1px solid currentColor;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 24px;
+  text-decoration: none;
+  white-space: normal;
+}
+.page button:not(:disabled):hover,
+.newAnalysis:hover {
+  background: #eee6de;
+}
+.newAnalysis:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.content {
+  padding: 45px var(--page-inset) 75px;
+  min-width: 0;
+}
+.titleBlock {
+  padding: 3px 0 0;
+  min-width: 0;
+}
+.title {
+  margin: 0;
+  font-size: 42px;
+  line-height: 1.215;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.statusSection {
+  padding: 72px 0 24px;
+}
+.statusRow {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  min-height: 120px;
+}
+.statusText {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.3;
+}
+.stage {
+  margin: 9px 0 0;
+  font-size: 24px;
+  line-height: 1.3;
+}
+.spinner {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+}
+.spinner img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.statusActions {
+  margin: 8px 0 0 64px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.feedback {
+  margin-top: 18px;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.feedback:empty {
+  display: none;
+}
+.notice {
+  font-size: 15px;
+  color: #62594f;
+  margin: 18px 0 0;
+}
+.report {
+  margin-top: var(--block-gap);
+  font-size: 24px;
+  line-height: 1.35;
+}
+.fields,
+.fields dl,
+.fields dd {
+  margin: 0;
+}
+.field {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 0.3em;
+  margin-bottom: 20px;
+}
+.fields > :last-child,
+.versions .field:last-child {
+  margin-bottom: 0;
+}
+.field dt {
+  font-weight: 700;
+}
+.field dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fields a {
+  color: inherit;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.fields a:hover {
+  color: inherit;
+}
+.versions > dt {
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.versions > dd {
+  margin-left: 48px;
+}
+.versions .field {
+  margin-bottom: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
+.previewSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--block-gap);
+  margin-top: var(--block-gap);
+  padding-bottom: 24px;
+}
+.previewSection .report,
+.previewSection .statusActions,
+.previewSection .feedback {
+  margin: 0;
+}
+
+.page .primaryAction {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fdf8f3;
+}
+.page .primaryAction:not(:disabled):hover {
+  background: var(--color-primary-hover);
+}

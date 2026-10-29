@@ -1,3 +1,4 @@
+import { formatUtc } from '@/lib/analysisView';
 import { Button } from '@/components/Button/Button';
 import type { FeedbackView } from './FeedbackMessage';
 import type { SubmissionState } from '@/hooks/useAnalysisSubmission';
@@ -22,16 +23,11 @@ export function submissionFeedback(
       return null;
 
     case 'submitting':
-      return {
-        variant: 'info',
-        icon: false,
-        message: 'Отправляем запрос на анализ…',
-      };
+      return null;
 
     case 'unknown':
     case 'temporary-error': {
-      const urlChanged =
-        currentUrl !== undefined && currentUrl !== state.originalUrl;
+      const urlChanged = currentUrl !== undefined && currentUrl !== state.originalUrl;
       return {
         variant: 'warning',
         message:
@@ -75,11 +71,7 @@ export function submissionFeedback(
         variant: 'success',
         message: 'Анализ запущен.',
         actions: (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => actions.onOpen(state.analysisId)}
-          >
+          <Button variant="secondary" size="sm" onClick={() => actions.onOpen(state.analysisId)}>
             Открыть анализ
           </Button>
         ),
@@ -88,7 +80,7 @@ export function submissionFeedback(
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  queued: 'В очереди',
+  queued: 'Ожидание',
   running: 'Выполняется',
   completed: 'Завершён',
   failed: 'Ошибка',
@@ -101,17 +93,8 @@ const STATUS_VARIANT: Record<string, FeedbackView['variant']> = {
   failed: 'error',
 };
 
-function formatUtc(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
-}
-
-function lastConfirmedLine(
-  status: string,
-  updatedAt: string,
-): string {
-  return `Последнее подтверждённое: ${STATUS_LABELS[status] ?? status} (${formatUtc(updatedAt)})`;
+function lastConfirmedLine(status: string, updatedAt: string): string {
+  return `Последнее подтверждённое состояние: ${STATUS_LABELS[status] ?? status}. Последнее обновление: ${formatUtc(updatedAt)}`;
 }
 
 export interface StatusActions {
@@ -141,7 +124,9 @@ export function statusFeedback(
       if (status === 'failed') {
         return {
           variant: 'error',
-          message: reasonCode ? safeMessageByCode(reasonCode, 'Анализ завершился ошибкой.') : 'Анализ завершился ошибкой.',
+          message: reasonCode
+            ? safeMessageByCode(reasonCode, 'Анализ завершился ошибкой.')
+            : 'Анализ завершился ошибкой.',
           hint: `Подтверждено: ${formatUtc(updatedAt)}`,
         };
       }
@@ -158,7 +143,7 @@ export function statusFeedback(
         message: state.message,
         hint: state.lastConfirmed
           ? lastConfirmedLine(state.lastConfirmed.status, state.lastConfirmed.updatedAt)
-          : 'Подтверждённых данных нет.',
+          : 'Состояние пока неизвестно',
         actions: (
           <Button variant="secondary" size="sm" onClick={actions.onRefresh}>
             Проверить статус
@@ -194,10 +179,7 @@ export interface ReportActions {
   onReload: () => void;
 }
 
-export function reportFeedback(
-  state: ReportState,
-  actions: ReportActions,
-): FeedbackView | null {
+export function reportFeedback(state: ReportState, actions: ReportActions): FeedbackView | null {
   const lastLoadedHint =
     (state.kind === 'loading' || state.kind === 'error' || state.kind === 'offline') &&
     state.loadedAt

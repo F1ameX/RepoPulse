@@ -27,8 +27,8 @@ export function safeMessage(error: unknown, fallback = SAFE_MESSAGES.DEFAULT): s
 }
 
 export function safeMessageByCode(
-  code: string | null | undefined, 
-  fallback = SAFE_MESSAGES.DEFAULT
+  code: string | null | undefined,
+  fallback = SAFE_MESSAGES.DEFAULT,
 ): string {
   if (!code) return fallback;
   return SAFE_MESSAGES[code] ?? fallback;
