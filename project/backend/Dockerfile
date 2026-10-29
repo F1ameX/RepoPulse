@@ -10,7 +10,7 @@ RUN CGO_ENABLED=0 go build -o /service ./cmd/${SERVICE}
 
 FROM alpine:3.23
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates git
 WORKDIR /app
 COPY --from=build /service ./service
 ENTRYPOINT ["/app/service"]
