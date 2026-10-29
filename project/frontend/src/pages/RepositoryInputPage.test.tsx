@@ -55,7 +55,7 @@ describe('C1 repository form', () => {
     expect(input().getAttribute('aria-invalid')).toBe('true');
     expect(input().getAttribute('aria-describedby')?.split(' ')).toEqual([
       'repository-hint',
-      'repository-url-error',
+      'repository-error',
     ]);
     expect(document.activeElement).toBe(input());
     expect(input().value).toBe(value);

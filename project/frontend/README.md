@@ -33,7 +33,9 @@ JSON-ошибки, HTML-ответ 502, разрыв соединения, та�
 анализа, отслеживание состояния, отчёт и интерфейс входа реализуются в
 последующих спринтах. Успешная проверка URL не означает выполненный анализ.
 
-## Хук валидации репозитория
+## Хуки
+
+### Валидация репозитория
 
 ``` tsx
 import { useRepositoryValidation } from '@/hooks/useRepositoryValidation';
@@ -50,12 +52,59 @@ const {
 } = useRepositoryValidation();
 ```
 
+### Отправка запроса на анализ
+
+``` tsx
+import { useAnalysisSubmission } from '@/hooks/useAnalysisSubmission';
+
+const {
+  state,          // idle | submitting | unknown | temporary-error | confirmed-error | accepted
+  submit,
+  retrySame,
+  retryNew,
+  reset,
+  originalUrl,    // string | null - URL, который отправляли
+  hasUnconfirmed, // true, если исход неизвестен или временная ошибка
+  isPending,
+} = useAnalysisSubmission({
+  onAccepted: (response) => navigate(`/analysis/${response.analysis_id}`),
+});
+```
+
+### Загрузки отчета
+
+``` tsx
+import { useReport } from '@/hooks/useReport';
+import type { Report } from '@/types';
+
+const {
+  state,     // idle | loading | loaded | error | offline | hidden
+  reload,
+  isOffline,
+} = useReport<Report>(reportId);
+```
+
+### Чтения статуса анализа
+
+``` tsx
+import { useAnalysisStatus } from '@/hooks/useAnalysisStatus';
+
+const {
+  state,     // idle | loading | confirmed | error | offline | hidden
+  refresh,
+  isOffline,
+} = useAnalysisStatus(analysisId);
+```
+
 ## Компоненты
 
 ### Импорт
 На любой странице:
 
-`import { Button, Input, Message } from '@/components';`
+``` tsx
+import { FeedbackMessage } from '@/components';		// Компонент неопределённого исхода отправки
+import { Button, Input, Message } from '@/components';	// Базовые компоненты: Кнопка, Поле ввода, Блок сообщения
+```
 
 ### Применение
 
@@ -154,3 +203,31 @@ const {
 	Текст сообщения
 </Message>
 ```
+
+#### FeedbackMessage
+
+``` tsx
+<FeedbackMessage view={someView} />
+```
+
+Вид `FeedbackView `:
+
+``` tsx
+{
+  variant: 'info' | 'success' | 'warning' | 'error';
+  message: ReactNode;
+  hint?: ReactNode;
+  actions?: ReactNode;
+  icon?: ReactNode | false;
+}
+```
+
+`mappers.tsx` содержит три функции:
+
+`submissionFeedback(state, currentUrl, actions)` - для экрана отправки.
+
+`statusFeedback(state, actions)` - для экрана статуса.
+
+`reportFeedback(state, actions)` - для экрана отчёта.
+
+Все они возвращают `FeedbackView | null`, который `FeedbackMessag`e превращает в готовый `Message` с правильным цветом, иконкой и кнопками действий.

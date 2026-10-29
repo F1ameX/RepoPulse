@@ -1,0 +1,12 @@
+.body {
+  display: inline;
+}
+
+.hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.35;
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+}
