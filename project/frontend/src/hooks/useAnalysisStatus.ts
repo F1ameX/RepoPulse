@@ -20,9 +20,7 @@ export function useAnalysisStatus(analysisId: string | null | undefined) {
   const refreshRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
-    const configuredInterval = Number(import.meta.env.VITE_ANALYSIS_POLL_INTERVAL_MS ?? '1000');
-    const pollInterval =
-      Number.isFinite(configuredInterval) && configuredInterval >= 250 ? configuredInterval : 1000;
+    const pollInterval = 5_000;
 
     let active = true;
     let pending = false;

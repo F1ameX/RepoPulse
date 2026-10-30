@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { ApiError } from '@/services/api';
 import { authService } from '@/services/authService';
 import { repositoryService } from '@/services/repositoryService';
@@ -27,20 +28,37 @@ const submit = () => fireEvent.submit(input().closest('form')!);
 const enter = (value = 'https://github.com/owner/repo') =>
   fireEvent.change(input(), { target: { value } });
 
+function CurrentPath() {
+  return <output aria-label="Текущий адрес">{useLocation().pathname}</output>;
+}
+function renderForm() {
+  return render(
+    <MemoryRouter>
+      <RepositoryInputPage />
+      <CurrentPath />
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
+  sessionStorage.clear();
   vi.spyOn(authService, 'getSessionContext').mockResolvedValue({ account: null, guest });
   vi.spyOn(authService, 'createGuestSession').mockResolvedValue(guest);
   vi.spyOn(repositoryService, 'validateRepository').mockResolvedValue(valid);
-  vi.spyOn(repositoryService, 'createAnalysis').mockRejectedValue(
-    new Error('C2 endpoint must not be called'),
-  );
+  vi.spyOn(repositoryService, 'createAnalysis').mockResolvedValue({
+    outcome: 'accepted',
+    analysis_id: '6f4a2b18-7c93-4e51-9d20-83a6c0b145ef',
+    report_id: null,
+    status: 'queued',
+    repository: valid.repository,
+  });
 });
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
 
-describe('C1 repository form', () => {
+describe('repository input and analysis launch', () => {
   it.each([
     '',
     'https://gitlab.com/a/b',
@@ -48,7 +66,7 @@ describe('C1 repository form', () => {
     'https://github.com/a/b?',
     'x'.repeat(2049),
   ])('rejects invalid input before any request: %s', async (value) => {
-    render(<RepositoryInputPage />);
+    renderForm();
     enter(value);
     submit();
     expect(screen.getByRole('alert').textContent).toBeTruthy();
@@ -67,29 +85,38 @@ describe('C1 repository form', () => {
   });
 
   it('does not silently remove pasted line breaks', () => {
-    render(<RepositoryInputPage />);
+    renderForm();
     fireEvent.paste(input(), { clipboardData: { getData: () => 'https://github.com/a/b\n' } });
     submit();
     expect(screen.getByText(URL_MESSAGES.INVALID_REPOSITORY_URL)).toBeTruthy();
     expect(authService.getSessionContext).not.toHaveBeenCalled();
   });
 
-  it('creates and confirms a guest once, sends original input, never launches C2 analysis', async () => {
+  it('confirms a guest, validates original input and opens the accepted analysis', async () => {
     vi.mocked(authService.getSessionContext).mockResolvedValueOnce({ account: null, guest: null });
-    render(<RepositoryInputPage />);
+    renderForm();
     const raw = ' HTTPS://GitHub.com/Owner/Repo.git.git/ ';
     enter(raw);
     submit();
     await screen.findByText(success);
     expect(authService.createGuestSession).toHaveBeenCalledTimes(1);
-    expect(authService.getSessionContext).toHaveBeenCalledTimes(2);
+    expect(authService.getSessionContext).toHaveBeenCalledTimes(3);
     expect(repositoryService.validateRepository).toHaveBeenCalledWith(raw, expect.any(AbortSignal));
-    expect(repositoryService.createAnalysis).not.toHaveBeenCalled();
+    await waitFor(() => expect(repositoryService.createAnalysis).toHaveBeenCalledTimes(1));
+    expect(repositoryService.createAnalysis).toHaveBeenCalledWith(
+      { request_id: expect.any(String), repository_url: raw },
+      expect.any(AbortSignal),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('Текущий адрес').textContent).toBe(
+        '/analysis/6f4a2b18-7c93-4e51-9d20-83a6c0b145ef',
+      ),
+    );
     expect(input().value).toBe(raw);
   });
 
   it('reuses a verified guest and does not treat letter case as a repository move', async () => {
-    render(<RepositoryInputPage />);
+    renderForm();
     enter('https://GitHub.com/Owner/Repo');
     submit();
     await screen.findByText(success);
@@ -102,7 +129,7 @@ describe('C1 repository form', () => {
       ...valid,
       moved_from: 'https://github.com/old/repo',
     });
-    render(<RepositoryInputPage />);
+    renderForm();
     enter('https://github.com/old/repo');
     submit();
     await screen.findByText('Репозиторий перемещён: owner/repo');
@@ -115,12 +142,12 @@ describe('C1 repository form', () => {
         finish = resolve;
       }),
     );
-    render(<RepositoryInputPage />);
+    renderForm();
     enter();
     submit();
     submit();
     await waitFor(() => expect(repositoryService.validateRepository).toHaveBeenCalledTimes(1));
-    expect(screen.getByText('Проверяем доступность репозитория')).toBeTruthy();
+    expect(screen.queryByText('Проверяем доступность репозитория')).toBeNull();
     expect(input().disabled).toBe(true);
     expect(
       (screen.getByRole('button', { name: 'Анализировать' }) as HTMLButtonElement).disabled,
@@ -129,7 +156,7 @@ describe('C1 repository form', () => {
       finish(valid);
     });
     await screen.findByText(success);
-    expect(input().disabled).toBe(false);
+    await waitFor(() => expect(input().disabled).toBe(false));
   });
 
   it.each([
@@ -144,7 +171,7 @@ describe('C1 repository form', () => {
     vi.mocked(repositoryService.validateRepository).mockRejectedValueOnce(
       new ApiError(code, 'sensitive upstream detail', 503),
     );
-    render(<RepositoryInputPage />);
+    renderForm();
     enter();
     submit();
     await screen.findByText(message);
@@ -160,7 +187,7 @@ describe('C1 repository form', () => {
     vi.mocked(repositoryService.validateRepository).mockRejectedValueOnce(
       new ApiError('REPOSITORY_NOT_FOUND_OR_PRIVATE', ''),
     );
-    render(<RepositoryInputPage />);
+    renderForm();
     enter();
     submit();
     fireEvent.click(await screen.findByRole('button', { name: 'Изменить URL' }));
@@ -171,7 +198,7 @@ describe('C1 repository form', () => {
 
   it('shows cookie instructions if the new guest cannot be confirmed', async () => {
     vi.mocked(authService.getSessionContext).mockResolvedValue({ account: null, guest: null });
-    render(<RepositoryInputPage />);
+    renderForm();
     enter();
     submit();
     await screen.findByText('Для работы RepoPulse разрешите cookie для этого сайта');
@@ -181,7 +208,7 @@ describe('C1 repository form', () => {
 
   it('does not replace an expired account with a guest automatically', async () => {
     vi.mocked(authService.getSessionContext).mockRejectedValue(new ApiError('SESSION_EXPIRED', ''));
-    render(<RepositoryInputPage />);
+    renderForm();
     enter();
     submit();
     await screen.findByText('Сессия истекла. Войдите снова');
@@ -193,7 +220,7 @@ describe('C1 repository form', () => {
     vi.mocked(repositoryService.validateRepository).mockRejectedValue(
       new ApiError('INVALID_REPOSITORY_URL', 'internal detail'),
     );
-    render(<RepositoryInputPage />);
+    renderForm();
     enter();
     submit();
     await screen.findByText(URL_MESSAGES.INVALID_REPOSITORY_URL);
@@ -202,7 +229,7 @@ describe('C1 repository form', () => {
 
   it('aborts the pending request on unmount', async () => {
     vi.mocked(repositoryService.validateRepository).mockReturnValue(new Promise(() => {}));
-    const view = render(<RepositoryInputPage />);
+    const view = renderForm();
     enter();
     submit();
     await waitFor(() => expect(repositoryService.validateRepository).toHaveBeenCalledTimes(1));
@@ -218,7 +245,7 @@ describe('C1 repository form', () => {
         resolveSession = resolve;
       }),
     );
-    const view = render(<RepositoryInputPage />);
+    const view = renderForm();
     enter();
     submit();
     view.unmount();
@@ -234,7 +261,7 @@ describe('C1 repository form', () => {
       account: { kind: 'account', login: 'owner', expires_at: guest.expires_at },
       guest: null,
     });
-    render(<RepositoryInputPage />);
+    renderForm();
     enter();
     submit();
     await screen.findByText(success);
@@ -245,7 +272,7 @@ describe('C1 repository form', () => {
     vi.mocked(authService.getSessionContext).mockRejectedValueOnce(
       new ApiError('INTERNAL_ERROR', 'HTTP 502', 502),
     );
-    render(<RepositoryInputPage />);
+    renderForm();
     enter();
     submit();
     await screen.findByText(temporary);
@@ -262,7 +289,7 @@ describe('C1 repository form', () => {
     vi.mocked(authService.createGuestSession).mockRejectedValueOnce(
       new ApiError('NETWORK_ERROR', 'request timed out'),
     );
-    render(<RepositoryInputPage />);
+    renderForm();
     enter();
     submit();
     await screen.findByText(temporary);
@@ -273,7 +300,7 @@ describe('C1 repository form', () => {
   });
 
   it('removes the old success when a changed URL fails local validation', async () => {
-    render(<RepositoryInputPage />);
+    renderForm();
     enter();
     submit();
     await screen.findByText(success);
@@ -281,7 +308,7 @@ describe('C1 repository form', () => {
     expect(screen.queryByText(success)).toBeNull();
     submit();
     expect(screen.getByText(URL_MESSAGES.INVALID_REPOSITORY_URL)).toBeTruthy();
-    expect(authService.getSessionContext).toHaveBeenCalledTimes(1);
+    expect(authService.getSessionContext).toHaveBeenCalledTimes(2);
     expect(repositoryService.validateRepository).toHaveBeenCalledTimes(1);
   });
 });

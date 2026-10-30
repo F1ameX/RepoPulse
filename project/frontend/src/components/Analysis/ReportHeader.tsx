@@ -38,42 +38,45 @@ export function ReportHeader({
   const until = formatUtc(report.window?.until);
   const fields: [string, ReactNode][] = [];
   const add = (name: string, value: string | null | undefined, node?: ReactNode) => {
-    if (known(value)) fields.push([name, node ?? value]);
+    fields.push([name, known(value) ? (node ?? value) : 'Не определено']);
   };
   add('Платформа', repository.platform === 'github' ? 'GitHub' : null);
-  if (known(repository.owner) && known(repository.name))
-    add('Репозиторий', `${repository.owner}/${repository.name}`);
-  if (safeUrl)
-    add(
-      'Ссылка',
-      url,
-      <a href={url} target="_blank" rel="noopener noreferrer">
-        {url}
-      </a>,
-    );
+  add(
+    'Репозиторий',
+    known(repository.owner) && known(repository.name)
+      ? `${repository.owner}/${repository.name}`
+      : null,
+  );
+  add(
+    'Ссылка',
+    safeUrl ? url : null,
+    <a href={url} target="_blank" rel="noopener noreferrer">
+      {url}
+    </a>,
+  );
   add('Анализ', report.analysis_id);
-  if (report.report_id !== report.analysis_id) add('Отчёт', report.report_id);
+  if (known(report.report_id) && report.report_id !== report.analysis_id)
+    add('Отчёт', report.report_id);
   add('Завершён', completed);
   add('Момент оценки', assessment);
-  if (known(from) && known(until)) add('Период оценки', `[${from}, ${until})`);
+  add('Период оценки', known(from) && known(until) ? `[${from}, ${until})` : null);
   add('Ветка', repository.default_branch);
-  if (hasSha)
-    add(
-      'Commit',
-      sha,
-      safeUrl ? (
-        <a href={`${url}/commit/${sha}`} target="_blank" rel="noopener noreferrer">
-          {sha}
-        </a>
-      ) : (
-        sha
-      ),
-    );
-  const versions = [
+  add(
+    'Commit',
+    hasSha ? sha : null,
+    hasSha && safeUrl ? (
+      <a href={`${url}/commit/${sha}`} target="_blank" rel="noopener noreferrer">
+        {sha}
+      </a>
+    ) : (
+      sha
+    ),
+  );
+  const versions: [string, string | null | undefined][] = [
     ['Методика', report.versions?.methodology],
     ['Профиль сборщика', report.versions?.collector_profile],
     ['Каталог рекомендаций', report.versions?.recommendation_catalog],
-  ].filter((item): item is [string, string] => known(item[1]));
+  ];
   return (
     <section aria-label={label} className={styles.report}>
       <dl className={styles.fields}>
@@ -83,21 +86,19 @@ export function ReportHeader({
             <dd>{value}</dd>
           </div>
         ))}
-        {versions.length > 0 && (
-          <div className={styles.versions}>
-            <dt>Версии:</dt>
-            <dd>
-              <dl>
-                {versions.map(([name, value]) => (
-                  <div className={styles.field} key={name}>
-                    <dt>{name}:</dt>
-                    <dd>{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </dd>
-          </div>
-        )}
+        <div className={styles.versions}>
+          <dt>Версии:</dt>
+          <dd>
+            <dl>
+              {versions.map(([name, value]) => (
+                <div className={styles.field} key={name}>
+                  <dt>{name}:</dt>
+                  <dd>{known(value) ? value : 'Не определено'}</dd>
+                </div>
+              ))}
+            </dl>
+          </dd>
+        </div>
       </dl>
     </section>
   );
