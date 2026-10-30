@@ -1,6 +1,6 @@
 .message {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
   font-size: 14px;
@@ -11,7 +11,6 @@
   flex-shrink: 0;
   width: 16px;
   height: 16px;
-  margin-top: 2px;
 }
 
 .text {
@@ -21,6 +20,7 @@
 
 .actions {
   display: inline-flex;
+  align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }

@@ -1,103 +1,130 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/services/api';
 import { repositoryService } from '@/services/repositoryService';
-import type { AnalysisStatusValue } from '@/services/repositoryService';
-import { safeMessage } from '@/lib/apiErrors';
-import { useOnlineStatus } from './useOnlineStatus';
+import type { AnalysisStatus } from '@/types';
 
-export interface ConfirmedStatus {
-  status: AnalysisStatusValue;
+export interface ConfirmedStatus extends AnalysisStatus {
   reportId: string | null;
   reasonCode: string | null;
   updatedAt: string;
 }
-
 export type AnalysisStatusState =
   | { kind: 'idle' }
-  | { kind: 'loading'; analysisId: string; lastConfirmed: ConfirmedStatus | null }
+  | { kind: 'loading' | 'offline'; analysisId: string; lastConfirmed: ConfirmedStatus | null }
   | { kind: 'confirmed'; analysisId: string; lastConfirmed: ConfirmedStatus }
-  | {
-      kind: 'error';
-      analysisId: string;
-      message: string;
-      lastConfirmed: ConfirmedStatus | null;
-    }
-  | { kind: 'offline'; analysisId: string; lastConfirmed: ConfirmedStatus | null }
+  | { kind: 'error'; analysisId: string; message: string; lastConfirmed: ConfirmedStatus | null }
   | { kind: 'hidden'; analysisId: string; code: string };
 
 export function useAnalysisStatus(analysisId: string | null | undefined) {
-  const online = useOnlineStatus();
   const [state, setState] = useState<AnalysisStatusState>({ kind: 'idle' });
-  const lastConfirmedRef = useRef<ConfirmedStatus | null>(null);
-  const inFlightRef = useRef(false);
-  const attemptRef = useRef(0);
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
-    attemptRef.current += 1;
-    inFlightRef.current = false;
-    lastConfirmedRef.current = null;
-    setState({ kind: 'idle' });
-  }, [analysisId]);
+    const pollInterval = 5_000;
 
-  const refresh = useCallback(async () => {
-    if (!analysisId) return;
-    if (inFlightRef.current) return;
+    let active = true;
+    let pending = false;
+    let stopped = false;
+    let last: ConfirmedStatus | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let controller: AbortController | undefined;
 
-    if (!online) {
-      setState({
-        kind: 'offline',
-        analysisId,
-        lastConfirmed: lastConfirmedRef.current,
-      });
-      return;
-    }
+    const refresh = async () => {
+      if (!active || !analysisId || pending || stopped) return;
 
-    inFlightRef.current = true;
-    const attempt = ++attemptRef.current;
-    const controller = new AbortController();
+      clearTimeout(timer);
 
-    setState({
-      kind: 'loading',
-      analysisId,
-      lastConfirmed: lastConfirmedRef.current,
+      pending = true;
+      controller = new AbortController();
+
+      setState({ kind: 'loading', analysisId, lastConfirmed: last });
+
+      try {
+        const data = await repositoryService.getAnalysis(analysisId, controller.signal);
+
+        if (!active) return;
+
+        if (
+          data.analysis_id !== analysisId ||
+          !['queued', 'running', 'completed', 'failed'].includes(data.status) ||
+          !data.repository ||
+          (data.status === 'completed' && !data.report_id)
+        ) {
+          throw new Error('Invalid status response');
+        }
+        last = {
+          ...data,
+          reportId: data.report_id,
+          reasonCode: data.error?.code ?? null,
+          updatedAt: new Date().toISOString(),
+        };
+        stopped = data.status === 'completed' || data.status === 'failed';
+        setState({ kind: 'confirmed', analysisId, lastConfirmed: last });
+      } catch (error) {
+        if (!active) return;
+
+        const code = error instanceof ApiError ? error.code : 'NETWORK_ERROR';
+
+        if (
+          [
+            'SESSION_REQUIRED',
+            'SESSION_EXPIRED',
+            'LOGIN_REQUIRED',
+            'ANALYSIS_NOT_FOUND',
+            'FORBIDDEN',
+          ].includes(code)
+        ) {
+          stopped = true;
+          last = null;
+          setState({ kind: 'hidden', analysisId, code });
+        } else
+          setState({
+            kind: 'error',
+            analysisId,
+            message: 'Не удалось обновить статус',
+            lastConfirmed: last,
+          });
+      } finally {
+        pending = false;
+
+        if (active && !stopped && navigator.onLine && document.visibilityState !== 'hidden') {
+          timer = setTimeout(() => void refresh(), pollInterval);
+        }
+      }
+    };
+    const resume = () => {
+      clearTimeout(timer);
+      if (!navigator.onLine) {
+        if (analysisId && !stopped && !pending)
+          setState({ kind: 'offline', analysisId, lastConfirmed: last });
+      } else if (document.visibilityState !== 'hidden') void refresh();
+    };
+    refreshRef.current = refresh;
+
+    window.addEventListener('online', resume);
+    window.addEventListener('offline', resume);
+    document.addEventListener('visibilitychange', resume);
+
+    queueMicrotask(() => {
+      if (active) resume();
     });
 
-    try {
-      const data = await repositoryService.getAnalysis(analysisId, controller.signal);
-      if (attemptRef.current !== attempt) return;
+    return () => {
+      active = false;
+      controller?.abort();
+      clearTimeout(timer);
+      window.removeEventListener('online', resume);
+      window.removeEventListener('offline', resume);
+      document.removeEventListener('visibilitychange', resume);
+    };
+  }, [analysisId]);
 
-      const confirmed: ConfirmedStatus = {
-        status: data.status,
-        reportId: data.report_id ?? null,
-        reasonCode: data.error?.code ?? null,
-        updatedAt: new Date().toISOString(),
-      };
-      lastConfirmedRef.current = confirmed;
-      setState({ kind: 'confirmed', analysisId, lastConfirmed: confirmed });
-    } catch (error) {
-      if (attemptRef.current !== attempt) return;
-
-      const code = error instanceof ApiError ? error.code : 'NETWORK_ERROR';
-
-      if (['SESSION_REQUIRED', 'SESSION_EXPIRED', 'LOGIN_REQUIRED', 'ANALYSIS_NOT_FOUND', 'FORBIDDEN'].includes(code)) {
-        lastConfirmedRef.current = null;
-        setState({ kind: 'hidden', analysisId, code });
-      } else {
-        setState({
-          kind: 'error',
-          analysisId,
-          message: safeMessage(error, 'Не удалось проверить статус анализа.'),
-          lastConfirmed: lastConfirmedRef.current,
-        });
-      }
-    } finally {
-      if (attemptRef.current === attempt) inFlightRef.current = false;
-    }
-  }, [analysisId, online]);
+  const refresh = useCallback(() => refreshRef.current(), []);
 
   return {
     state,
     refresh,
-    isOffline: !online,
+    isOffline: state.kind === 'offline',
+    isPending: state.kind === 'loading',
   };
 }

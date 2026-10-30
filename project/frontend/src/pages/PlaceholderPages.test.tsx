@@ -7,21 +7,16 @@ import ErrorPage from './ErrorPage';
 
 afterEach(cleanup);
 
-it.each([AnalysisStatusPage, ReportPage])(
-  'does not invent an analysis or report before C2',
-  (Page) => {
-    render(
-      <MemoryRouter>
-        <Page />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText(/пока не реализован/)).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'К проверке репозитория' }).getAttribute('href')).toBe(
-      '/',
-    );
-    expect(screen.queryByText(/выполняется|завершён/)).toBeNull();
-  },
-);
+it.each([AnalysisStatusPage, ReportPage])('does not reveal metadata without a valid ID', (Page) => {
+  render(
+    <MemoryRouter>
+      <Page />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('alert').textContent).toMatch(/недоступен/);
+  expect(screen.getByRole('link', { name: 'Новый анализ' }).getAttribute('href')).toBe('/');
+  expect(screen.queryByText(/выполняется|завершён/)).toBeNull();
+});
 
 it('offers safe recovery from an unavailable page', () => {
   render(
