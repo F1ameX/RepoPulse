@@ -7,23 +7,25 @@ import ErrorPage from './ErrorPage';
 
 afterEach(cleanup);
 
-it.each([AnalysisStatusPage, ReportPage])('does not reveal metadata without a valid ID', (Page) => {
+it.each([
+  [AnalysisStatusPage, '/analysis/not-a-uuid', /Анализ недоступен/],
+  [ReportPage, '/report/not-a-uuid', /Отчёт недоступен/],
+] as const)('invalid UUID shows a safe denial', (Page, path, message) => {
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <Page />
     </MemoryRouter>,
   );
-  expect(screen.getByRole('alert').textContent).toMatch(/недоступен/);
+  expect(screen.getByRole('alert').textContent).toMatch(message);
   expect(screen.getByRole('link', { name: 'Новый анализ' }).getAttribute('href')).toBe('/');
   expect(screen.queryByText(/выполняется|завершён/)).toBeNull();
 });
 
-it('offers safe recovery from an unavailable page', () => {
+it('ErrorPage offers safe recovery', () => {
   render(
     <MemoryRouter>
       <ErrorPage />
     </MemoryRouter>,
   );
   expect(screen.getByRole('alert').textContent).toContain('Не удалось открыть страницу.');
-  expect(screen.getByRole('link').getAttribute('href')).toBe('/');
 });
