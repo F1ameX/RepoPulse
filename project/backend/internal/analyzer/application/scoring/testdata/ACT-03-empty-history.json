@@ -1,0 +1,43 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "ACT-03",
+  "title": "Полностью пустая история",
+  "requirement": "FR-17",
+  "input": {
+    "assessment_time": "2026-10-29T12:00:00Z",
+    "window": {
+      "days": 140
+    },
+    "history_status": "complete",
+    "commits": []
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "ACT_COMMIT_FREQ": {
+        "raw_value": null,
+        "normalized_score": null,
+        "status": "not_applicable",
+        "reason": "NO_COMMITS_AT_ALL"
+      },
+      "ACT_DAYS_SINCE_LAST": {
+        "raw_value": null,
+        "normalized_score": null,
+        "status": "not_applicable",
+        "reason": "NO_COMMITS_AT_ALL"
+      },
+      "ACT_TREND": {
+        "raw_value": null,
+        "normalized_score": null,
+        "status": "not_applicable",
+        "reason": "NO_COMMITS_IN_WINDOW"
+      }
+    }
+  },
+  "notes": [
+    "Пустая, но полностью прочитанная история не равна ошибке источника."
+  ]
+}

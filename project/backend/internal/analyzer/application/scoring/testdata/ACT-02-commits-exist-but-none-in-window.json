@@ -1,0 +1,53 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "ACT-02",
+  "title": "История есть, но в окне нет коммитов",
+  "requirement": "FR-17",
+  "input": {
+    "assessment_time": "2026-10-29T12:00:00Z",
+    "window": {
+      "days": 140,
+      "start_inclusive": "2026-06-11T12:00:00Z",
+      "end_exclusive": "2026-10-29T12:00:00Z"
+    },
+    "history_status": "complete",
+    "commits": [
+      {
+        "sha": "old-001",
+        "committer_date": "2026-06-01T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      }
+    ]
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "ACT_COMMIT_FREQ": {
+        "raw_value": 0,
+        "normalized_score": 0.0,
+        "status": "complete",
+        "reason": null
+      },
+      "ACT_DAYS_SINCE_LAST": {
+        "raw_value": 150,
+        "normalized_score": 0.6737946999085467,
+        "status": "complete",
+        "reason": null
+      },
+      "ACT_TREND": {
+        "raw_value": null,
+        "normalized_score": null,
+        "status": "not_applicable",
+        "reason": "NO_COMMITS_IN_WINDOW"
+      }
+    }
+  },
+  "notes": [
+    "Проверяет отличие нулевой частоты от N/A. Возраст последнего коммита вычисляется от committer UTC; число 150 соответствует разнице дат в этом сценарии."
+  ]
+}

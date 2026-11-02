@@ -1,0 +1,45 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "ACT-07",
+  "title": "Возраст последнего коммита ровно 30 суток",
+  "requirement": "FR-17",
+  "input": {
+    "assessment_time": "2026-10-29T12:00:00Z",
+    "window": {
+      "days": 140
+    },
+    "history_status": "complete",
+    "commits": [
+      {
+        "sha": "age-30-days",
+        "committer_date": "2026-09-29T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      }
+    ]
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "ACT_DAYS_SINCE_LAST": {
+        "raw_value": 30,
+        "normalized_score": 36.787944117144235,
+        "status": "complete",
+        "reason": null
+      },
+      "ACT_COMMIT_FREQ": {
+        "raw_value": 0.05,
+        "normalized_score": 2.0347078841559805,
+        "status": "complete",
+        "reason": null
+      }
+    }
+  },
+  "notes": [
+    "assessment_time минус committer_date составляет ровно 30 суток; 100*exp(-1). Коммит входит в окно, частота 1/20."
+  ]
+}

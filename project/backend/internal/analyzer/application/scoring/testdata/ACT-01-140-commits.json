@@ -1,0 +1,1026 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "ACT-01",
+  "title": "140 коммитов в 140-дневном окне",
+  "requirement": "FR-17",
+  "input": {
+    "assessment_time": "2026-10-29T12:00:00Z",
+    "window": {
+      "days": 140,
+      "start_inclusive": "2026-06-11T12:00:00Z",
+      "end_exclusive": "2026-10-29T12:00:00Z"
+    },
+    "history_status": "complete",
+    "commits": [
+      {
+        "sha": "fixture-commit-001",
+        "committer_date": "2026-06-11T12:00:00Z",
+        "is_main": true,
+        "is_merge": true,
+        "is_bot": true
+      },
+      {
+        "sha": "fixture-commit-002",
+        "committer_date": "2026-06-12T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-003",
+        "committer_date": "2026-06-13T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-004",
+        "committer_date": "2026-06-14T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-005",
+        "committer_date": "2026-06-15T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-006",
+        "committer_date": "2026-06-16T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-007",
+        "committer_date": "2026-06-17T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-008",
+        "committer_date": "2026-06-18T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-009",
+        "committer_date": "2026-06-19T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-010",
+        "committer_date": "2026-06-20T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-011",
+        "committer_date": "2026-06-21T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-012",
+        "committer_date": "2026-06-22T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-013",
+        "committer_date": "2026-06-23T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-014",
+        "committer_date": "2026-06-24T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-015",
+        "committer_date": "2026-06-25T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-016",
+        "committer_date": "2026-06-26T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-017",
+        "committer_date": "2026-06-27T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-018",
+        "committer_date": "2026-06-28T12:00:00Z",
+        "is_main": true,
+        "is_merge": true,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-019",
+        "committer_date": "2026-06-29T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-020",
+        "committer_date": "2026-06-30T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-021",
+        "committer_date": "2026-07-01T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-022",
+        "committer_date": "2026-07-02T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-023",
+        "committer_date": "2026-07-03T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-024",
+        "committer_date": "2026-07-04T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": true
+      },
+      {
+        "sha": "fixture-commit-025",
+        "committer_date": "2026-07-05T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-026",
+        "committer_date": "2026-07-06T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-027",
+        "committer_date": "2026-07-07T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-028",
+        "committer_date": "2026-07-08T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-029",
+        "committer_date": "2026-07-09T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-030",
+        "committer_date": "2026-07-10T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-031",
+        "committer_date": "2026-07-11T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-032",
+        "committer_date": "2026-07-12T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-033",
+        "committer_date": "2026-07-13T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-034",
+        "committer_date": "2026-07-14T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-035",
+        "committer_date": "2026-07-15T12:00:00Z",
+        "is_main": true,
+        "is_merge": true,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-036",
+        "committer_date": "2026-07-16T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-037",
+        "committer_date": "2026-07-17T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-038",
+        "committer_date": "2026-07-18T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-039",
+        "committer_date": "2026-07-19T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-040",
+        "committer_date": "2026-07-20T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-041",
+        "committer_date": "2026-07-21T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-042",
+        "committer_date": "2026-07-22T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-043",
+        "committer_date": "2026-07-23T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-044",
+        "committer_date": "2026-07-24T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-045",
+        "committer_date": "2026-07-25T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-046",
+        "committer_date": "2026-07-26T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-047",
+        "committer_date": "2026-07-27T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": true
+      },
+      {
+        "sha": "fixture-commit-048",
+        "committer_date": "2026-07-28T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-049",
+        "committer_date": "2026-07-29T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-050",
+        "committer_date": "2026-07-30T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-051",
+        "committer_date": "2026-07-31T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-052",
+        "committer_date": "2026-08-01T12:00:00Z",
+        "is_main": true,
+        "is_merge": true,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-053",
+        "committer_date": "2026-08-02T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-054",
+        "committer_date": "2026-08-03T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-055",
+        "committer_date": "2026-08-04T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-056",
+        "committer_date": "2026-08-05T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-057",
+        "committer_date": "2026-08-06T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-058",
+        "committer_date": "2026-08-07T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-059",
+        "committer_date": "2026-08-08T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-060",
+        "committer_date": "2026-08-09T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-061",
+        "committer_date": "2026-08-10T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-062",
+        "committer_date": "2026-08-11T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-063",
+        "committer_date": "2026-08-12T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-064",
+        "committer_date": "2026-08-13T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-065",
+        "committer_date": "2026-08-14T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-066",
+        "committer_date": "2026-08-15T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-067",
+        "committer_date": "2026-08-16T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-068",
+        "committer_date": "2026-08-17T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-069",
+        "committer_date": "2026-08-18T12:00:00Z",
+        "is_main": true,
+        "is_merge": true,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-070",
+        "committer_date": "2026-08-19T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": true
+      },
+      {
+        "sha": "fixture-commit-071",
+        "committer_date": "2026-08-20T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-072",
+        "committer_date": "2026-08-21T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-073",
+        "committer_date": "2026-08-22T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-074",
+        "committer_date": "2026-08-23T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-075",
+        "committer_date": "2026-08-24T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-076",
+        "committer_date": "2026-08-25T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-077",
+        "committer_date": "2026-08-26T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-078",
+        "committer_date": "2026-08-27T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-079",
+        "committer_date": "2026-08-28T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-080",
+        "committer_date": "2026-08-29T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-081",
+        "committer_date": "2026-08-30T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-082",
+        "committer_date": "2026-08-31T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-083",
+        "committer_date": "2026-09-01T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-084",
+        "committer_date": "2026-09-02T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-085",
+        "committer_date": "2026-09-03T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-086",
+        "committer_date": "2026-09-04T12:00:00Z",
+        "is_main": true,
+        "is_merge": true,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-087",
+        "committer_date": "2026-09-05T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-088",
+        "committer_date": "2026-09-06T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-089",
+        "committer_date": "2026-09-07T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-090",
+        "committer_date": "2026-09-08T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-091",
+        "committer_date": "2026-09-09T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-092",
+        "committer_date": "2026-09-10T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-093",
+        "committer_date": "2026-09-11T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": true
+      },
+      {
+        "sha": "fixture-commit-094",
+        "committer_date": "2026-09-12T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-095",
+        "committer_date": "2026-09-13T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-096",
+        "committer_date": "2026-09-14T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-097",
+        "committer_date": "2026-09-15T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-098",
+        "committer_date": "2026-09-16T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-099",
+        "committer_date": "2026-09-17T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-100",
+        "committer_date": "2026-09-18T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-101",
+        "committer_date": "2026-09-19T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-102",
+        "committer_date": "2026-09-20T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-103",
+        "committer_date": "2026-09-21T12:00:00Z",
+        "is_main": true,
+        "is_merge": true,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-104",
+        "committer_date": "2026-09-22T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-105",
+        "committer_date": "2026-09-23T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-106",
+        "committer_date": "2026-09-24T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-107",
+        "committer_date": "2026-09-25T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-108",
+        "committer_date": "2026-09-26T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-109",
+        "committer_date": "2026-09-27T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-110",
+        "committer_date": "2026-09-28T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-111",
+        "committer_date": "2026-09-29T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-112",
+        "committer_date": "2026-09-30T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-113",
+        "committer_date": "2026-10-01T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-114",
+        "committer_date": "2026-10-02T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-115",
+        "committer_date": "2026-10-03T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-116",
+        "committer_date": "2026-10-04T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": true
+      },
+      {
+        "sha": "fixture-commit-117",
+        "committer_date": "2026-10-05T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-118",
+        "committer_date": "2026-10-06T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-119",
+        "committer_date": "2026-10-07T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-120",
+        "committer_date": "2026-10-08T12:00:00Z",
+        "is_main": true,
+        "is_merge": true,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-121",
+        "committer_date": "2026-10-09T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-122",
+        "committer_date": "2026-10-10T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-123",
+        "committer_date": "2026-10-11T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-124",
+        "committer_date": "2026-10-12T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-125",
+        "committer_date": "2026-10-13T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-126",
+        "committer_date": "2026-10-14T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-127",
+        "committer_date": "2026-10-15T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-128",
+        "committer_date": "2026-10-16T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-129",
+        "committer_date": "2026-10-17T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-130",
+        "committer_date": "2026-10-18T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-131",
+        "committer_date": "2026-10-19T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-132",
+        "committer_date": "2026-10-20T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-133",
+        "committer_date": "2026-10-21T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-134",
+        "committer_date": "2026-10-22T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-135",
+        "committer_date": "2026-10-23T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-136",
+        "committer_date": "2026-10-24T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-137",
+        "committer_date": "2026-10-25T12:00:00Z",
+        "is_main": true,
+        "is_merge": true,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-138",
+        "committer_date": "2026-10-26T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      },
+      {
+        "sha": "fixture-commit-139",
+        "committer_date": "2026-10-27T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": true
+      },
+      {
+        "sha": "fixture-commit-140",
+        "committer_date": "2026-10-28T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      }
+    ]
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "ACT_COMMIT_FREQ": {
+        "raw_value": 7.0,
+        "normalized_score": 86.71944789536634,
+        "status": "complete",
+        "reason": null
+      },
+      "ACT_DAYS_SINCE_LAST": {
+        "raw_value": 1,
+        "normalized_score": 96.72161004820059,
+        "status": "complete",
+        "reason": null
+      },
+      "ACT_TREND": {
+        "raw_value": 1,
+        "normalized_score": 80.0,
+        "status": "complete",
+        "reason": null
+      }
+    }
+  },
+  "notes": [
+    "Полная основная история: 20 полных семидневных периодов по 7 коммитов. R=1; балл тренда 80. Merge и bot учитываются."
+  ]
+}

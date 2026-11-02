@@ -1,0 +1,52 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "ACT-06",
+  "title": "История коммитов неполная",
+  "requirement": "FR-17",
+  "input": {
+    "assessment_time": "2026-10-29T12:00:00Z",
+    "window": {
+      "days": 140
+    },
+    "history_status": "partial",
+    "history_reason": "GIT_HISTORY_INTERRUPTED",
+    "commits": [
+      {
+        "sha": "known-001",
+        "committer_date": "2026-10-20T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      }
+    ]
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "partial",
+      "reason": "GIT_HISTORY_INTERRUPTED"
+    },
+    "metrics": {
+      "ACT_COMMIT_FREQ": {
+        "raw_value": null,
+        "normalized_score": null,
+        "status": "partial",
+        "reason": "GIT_HISTORY_INTERRUPTED"
+      },
+      "ACT_DAYS_SINCE_LAST": {
+        "raw_value": 9,
+        "normalized_score": 74.08182206817179,
+        "status": "complete",
+        "reason": null
+      },
+      "ACT_TREND": {
+        "raw_value": null,
+        "normalized_score": null,
+        "status": "unavailable",
+        "reason": "GIT_HISTORY_INTERRUPTED"
+      }
+    }
+  },
+  "notes": [
+    "Нельзя считать известное количество коммитов полным результатом при прерванном обходе. Возраст последнего подтверждённого коммита требует проверки по методике полноты."
+  ]
+}

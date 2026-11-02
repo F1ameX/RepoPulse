@@ -1,0 +1,40 @@
+{
+  "methodology_version": "rhs-mvp-1.1.0",
+  "approval_state": "manager_planning_baseline_2026-10-18",
+  "platform": "github",
+  "window_days": 140,
+  "period_days": 7,
+  "max_periods": 20,
+  "display_decimal_places": 1,
+  "categories": [
+    {"id":"activity","name":"Активность и регулярность","weight":3,"metrics":[
+      {"id":"ACT_COMMIT_FREQ","weight":0.35,"normalization":"log","parameters":{"max":10}},
+      {"id":"ACT_DAYS_SINCE_LAST","weight":0.35,"normalization":"decay","parameters":{"k":30}},
+      {"id":"ACT_TREND","weight":0.3,"normalization":"trend","parameters":{"k":1.2,"M0":80}}
+    ]},
+    {"id":"security","name":"Безопасность","weight":3,"metrics":[
+      {"id":"SEC_SECRETS","weight":0.35,"normalization":"secret","parameters":{}},
+      {"id":"SEC_VULN_RISK","weight":0.5,"normalization":"decay","parameters":{"k":15,"severity_weights":{"critical":10,"high":5,"medium":2,"low":1}}},
+      {"id":"SEC_SAST","weight":0.15,"normalization":"boolean","parameters":{}}
+    ]},
+    {"id":"documentation","name":"Документация","weight":2,"metrics":[
+      {"id":"DOC_README","weight":0.5,"normalization":"boolean","parameters":{}},
+      {"id":"DOC_SUPPORT_SHARE","weight":0.5,"normalization":"share","parameters":{}}
+    ]},
+    {"id":"testing","name":"Тестирование","weight":2,"metrics":[
+      {"id":"TEST_PRESENCE","weight":1,"normalization":"boolean","parameters":{}}
+    ]},
+    {"id":"ci_cd","name":"CI/CD","weight":2,"metrics":[
+      {"id":"CI_PRESENT","weight":0.4,"normalization":"boolean","parameters":{}},
+      {"id":"CI_SUCCESS_RATE","weight":0.4,"normalization":"share","parameters":{}},
+      {"id":"CI_REQUIRED_CHECKS","weight":0.2,"normalization":"boolean","parameters":{}}
+    ]}
+  ],
+  "finding_thresholds":{"ACT_COMMIT_FREQ":50,"ACT_DAYS_SINCE_LAST":50,"ACT_TREND":50,"DOC_SUPPORT_SHARE":100,"CI_SUCCESS_RATE":80},
+  "supporting_documents":["LICENSE","CONTRIBUTING.md","CODE_OF_CONDUCT.md"],
+  "notes":"Плановые стартовые параметры MVP. Формулы и внутренние веса пяти категорий сохранены из rhs-2.0.0; внешние веса сохранены в отношении 15:15:10:10:10. Это не эмпирически откалиброванный стандарт качества.",
+  "scoring_config_version":"rhs-mvp-1.1.0",
+  "category_weight_basis":"relative_positive_weights_sum_12",
+  "collector_profile_version":"github-mvp-1.1.0",
+  "score_metric_count":12
+}
