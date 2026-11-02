@@ -1,0 +1,45 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "ACT-04",
+  "title": "Тренд по периодам 10, 20 и 30 коммитов",
+  "requirement": "FR-17",
+  "input": {
+    "assessment_time": "2026-10-29T12:00:00Z",
+    "window": {
+      "days": 140
+    },
+    "history_status": "complete",
+    "periods": [
+      {
+        "period_index": 1,
+        "commits": 10
+      },
+      {
+        "period_index": 2,
+        "commits": 20
+      },
+      {
+        "period_index": 3,
+        "commits": 30
+      }
+    ],
+    "period_order": "oldest_to_newest"
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "ACT_TREND": {
+        "raw_value": 1.6,
+        "normalized_score": 99.85605593827273,
+        "status": "complete",
+        "reason": null
+      }
+    }
+  },
+  "notes": [
+    "Ожидаемое значение 1.6 взято из критериев приёмки, переданных пользователем. Перед фиксацией эталона в production нужно сверить формулу и порядок периодов с методикой №909."
+  ]
+}

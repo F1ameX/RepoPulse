@@ -1,0 +1,46 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "ACT-05",
+  "title": "Последний коммит ровно в момент оценки",
+  "requirement": "FR-17",
+  "input": {
+    "assessment_time": "2026-10-29T12:00:00Z",
+    "window": {
+      "days": 140
+    },
+    "history_status": "complete",
+    "commits": [
+      {
+        "sha": "at-t",
+        "committer_date": "2026-10-29T12:00:00Z",
+        "is_main": true,
+        "is_merge": false,
+        "is_bot": false
+      }
+    ]
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "ACT_DAYS_SINCE_LAST": {
+        "raw_value": 0,
+        "normalized_score": 100.0,
+        "status": "complete",
+        "reason": null
+      },
+      "ACT_COMMIT_FREQ": {
+        "raw_value": 0,
+        "normalized_score": 0.0,
+        "status": "complete",
+        "reason": null
+      }
+    }
+  },
+  "notes": [
+    "Граничный тест для окна [t−140 дней,t): коммит ровно в t исключается из частоты, поэтому в окне 0 коммитов и ACT_COMMIT_FREQ=0.",
+    "ACT_DAYS_SINCE_LAST может учитывать последний коммит закреплённой истории и в этом сценарии равен 0."
+  ]
+}
