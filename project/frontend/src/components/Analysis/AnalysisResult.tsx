@@ -3,7 +3,7 @@ import { Button, FeedbackMessage, Message } from '@/components';
 import { reportFeedback } from '@/components/FeedbackMessage/mappers';
 import { useReport } from '@/hooks/useReport';
 import type { Repository } from '@/types';
-import { AnalysisTitle } from './AnalysisLayout';
+import { AnalysisTitle } from './AnalysisTitle';
 import { ReportHeader } from './ReportHeader';
 import styles from './Analysis.module.css';
 

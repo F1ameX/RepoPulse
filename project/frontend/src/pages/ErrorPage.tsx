@@ -1,16 +1,16 @@
 import { Link } from 'react-router-dom';
-import { AnalysisLayout } from '@/components/Analysis/AnalysisLayout';
-import styles from '@/components/Analysis/Analysis.module.css';
+import { PageLayout } from '@/components/Page/PageLayout';
+import styles from '@/components/Page/Page.module.css';
 
 export default function ErrorPage() {
   return (
-    <AnalysisLayout>
-      <div role="alert" className={styles.error}>
+    <PageLayout>
+      <div role="alert" className={styles.recovery}>
         <h1 className={styles.title}>Не удалось открыть страницу</h1>
-        <Link to="/" className={styles.newAnalysis}>
+        <Link to="/" className={styles.actionLink}>
           К проверке репозитория
         </Link>
       </div>
-    </AnalysisLayout>
+    </PageLayout>
   );
 }

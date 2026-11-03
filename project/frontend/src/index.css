@@ -76,21 +76,3 @@ a:focus-visible {
 strong {
   font-weight: 600;
 }
-
-.appHeader {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  max-width: var(--content-width);
-  min-height: 72px;
-  margin: 0 auto;
-  padding: 16px var(--page-padding);
-}
-
-.appLogo {
-  color: var(--color-text);
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1.25;
-  text-decoration: none;
-}

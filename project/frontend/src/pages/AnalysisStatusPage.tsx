@@ -2,7 +2,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button, FeedbackMessage, Message } from '@/components';
 import { statusFeedback, submissionFeedback } from '@/components/FeedbackMessage/mappers';
 import { AnalysisAccess } from '@/components/Analysis/AnalysisAccess';
-import { AnalysisLayout, AnalysisTitle } from '@/components/Analysis/AnalysisLayout';
+import { AnalysisTitle } from '@/components/Analysis/AnalysisTitle';
+import { PageLayout } from '@/components/Page/PageLayout';
+import pageStyles from '@/components/Page/Page.module.css';
 import { AnalysisResult } from '@/components/Analysis/AnalysisResult';
 import { useAnalysisStatus } from '@/hooks/useAnalysisStatus';
 import { useAnalysisSubmission } from '@/hooks/useAnalysisSubmission';
@@ -23,7 +25,7 @@ function AnalysisLifecycle({ id }: { id: string }) {
     return (
       <>
         <FeedbackMessage view={statusFeedback(state, { onRefresh: () => void refresh() })} />
-        <Link to="/" className={styles.newAnalysis}>
+        <Link to="/" className={pageStyles.actionLink}>
           Новый анализ
         </Link>
       </>
@@ -123,12 +125,12 @@ function AnalysisLifecycle({ id }: { id: string }) {
 export default function AnalysisStatusPage() {
   const { id } = useParams();
   return (
-    <AnalysisLayout>
+    <PageLayout>
       {!validId(id) ? (
         <Message
           variant="error"
           actions={
-            <Link to="/" className={styles.newAnalysis}>
+            <Link to="/" className={pageStyles.actionLink}>
               Новый анализ
             </Link>
           }
@@ -140,6 +142,6 @@ export default function AnalysisStatusPage() {
           <AnalysisLifecycle key={id} id={id!} />
         </AnalysisAccess>
       )}
-    </AnalysisLayout>
+    </PageLayout>
   );
 }
