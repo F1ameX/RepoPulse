@@ -76,7 +76,7 @@ export function AnalysisAccess({ children }: { children: ReactNode }) {
   return (
     <>
       {access.context && (
-        <div hidden={access.kind !== 'ready'}>
+        <div inert={access.kind !== 'ready'} aria-busy={access.kind === 'checking'}>
           <Fragment key={access.context}>{children}</Fragment>
         </div>
       )}

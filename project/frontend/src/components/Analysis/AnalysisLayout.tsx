@@ -5,8 +5,8 @@ import styles from './Analysis.module.css';
 export function AnalysisLayout({ children }: { children: ReactNode }) {
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <Link to="/" className={styles.logo}>
+      <header className="appHeader">
+        <Link to="/" className="appLogo">
           RepoPulse
         </Link>
       </header>
@@ -16,17 +16,15 @@ export function AnalysisLayout({ children }: { children: ReactNode }) {
 }
 export function AnalysisTitle({ repository }: { repository?: { owner: string; name: string } }) {
   return (
-    <div className={styles.titleBlock}>
-      <h1 className={styles.title}>
-        {repository ? (
-          <>
-            {repository.owner}/<wbr />
-            {repository.name}
-          </>
-        ) : (
-          'Анализ репозитория'
-        )}
-      </h1>
-    </div>
+    <h1 className={styles.title}>
+      {repository ? (
+        <>
+          {repository.owner}/<wbr />
+          {repository.name}
+        </>
+      ) : (
+        'Анализ репозитория'
+      )}
+    </h1>
   );
 }

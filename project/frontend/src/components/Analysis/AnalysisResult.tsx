@@ -47,9 +47,10 @@ export function AnalysisResult({
           Состояние анализа: <strong>Завершён</strong>
         </p>
       )}
-      <div className={styles.feedback}>
-        <FeedbackMessage view={reportFeedback(state, { onReload: () => void reload() })} />
-      </div>
+      <FeedbackMessage
+        className={styles.feedback}
+        view={reportFeedback(state, { onReload: () => void reload() })}
+      />
       {report && <ReportHeader report={report} />}
     </>
   );

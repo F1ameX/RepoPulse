@@ -179,8 +179,7 @@ describe('FR-03 P01–P11', () => {
     expect(result.current.state.kind).toBe('unknown');
   });
 
-  // NOTE: FR-03 P05 требует «Запрос изменён. Отправьте его заново» (D1, #18480).
-  it('P05: SUBMISSION_CHANGED currently shows the generic safe message', async () => {
+  it('P05: SUBMISSION_CHANGED shows the safe message for a changed request', async () => {
     vi.spyOn(repositoryService, 'createAnalysis').mockRejectedValue(
       new ApiError('SUBMISSION_CHANGED', ''),
     );
@@ -189,7 +188,7 @@ describe('FR-03 P01–P11', () => {
     await act(async () => { await flush(); });
     expect(result.current.state.kind).toBe('confirmed-error');
     expect((result.current.state as { message: string }).message).toBe(
-      'Не удалось выполнить операцию. Повторите позже.',
+      'Запрос изменён. Отправьте его заново',
     );
   });
 

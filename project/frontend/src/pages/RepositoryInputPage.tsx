@@ -67,13 +67,13 @@ export default function RepositoryInputPage() {
   );
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <span className={styles.logo}>RepoPulse</span>
+      <header className="appHeader">
+        <span className="appLogo">RepoPulse</span>
       </header>
       <main className={styles.content}>
         <section className={styles.hero} aria-labelledby="project-title">
           <h1 id="project-title" className={styles.title}>
-            Веб-сервис для автоматической оценки технического здоровья GitHub-репозитория
+            Техническое здоровье GitHub-репозитория
           </h1>
           <p className={styles.description}>
             RepoPulse анализирует историю, документацию, тесты, зависимости, CI/CD и code review — и

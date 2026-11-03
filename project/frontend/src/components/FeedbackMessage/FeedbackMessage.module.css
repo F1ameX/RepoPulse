@@ -1,12 +1,8 @@
-.body {
-  display: inline;
-}
-
 .hint {
   display: block;
-  margin-top: 4px;
+  margin-top: 8px;
+  color: var(--color-text-secondary);
   font-size: 13px;
-  line-height: 1.35;
-  opacity: 0.85;
+  line-height: 20px;
   overflow-wrap: anywhere;
 }

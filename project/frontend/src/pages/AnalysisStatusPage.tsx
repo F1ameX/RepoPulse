@@ -3,12 +3,10 @@ import { Button, FeedbackMessage, Message } from '@/components';
 import { statusFeedback, submissionFeedback } from '@/components/FeedbackMessage/mappers';
 import { AnalysisAccess } from '@/components/Analysis/AnalysisAccess';
 import { AnalysisLayout, AnalysisTitle } from '@/components/Analysis/AnalysisLayout';
-import { AnalysisPreviewHeader } from '@/components/Analysis/AnalysisPreviewHeader';
 import { AnalysisResult } from '@/components/Analysis/AnalysisResult';
 import { useAnalysisStatus } from '@/hooks/useAnalysisStatus';
 import { useAnalysisSubmission } from '@/hooks/useAnalysisSubmission';
 import { analysisFailure, STAGE_LABELS, STATUS_LABELS } from '@/lib/analysisView';
-import spinner from '@/assets/analysis-spinner.svg';
 import styles from '@/components/Analysis/Analysis.module.css';
 
 const validId = (value: string | undefined) =>
@@ -42,10 +40,6 @@ function AnalysisLifecycle({ id }: { id: string }) {
     );
   }
   const failed = confirmed?.status === 'failed';
-  const metadataPreview =
-    failed &&
-    confirmed.reasonCode === 'ANALYSIS_FAILED' &&
-    import.meta.env.VITE_C2_METADATA_PREVIEW !== 'false';
   const stage = confirmed?.stage ? STAGE_LABELS[confirmed.stage] : undefined;
   const changeUrl = () =>
     navigate('/', {
@@ -57,65 +51,50 @@ function AnalysisLifecycle({ id }: { id: string }) {
   return (
     <>
       <AnalysisTitle repository={confirmed?.repository} />
-      <section
-        className={metadataPreview ? styles.previewSection : styles.statusSection}
-        aria-label="Состояние анализа"
-      >
-        {!metadataPreview && (
-          <div className={styles.statusRow}>
-            {!failed && (
-              <span className={styles.spinner} aria-hidden="true">
-                <img src={spinner} alt="" width="67" height="35" />
-              </span>
-            )}
-            <div aria-live="polite">
-              <p className={styles.statusText}>
-                {confirmed && 'Состояние анализа: '}
-                <strong>
-                  {confirmed ? STATUS_LABELS[confirmed.status] : 'Состояние пока неизвестно'}
-                </strong>
-              </p>
-              {stage && !failed && <p className={styles.stage}>{stage}</p>}
-            </div>
+      {failed && <p className={styles.notice}>Анализ: {id}</p>}
+      <section className={styles.statusSection} aria-label="Состояние анализа">
+        <div className={styles.statusRow}>
+          {!failed && <span className={styles.spinner} aria-hidden="true" />}
+          <div aria-live="polite">
+            <p className={styles.statusText}>
+              {confirmed && 'Состояние анализа: '}
+              <strong>
+                {confirmed ? STATUS_LABELS[confirmed.status] : 'Состояние пока неизвестно'}
+              </strong>
+            </p>
+            {stage && !failed && <p className={styles.stage}>{stage}</p>}
           </div>
-        )}
+        </div>
         {failed ? (
           <>
-            {!metadataPreview && (
-              <div className={styles.feedback}>
-                <FeedbackMessage
-                  view={{ variant: 'error', message: analysisFailure(confirmed.reasonCode) }}
-                />
-              </div>
-            )}
-            {metadataPreview && <AnalysisPreviewHeader analysis={confirmed} />}
+            <FeedbackMessage
+              className={styles.feedback}
+              view={{
+                variant: 'error',
+                message: analysisFailure(confirmed.reasonCode, confirmed.error?.message),
+              }}
+            />
             <div className={styles.statusActions}>
-              <Button variant="secondary" disabled={submission.isPending} onClick={retry}>
+              <Button variant="primary" disabled={submission.isPending} onClick={retry}>
                 Повторить анализ
               </Button>
-              <Button
-                className={styles.primaryAction}
-                variant="primary"
-                disabled={submission.isPending}
-                onClick={changeUrl}
-              >
-                Новый анализ
+              <Button variant="secondary" disabled={submission.isPending} onClick={changeUrl}>
+                Изменить URL
               </Button>
             </div>
-            <div className={styles.feedback}>
-              <FeedbackMessage
-                view={
-                  submission.state.kind === 'submitting'
-                    ? null
-                    : submissionFeedback(submission.state, confirmed.repository.canonical_url, {
-                        retrySame: submission.retrySame,
-                        retryNew: retry,
-                        onChangeUrl: changeUrl,
-                        onOpen: (analysisId) => navigate(`/analysis/${analysisId}`),
-                      })
-                }
-              />
-            </div>
+            <FeedbackMessage
+              className={styles.feedback}
+              view={
+                submission.state.kind === 'submitting'
+                  ? null
+                  : submissionFeedback(submission.state, confirmed.repository.canonical_url, {
+                      retrySame: submission.retrySame,
+                      retryNew: retry,
+                      onChangeUrl: changeUrl,
+                      onOpen: (analysisId) => navigate(`/analysis/${analysisId}`),
+                    })
+              }
+            />
           </>
         ) : (
           <>
@@ -127,14 +106,13 @@ function AnalysisLifecycle({ id }: { id: string }) {
               </Button>
             </div>
             {(state.kind === 'error' || state.kind === 'offline') && (
-              <div className={styles.feedback}>
-                <FeedbackMessage
-                  view={(() => {
-                    const view = statusFeedback(state, { onRefresh: () => void refresh() });
-                    return view ? { ...view, actions: undefined } : null;
-                  })()}
-                />
-              </div>
+              <FeedbackMessage
+                className={styles.feedback}
+                view={(() => {
+                  const view = statusFeedback(state, { onRefresh: () => void refresh() });
+                  return view ? { ...view, actions: undefined } : null;
+                })()}
+              />
             )}
           </>
         )}
