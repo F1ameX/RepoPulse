@@ -79,6 +79,7 @@ func (s *Session) Data() domain.GitData {
 	data.Repository.DefaultBranch = clonePointer(data.Repository.DefaultBranch)
 	data.Refs = append([]domain.GitRef{}, data.Refs...)
 	data.Files = append([]domain.GitFile{}, data.Files...)
+	data.MainCommits = append([]domain.ActivityCommit{}, data.MainCommits...)
 	data.Commits = append([]domain.GitCommit{}, data.Commits...)
 	for i := range data.Commits {
 		data.Commits[i].Main = clonePointer(data.Commits[i].Main)
@@ -261,7 +262,8 @@ func (r *Reader) Open(ctx context.Context, metadata domain.RepositoryMetadata) (
 		fetchCode = "GIT_TIME_LIMIT"
 	}
 	// The Git budget covers local object traversal as well as the fetch.
-	s.readObjects(acquire, fetchCode)
+	empty := refCode == "" && headSHA == "" && len(refs) == 0
+	s.readObjects(acquire, fetchCode, empty)
 	fingerprint := sha256.New()
 	if s.data.Repository.CommitSHA != nil {
 		_, _ = io.WriteString(fingerprint, *s.data.Repository.CommitSHA)
@@ -349,11 +351,11 @@ func source(scope string, count int, code, failureState string) domain.SourceSta
 	return state
 }
 
-func (s *Session) readObjects(ctx context.Context, fetchCode string) {
+func (s *Session) readObjects(ctx context.Context, fetchCode string, empty bool) {
 	sha := s.data.Repository.CommitSHA
 	if sha == nil {
 		code := fetchCode
-		if code == "" && len(s.data.Refs) > 0 {
+		if code == "" && !empty {
 			code = "GIT_REVISION_UNAVAILABLE"
 		}
 		if ctx.Err() != nil {
@@ -401,78 +403,7 @@ func (s *Session) readObjects(ctx context.Context, fetchCode string) {
 		s.data.Sources = append(s.data.Sources, source("tree", len(s.data.Files), treeCode, state))
 	}
 
-	history, err := s.command(ctx, "", 2<<20, "rev-list", "--timestamp", "--topo-order", "--max-count="+strconv.Itoa(s.reader.limits.Commits+1), "--all")
-	historyCode := fetchCode
-	if err != nil {
-		historyCode = "GIT_HISTORY_INTERRUPTED"
-	}
-	for _, line := range strings.Split(strings.TrimSpace(string(history)), "\n") {
-		if ctx.Err() != nil {
-			break
-		}
-		if line == "" {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) != 2 || !hash(fields[1]) {
-			historyCode = "GIT_HISTORY_INVALID"
-			continue
-		}
-		seconds, err := strconv.ParseInt(fields[0], 10, 64)
-		if err != nil {
-			historyCode = "GIT_HISTORY_INVALID"
-			continue
-		}
-		if len(s.data.Commits) >= s.reader.limits.Commits {
-			historyCode = "GIT_COMMIT_LIMIT"
-			break
-		}
-		at := time.Unix(seconds, 0).UTC()
-		if at.Year() < 1 || at.Year() > 9999 {
-			historyCode = "GIT_HISTORY_INVALID"
-			continue
-		}
-		s.data.Commits = append(s.data.Commits, domain.GitCommit{SHA: fields[1], CommittedAt: at})
-	}
-	if sha != nil && ctx.Err() == nil {
-		main, mainErr := s.command(ctx, "", 2<<20, "rev-list", "--max-count="+strconv.Itoa(s.reader.limits.Commits+1), *sha)
-		mainIDs := strings.Fields(string(main))
-		mainComplete := mainErr == nil && len(mainIDs) <= s.reader.limits.Commits
-		mainSet := map[string]bool{}
-		for _, id := range mainIDs {
-			if !hash(id) {
-				mainComplete = false
-				if historyCode == "" {
-					historyCode = "GIT_HISTORY_INVALID"
-				}
-				continue
-			}
-			mainSet[id] = true
-		}
-		for i := range s.data.Commits {
-			inMain := mainSet[s.data.Commits[i].SHA]
-			// An observed SHA proves ancestry even in a partial walk. Its
-			// absence proves non-membership only after a complete traversal.
-			if inMain || mainComplete {
-				s.data.Commits[i].Main = &inMain
-			}
-		}
-		if len(mainIDs) > s.reader.limits.Commits && historyCode == "" {
-			historyCode = "GIT_COMMIT_LIMIT"
-		}
-		if mainErr != nil && historyCode == "" {
-			historyCode = "GIT_HISTORY_INTERRUPTED"
-		}
-	}
-	if ctx.Err() != nil {
-		historyCode = "GIT_TIME_LIMIT"
-	}
-
-	state := "unavailable"
-	if len(s.data.Commits) > 0 {
-		state = "partial"
-	}
-	s.data.Sources = append(s.data.Sources, source("history", len(s.data.Commits), historyCode, state))
+	s.readHistory(ctx, fetchCode, empty)
 }
 
 func (s *Session) ReadBlob(ctx context.Context, objectSHA string) ([]byte, error) {
