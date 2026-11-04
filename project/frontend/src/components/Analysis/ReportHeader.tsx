@@ -83,7 +83,22 @@ export function ReportHeader({
         {fields.map(([name, value]) => (
           <div className={styles.field} key={name}>
             <dt>{name}:</dt>
-            <dd>{value}</dd>
+            <dd
+              className={
+                [
+                  'Анализ',
+                  'Отчёт',
+                  'Завершён',
+                  'Момент оценки',
+                  'Период оценки',
+                  'Commit',
+                ].includes(name)
+                  ? styles.metadata
+                  : undefined
+              }
+            >
+              {value}
+            </dd>
           </div>
         ))}
         <div className={styles.versions}>

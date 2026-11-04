@@ -17,6 +17,7 @@ export const SAFE_MESSAGES: Record<string, string> = {
   NETWORK_ERROR: 'Нет соединения с сервером.',
   INTERNAL_ERROR: 'Сервис временно недоступен.',
   CSRF_REJECTED: 'Запрос отклонён. Обновите страницу.',
+  SUBMISSION_CHANGED: 'Запрос изменён. Отправьте его заново',
 };
 
 export function safeMessage(error: unknown, fallback = SAFE_MESSAGES.DEFAULT): string {

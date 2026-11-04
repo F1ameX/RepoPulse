@@ -1,34 +1,37 @@
 .message {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
   flex-wrap: wrap;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 20px;
 }
 
 .icon {
-  flex-shrink: 0;
+  flex: 0 0 16px;
   width: 16px;
   height: 16px;
+  margin-top: 2px;
 }
 
 .text {
-  flex: 1;
+  flex: 1 1 200px;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .actions {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .close {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -37,18 +40,14 @@
   border-radius: 4px;
   background: transparent;
   color: inherit;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  opacity: 0.7;
-  transition:
-    opacity 0.15s,
-    background-color 0.15s;
+  transition: background-color 160ms var(--ease);
 }
 
 .close:hover {
-  opacity: 1;
-  background-color: rgba(0, 0, 0, 0.06);
+  background-color: var(--color-raised);
 }
 
 .close:focus-visible {
@@ -70,4 +69,10 @@
 
 .error {
   color: var(--color-error);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .close {
+    transition: none;
+  }
 }

@@ -22,10 +22,8 @@ export function FeedbackMessage({ view, className }: FeedbackMessageProps) {
 
   return (
     <Message variant={view.variant} icon={view.icon} actions={view.actions} className={className}>
-      <span className={styles.body}>
-        {view.message}
-        {view.hint && <span className={styles.hint}>{view.hint}</span>}
-      </span>
+      {view.message}
+      {view.hint && <span className={styles.hint}>{view.hint}</span>}
     </Message>
   );
 }

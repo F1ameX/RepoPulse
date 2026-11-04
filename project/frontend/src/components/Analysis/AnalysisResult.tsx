@@ -3,7 +3,7 @@ import { Button, FeedbackMessage, Message } from '@/components';
 import { reportFeedback } from '@/components/FeedbackMessage/mappers';
 import { useReport } from '@/hooks/useReport';
 import type { Repository } from '@/types';
-import { AnalysisTitle } from './AnalysisLayout';
+import { AnalysisTitle } from './AnalysisTitle';
 import { ReportHeader } from './ReportHeader';
 import styles from './Analysis.module.css';
 
@@ -47,9 +47,10 @@ export function AnalysisResult({
           Состояние анализа: <strong>Завершён</strong>
         </p>
       )}
-      <div className={styles.feedback}>
-        <FeedbackMessage view={reportFeedback(state, { onReload: () => void reload() })} />
-      </div>
+      <FeedbackMessage
+        className={styles.feedback}
+        view={reportFeedback(state, { onReload: () => void reload() })}
+      />
       {report && <ReportHeader report={report} />}
     </>
   );

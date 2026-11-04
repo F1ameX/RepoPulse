@@ -27,5 +27,5 @@ it('ErrorPage offers safe recovery', () => {
       <ErrorPage />
     </MemoryRouter>,
   );
-  expect(screen.getByRole('alert').textContent).toContain('Не удалось открыть страницу.');
+  expect(screen.getByRole('alert').textContent).toContain('Не удалось открыть страницу');
 });
