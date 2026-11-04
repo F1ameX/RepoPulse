@@ -227,3 +227,18 @@ partial/unavailable/not_applicable требуют reason; complete не озна
 | `ExcludedCount.reason` | `string` | `string` #1 | да / нет | Например cancelled/skipped/neutral. | — |
 | `ExcludedCount.count` | `integer` | `int32` #2 | да / нет | Подтверждённое количество. | — |
 
+
+## Выборки активности
+
+Для входов активности единицы `raw_value`: `ACT_COMMIT_FREQ` — `commits_per_week`,
+`ACT_DAYS_SINCE_LAST` — `days`, `ACT_TREND` — `ratio`. Нормализованный балл хранится
+отдельно в `Metric.normalized_score`, а не вместо сырого значения.
+
+| Метрика | sample.collected / total | sample.numerator / denominator | Дополнительные поля |
+| --- | --- | --- | --- |
+| ACT_COMMIT_FREQ | Коммиты окна; total=null при неполном охвате | Число коммитов полного окна / 20 недель | window — принятые 140 дней |
+| ACT_DAYS_SINCE_LAST | 1 / 1 при подтверждённом последнем коммите | null / null | observed_at — committer UTC |
+| ACT_TREND | Число собранных полных недель / известное полное число недель | Взвешенные суммы соседних недель | series — от старого периода к новому; R=0 является числом |
+
+Форма JSON/protobuf не меняется. Алгоритм, причины N/A, доказательство полноты
+и версии — [в описании расчёта](../architecture/activity-scoring.md).

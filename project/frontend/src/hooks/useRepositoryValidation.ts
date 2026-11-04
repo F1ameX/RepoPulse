@@ -15,8 +15,11 @@ export type ValidationState =
 
 const CHECK_FAILED = 'Не удалось проверить доступность репозитория. Повторите попытку позже';
 
-export function useRepositoryValidation() {
-  const [url, setUrlState] = useState('');
+export function useRepositoryValidation(options?: {
+  initialUrl?: string;
+  onValidated?: (url: string) => void;
+}) {
+  const [url, setUrlState] = useState(options?.initialUrl ?? '');
   const [state, setState] = useState<ValidationState>({ kind: 'idle' });
   const inputRef = useRef<HTMLInputElement>(null);
   const activeRequest = useRef<AbortController | null>(null);
@@ -29,7 +32,7 @@ export function useRepositoryValidation() {
   const run = async () => {
     if (activeRequest.current) return;
     const checked = validateRepositoryUrl(url);
-    if (!checked.ok) {
+    if (checked.ok === false) {
       setState({ kind: 'field-error', message: checked.message });
       inputRef.current?.focus();
       return;
@@ -63,7 +66,7 @@ export function useRepositoryValidation() {
           ? validated.repository.owner + '/' + validated.repository.name
           : null,
       });
-      // C1 stops at preflight; job creation and its status page belong to C2.
+      options?.onValidated?.(url);
     } catch (err) {
       if (controller.signal.aborted) return;
       if (err instanceof ApiError && Object.hasOwn(URL_MESSAGES, err.code)) {
@@ -77,7 +80,10 @@ export function useRepositoryValidation() {
         err instanceof ApiError &&
         ['SESSION_EXPIRED', 'SESSION_REQUIRED'].includes(err.code)
       ) {
-        setState({ kind: 'session-error', message: 'Сессия истекла. Войдите снова' });
+        setState({
+          kind: 'session-error',
+          message: 'Сессия истекла. Войдите снова',
+        });
       } else {
         // Do not render arbitrary response messages or transport details.
         setState({ kind: 'temporary-error', message: CHECK_FAILED });

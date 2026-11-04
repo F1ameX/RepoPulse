@@ -11,6 +11,8 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
+	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/adapter/out/password"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 	authv1 "github.com/F1ameX/RepoPulse/project/backend/pkg/proto/auth/v1"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,11 +35,21 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("ping database: %w", err)
 	}
 
+	hasher, err := password.NewArgon2id(cfg.HasherConfig)
+	if err != nil {
+		return fmt.Errorf("password hasher: %w", err)
+	}
+
 	listener, err := net.Listen("tcp", cfg.GRPCAddr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
-	server, healthServer := newGRPCServer(ctx, pool)
+
+	options := domain.Options{
+		GuestSessionTTL:   cfg.GuestSessionTTL,
+		AccountSessionTTL: cfg.AccountSessionTTL,
+	}
+	server, healthServer := newGRPCServer(ctx, pool, options, hasher)
 	return serve(ctx, listener, server, healthServer, cfg.ShutdownTimeout)
 }
 

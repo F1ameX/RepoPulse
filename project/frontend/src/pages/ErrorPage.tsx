@@ -1,10 +1,16 @@
 import { Link } from 'react-router-dom';
+import { PageLayout } from '@/components/Page/PageLayout';
+import styles from '@/components/Page/Page.module.css';
 
 export default function ErrorPage() {
   return (
-    <div role="alert">
-      <p>Не удалось открыть страницу.</p>
-      <Link to="/">К проверке репозитория</Link>
-    </div>
+    <PageLayout>
+      <div role="alert" className={styles.recovery}>
+        <h1 className={styles.title}>Не удалось открыть страницу</h1>
+        <Link to="/" className={styles.actionLink}>
+          К проверке репозитория
+        </Link>
+      </div>
+    </PageLayout>
   );
 }

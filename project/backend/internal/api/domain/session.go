@@ -27,15 +27,28 @@ type IssuedSession struct {
 	Session SessionInfo
 }
 
-type Error struct{ Code, Message string }
+// RegistrationResult confirms account creation; registration does not sign in.
+type RegistrationResult struct {
+	Login   string
+	Message string
+}
+
+// FieldError is the first error of one request field (FR-27 order).
+type FieldError struct{ Field, Code, Message string }
+
+// Error is a safe client-facing failure. FieldErrors is set only for VALIDATION_FAILED.
+type Error struct {
+	Code, Message string
+	FieldErrors   []FieldError
+}
 
 func (e *Error) Error() string { return e.Message }
 
 var (
-	ErrSessionRequired = &Error{"SESSION_REQUIRED", "Нужна действующая сессия"}
-	ErrSessionExpired  = &Error{"SESSION_EXPIRED", "Сессия аккаунта недействительна. Войдите снова"}
-	ErrAuthUnavailable = &Error{"AUTH_UNAVAILABLE", "Сервис сессий временно недоступен. Повторите попытку позже"}
-	ErrInternal        = &Error{"INTERNAL_ERROR", "Не удалось выполнить операцию"}
+	ErrSessionRequired = &Error{Code: "SESSION_REQUIRED", Message: "Нужна действующая сессия"}
+	ErrSessionExpired  = &Error{Code: "SESSION_EXPIRED", Message: "Сессия аккаунта недействительна. Войдите снова"}
+	ErrAuthUnavailable = &Error{Code: "AUTH_UNAVAILABLE", Message: "Сервис сессий временно недоступен. Повторите попытку позже"}
+	ErrInternal        = &Error{Code: "INTERNAL_ERROR", Message: "Не удалось выполнить операцию"}
 )
 
 type traceIDKey struct{}

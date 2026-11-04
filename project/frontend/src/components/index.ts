@@ -6,3 +6,6 @@ export type { InputProps, InputSize } from './Input/Input';
 
 export { Message } from './Message/Message';
 export type { MessageProps, MessageVariant } from './Message/Message';
+
+export { FeedbackMessage } from './FeedbackMessage/FeedbackMessage';
+export type { FeedbackView, FeedbackVariant } from './FeedbackMessage/FeedbackMessage';

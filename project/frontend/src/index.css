@@ -1,29 +1,38 @@
 :root {
-  /* Переделай под дизайн из физмы */
-  --color-bg: #ffffff;
-  --color-text: #111827;
-  --color-muted: #6b7280;
-  --color-border: #d1d5db;
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
+  --color-bg: #fdf8f3;
+  --color-surface: #fffcf9;
+  --color-raised: #f1ebe5;
+  --color-text: #1a1613;
+  --color-secondary: #1a1613;
+  --color-secondary-hover: #39312b;
+  --color-text-secondary: #5e554d;
+  --color-muted: #756b62;
+  --color-border: rgb(26 22 19 / 12%);
+  --color-primary: #ed792d;
+  --color-focus: var(--color-secondary);
 
-  --color-error: #dc2626;
-  --color-error-bg: #fef2f2;
-  --color-success: #16a34a;
-  --color-success-bg: #f0fdf4;
-  --color-warning: #d97706;
-  --color-warning-bg: #fffbeb;
-  --color-info: #2563eb;
-  --color-info-bg: #eff6ff;
+  --color-error: #ad3434;
+  --color-error-bg: #fbefeb;
+  --color-success: #276346;
+  --color-success-bg: #edf3ec;
+  --color-warning: #805c1c;
+  --color-warning-bg: #f8f0df;
+  --color-info: var(--color-text-secondary);
+  --color-info-bg: var(--color-raised);
 
-  --radius: 6px;
+  --radius: 8px;
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
+  --page-padding: 32px;
+  --content-width: 1200px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.5;
   color: var(--color-text);
   background-color: var(--color-bg);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -50,4 +59,20 @@ textarea,
 select {
   font: inherit;
   color: inherit;
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+strong {
+  font-weight: 600;
 }

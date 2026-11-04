@@ -38,10 +38,12 @@ func (g *fakeGuests) CreateGuestSession(_ context.Context, hash string, issuedAt
 
 var testNow = time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 
+var testOptions = domain.Options{GuestSessionTTL: 24 * time.Hour, AccountSessionTTL: 168 * time.Hour}
+
 func TestCreateGuestSession(t *testing.T) {
 	guests := &fakeGuests{}
 	svc := NewService(guests, nil, nil, fakeGenerator{token: "raw-token", hash: "token-hash"},
-		func() time.Time { return testNow })
+		func() time.Time { return testNow }, testOptions, nil)
 
 	issued, err := svc.CreateGuestSession(context.Background())
 	if err != nil {
@@ -68,7 +70,7 @@ func TestCreateGuestSessionErrors(t *testing.T) {
 
 	t.Run("generator", func(t *testing.T) {
 		guests := &fakeGuests{}
-		svc := NewService(guests, nil, nil, fakeGenerator{err: errGenerate}, func() time.Time { return testNow })
+		svc := NewService(guests, nil, nil, fakeGenerator{err: errGenerate}, func() time.Time { return testNow }, testOptions, nil)
 		if _, err := svc.CreateGuestSession(context.Background()); !errors.Is(err, errGenerate) {
 			t.Fatalf("err = %v, want %v", err, errGenerate)
 		}
@@ -80,7 +82,7 @@ func TestCreateGuestSessionErrors(t *testing.T) {
 	t.Run("repository", func(t *testing.T) {
 		guests := &fakeGuests{err: errStore}
 		svc := NewService(guests, nil, nil, fakeGenerator{token: "raw-token", hash: "token-hash"},
-			func() time.Time { return testNow })
+			func() time.Time { return testNow }, testOptions, nil)
 		issued, err := svc.CreateGuestSession(context.Background())
 		if !errors.Is(err, errStore) {
 			t.Fatalf("err = %v, want %v", err, errStore)
@@ -94,7 +96,7 @@ func TestCreateGuestSessionErrors(t *testing.T) {
 func TestGuestTimestampsMatchPostgresPrecision(t *testing.T) {
 	guests := &fakeGuests{}
 	now := testNow.Add(123456789 * time.Nanosecond)
-	svc := NewService(guests, nil, nil, fakeGenerator{token: "raw-token", hash: "token-hash"}, func() time.Time { return now })
+	svc := NewService(guests, nil, nil, fakeGenerator{token: "raw-token", hash: "token-hash"}, func() time.Time { return now }, testOptions, nil)
 	issued, err := svc.CreateGuestSession(context.Background())
 	if err != nil {
 		t.Fatal(err)

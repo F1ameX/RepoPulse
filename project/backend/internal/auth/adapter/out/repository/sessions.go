@@ -23,7 +23,18 @@ func NewSessions(pool *pgxpool.Pool) *Sessions {
 }
 
 func (r *Sessions) CreateSession(ctx context.Context, session domain.Session) (domain.Session, error) {
-	return domain.Session{}, domain.ErrNotImplemented
+	session.ID = uuid.NewString()
+
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO auth.sessions
+		(id, principal_id, kind, token_hash, issued_at, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6)`, session.ID, session.PrincipalID,
+		session.Kind, session.TokenHash, session.IssuedAt, session.ExpiresAt)
+	if err != nil {
+		return domain.Session{}, fmt.Errorf("insert new session: %w", err)
+	}
+	return session, nil
+
 }
 
 func (r *Sessions) FindSessionByTokenHash(ctx context.Context, tokenHash string) (domain.Session, error) {
@@ -47,8 +58,14 @@ func (r *Sessions) FindSessionByTokenHash(ctx context.Context, tokenHash string)
 	return s, nil
 }
 
-func (r *Sessions) RevokeSession(ctx context.Context, sessionID string, at time.Time) error {
-	return domain.ErrNotImplemented
+func (r *Sessions) RevokeSession(ctx context.Context, sessionID string, at time.Time) (bool, error) {
+	// revoked_at IS NULL makes a repeated logout a no-op that keeps the first revocation time.
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE auth.sessions SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL`, sessionID, at)
+	if err != nil {
+		return false, fmt.Errorf("revoke session: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
 func (r *Sessions) CreateGuestSession(ctx context.Context, hash string, issuedAt, expiresAt time.Time) (domain.Session, error) {

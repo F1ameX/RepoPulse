@@ -128,6 +128,8 @@ func toError(err error) error {
 		return grpcerr.InvalidArgument(fields...)
 	case errors.Is(err, domain.ErrInvalidCredentials):
 		return grpcerr.InvalidCredentials()
+	case errors.Is(err, domain.ErrLoginTaken):
+		return grpcerr.LoginTaken()
 	case errors.Is(err, domain.ErrNotImplemented):
 		return grpcerr.NotImplemented()
 	default:
