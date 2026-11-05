@@ -242,10 +242,18 @@ func minTime(a, b time.Time) time.Time {
 }
 
 func useful(output Output) bool {
+	for _, source := range output.Snapshot.Sources {
+		if source.Source == "git" && source.Scope == domain.ActivityHistoryScope && source.Status == "complete" {
+			return true
+		}
+	}
 	if len(output.Report.Findings) > 0 {
 		return true
 	}
 	for _, input := range output.Snapshot.Inputs {
+		if len(input.Evidence) > 0 && (input.Status == "complete" || input.Status == "partial") {
+			return true
+		}
 		raw, _ := json.Marshal(input.RawValue)
 		if (input.Status == "complete" || input.Status == "partial") && string(raw) != "null" {
 			return true

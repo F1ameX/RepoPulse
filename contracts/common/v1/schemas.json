@@ -197,6 +197,7 @@
             "LOGIN_TAKEN",
             "ANALYSIS_NOT_FOUND",
             "REPORT_NOT_FOUND",
+            "REPORT_UNAVAILABLE",
             "UPSTREAM_RATE_LIMITED",
             "UPSTREAM_TIMEOUT",
             "BUDGET_EXCEEDED",
