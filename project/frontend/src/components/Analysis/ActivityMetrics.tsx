@@ -1,8 +1,19 @@
-import type { Evidence, Metric, MetricId, MetricInput, Report } from '@/types';
+import type {
+  DataStatus,
+  Evidence,
+  Metric,
+  MetricId,
+  MetricInput,
+  Report,
+} from '@/types';
 import { formatUtc } from '@/lib/analysisView';
 import styles from './Analysis.module.css';
 
-const TARGET_METRICS: MetricId[] = ['ACT_COMMIT_FREQ', 'ACT_DAYS_SINCE_LAST', 'ACT_TREND'];
+const TARGET_METRICS: MetricId[] = [
+  'ACT_COMMIT_FREQ',
+  'ACT_DAYS_SINCE_LAST',
+  'ACT_TREND',
+];
 
 const METRIC_LABELS: Partial<Record<MetricId, string>> = {
   ACT_COMMIT_FREQ: 'Частота коммитов',
@@ -10,10 +21,20 @@ const METRIC_LABELS: Partial<Record<MetricId, string>> = {
   ACT_TREND: 'Тренд активности',
 };
 
+const STATUS_LABELS: Record<DataStatus, string> = {
+  complete: 'Полные данные',
+  partial: 'Частичные данные',
+  unavailable: 'Недоступно',
+  not_applicable: 'Не применимо',
+};
+
 function roundHalfUp(value: number, decimals: number): string {
-  const factor = 10 ** decimals;
-  const rounded = Math.round((value + Number.EPSILON) * factor) / factor;
-  return rounded.toFixed(decimals);
+  if (value === 0) return (0).toFixed(decimals);
+  const sign = Math.sign(value);
+  const absValue = Math.abs(value);
+  const shifted = Number(`${absValue}e${decimals}`);
+  const rounded = Math.round(shifted);
+  return (sign * Number(`${rounded}e-${decimals}`)).toFixed(decimals);
 }
 
 function formatRawValue(id: MetricId, raw: unknown): string {
@@ -31,7 +52,12 @@ function formatRawValue(id: MetricId, raw: unknown): string {
 
 function formatSample(sample: MetricInput['sample']): string {
   const { collected, total, numerator, denominator } = sample;
-  if (collected === null && total === null && numerator === null && denominator === null) {
+  if (
+    collected === null &&
+    total === null &&
+    numerator === null &&
+    denominator === null
+  ) {
     return 'Не определено';
   }
   const parts: string[] = [];
@@ -69,7 +95,8 @@ function EvidenceList({
   if (!evidence || evidence.length === 0) {
     return (
       <div className={styles.evidenceBlock}>
-        <strong>Evidence:</strong> <span className={styles.mono}>Нет данных об источниках</span>
+        <strong>Evidence:</strong>{' '}
+        <span className={styles.mono}>Основания не сохранены</span>
       </div>
     );
   }
@@ -81,7 +108,12 @@ function EvidenceList({
         {evidence.map((ev) => (
           <li key={ev.id}>
             <span>{ev.description}</span>
-            {ev.path && <span className={styles.mono}> ({ev.path})</span>}
+            {/* Используем шаблонные строки, чтобы React не разбивал текст на куски */}
+            <span className={styles.mono}>{` (source: ${ev.source})`}</span>
+            {ev.path && <span className={styles.mono}>{` [${ev.path}]`}</span>}
+            {ev.revision && (
+              <span className={styles.mono}>{` rev: ${ev.revision}`}</span>
+            )}
             {isSafeUrl(ev.url) ? (
               <>
                 {' '}
@@ -90,7 +122,10 @@ function EvidenceList({
                 </a>
               </>
             ) : (
-              <span className={styles.mono}> (Ссылка на источник недоступна)</span>
+              <span className={styles.mono}>
+                {' '}
+                (Ссылка на источник недоступна)
+              </span>
             )}
           </li>
         ))}
@@ -114,14 +149,17 @@ function MetricRow({ metric }: { metric: Metric }) {
     input.raw_value === null ||
     input.raw_value === undefined;
 
-  const displayRaw = isUnavailable ? 'N/A' : formatRawValue(input.id, input.raw_value);
-  
-  const reason = isUnavailable && input.reason
-    ? {
-        specific: input.reason.message,
-        general: input.reason.cannot_conclude,
-      }
-    : null;
+  const displayRaw = isUnavailable
+    ? 'N/A'
+    : formatRawValue(input.id, input.raw_value);
+
+  const reason =
+    isUnavailable && input.reason
+      ? {
+          specific: input.reason.message,
+          general: input.reason.cannot_conclude,
+        }
+      : null;
 
   return (
     <div className={styles.metricRow}>
@@ -131,7 +169,9 @@ function MetricRow({ metric }: { metric: Metric }) {
           <span>
             <strong>Сырое значение:</strong>{' '}
             <span className={styles.rawValue}>{displayRaw}</span>
-            {input.unit && <span className={styles.mono}> {input.unit}</span>}
+            {input.unit && (
+              <span className={styles.mono}> {input.unit}</span>
+            )}
           </span>
           {reason && (
             <span className={styles.naReason}>
@@ -142,11 +182,12 @@ function MetricRow({ metric }: { metric: Metric }) {
         <div>
           <strong>Балл:</strong> {metric.normalized_score ?? 'N/A'}
         </div>
-        {input.status !== 'complete' && (
-          <div>
-            <strong>Состояние:</strong> <span className={styles.mono}>{input.status}</span>
-          </div>
-        )}
+        <div>
+          <strong>Состояние:</strong>{' '}
+          <span className={styles.mono}>
+            {STATUS_LABELS[input.status] ?? input.status}
+          </span>
+        </div>
         <div>
           <strong>Окно:</strong>{' '}
           {input.window
@@ -163,7 +204,8 @@ function MetricRow({ metric }: { metric: Metric }) {
         </div>
         {input.series && input.series.length > 0 && (
           <div>
-            <strong>Ряд:</strong> <span className={styles.mono}>{input.series.join(', ')}</span>
+            <strong>Ряд:</strong>{' '}
+            <span className={styles.mono}>{input.series.join(', ')}</span>
           </div>
         )}
         <div>
@@ -171,7 +213,8 @@ function MetricRow({ metric }: { metric: Metric }) {
           {metric.threshold !== null && ` (порог: ${metric.threshold})`}
         </div>
         <div>
-          <strong>Версия правила:</strong> <span className={styles.mono}>{metric.rule_version}</span>
+          <strong>Версия правила:</strong>{' '}
+          <span className={styles.mono}>{metric.rule_version}</span>
         </div>
         <EvidenceList
           evidence={input.evidence}
@@ -194,11 +237,15 @@ export function ActivityMetrics({ report }: { report: Report }) {
   if (metrics.length === 0) return null;
 
   return (
-    <section aria-label="Показатели активности" className={styles.activitySection}>
+    <section
+      aria-label="Показатели активности"
+      className={styles.activitySection}
+    >
       <h2 className={styles.sectionTitle}>Активность репозитория</h2>
       {activityCategory.status === 'unavailable' && activityCategory.reason && (
         <p className={styles.sectionWarning} role="status">
-          {activityCategory.reason.cannot_conclude || activityCategory.reason.message}
+          {activityCategory.reason.cannot_conclude ||
+            activityCategory.reason.message}
         </p>
       )}
       <dl className={styles.fields}>

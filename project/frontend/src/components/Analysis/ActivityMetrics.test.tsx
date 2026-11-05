@@ -127,9 +127,20 @@ it('FR-10: форматирует сырые значения как в ТЗ —
   expect(screen.getByText('0.1235')).toBeTruthy();
 });
 
-it('P2: округляет half-up (0.00015 -> 0.0002)', () => {
-  render(<ActivityMetrics report={makeReport([makeMetric('ACT_TREND', 0.00015)])} />);
+it('P2: округляет half-up (0.00015 -> 0.0002 и 2.00085 -> 2.0009)', () => {
+  const { rerender } = render(
+    <ActivityMetrics
+      report={makeReport([makeMetric('ACT_TREND', 0.00015)])}
+    />,
+  );
   expect(screen.getByText('0.0002')).toBeTruthy();
+
+  rerender(
+    <ActivityMetrics
+      report={makeReport([makeMetric('ACT_TREND', 2.00085)])}
+    />,
+  );
+  expect(screen.getByText('2.0009')).toBeTruthy();
 });
 
 it('FR-17: 0 — валидное значение, а не N/A', () => {
@@ -159,8 +170,21 @@ it('P1: unavailable + reason → N/A с предметной причиной и
   );
 
   expect(screen.getAllByText('N/A')).toHaveLength(2);
-  expect(screen.getByText(/Знаменатель коэффициента тренда равен нулю/)).toBeTruthy();
-  expect(screen.getAllByText(/Полная оценка этой проверки недоступна/).length).toBeGreaterThanOrEqual(1);
+  expect(
+    screen.getByText(/Знаменатель коэффициента тренда равен нулю/),
+  ).toBeTruthy();
+  expect(
+    screen.getAllByText(/Полная оценка этой проверки недоступна/).length,
+  ).toBeGreaterThanOrEqual(1);
+});
+
+it('P1: выводит статус полноты (complete -> «Полные данные»)', () => {
+  render(
+    <ActivityMetrics
+      report={makeReport([makeMetric('ACT_COMMIT_FREQ', 5, 'complete')])}
+    />,
+  );
+  expect(screen.getByText('Полные данные')).toBeTruthy();
 });
 
 it('P1: evidence с небезопасным URL (userinfo bypass) не рендерится как ссылка', () => {
@@ -170,7 +194,7 @@ it('P1: evidence с небезопасным URL (userinfo bypass) не ренд
     kind: 'commit',
     description: 'Safe commit',
     path: 'src/index.ts',
-    revision: null,
+    revision: 'abc123',
     url: 'https://github.com/example/repopulse-fixture/commit/abc',
     run_id: null,
     attempt: null,
@@ -190,13 +214,16 @@ it('P1: evidence с небезопасным URL (userinfo bypass) не ренд
     description: 'Missing URL commit',
     url: null,
   };
-  
+
   const metric = makeMetric('ACT_COMMIT_FREQ', 3.14, 'complete', null, {
     evidence: [safeEvidence, unsafeEvidence, missingEvidence],
     evidence_limited: true,
     evidence_total: 10,
   });
   render(<ActivityMetrics report={makeReport([metric])} />);
+
+  expect(screen.getAllByText(/source: git/).length).toBe(3);
+  expect(screen.getAllByText(/rev: abc123/).length).toBe(3);
 
   const safeLink = screen.getByRole('link', { name: '[ссылка]' });
   expect(safeLink.getAttribute('href')).toBe(safeEvidence.url);
@@ -205,9 +232,9 @@ it('P1: evidence с небезопасным URL (userinfo bypass) не ренд
 
   expect(screen.getByText('Unsafe commit')).toBeTruthy();
   expect(screen.getByText('Missing URL commit')).toBeTruthy();
-  
+
   expect(screen.getAllByRole('link', { name: '[ссылка]' })).toHaveLength(1);
-  
+
   expect(screen.getAllByText(/Ссылка на источник недоступна/)).toHaveLength(2);
 });
 
@@ -216,17 +243,17 @@ it('P1: пустой evidence выводит явное сообщение', () 
     evidence: [],
   });
   render(<ActivityMetrics report={makeReport([metric])} />);
-  expect(screen.getByText('Нет данных об источниках')).toBeTruthy();
+  expect(screen.getByText('Основания не сохранены')).toBeTruthy();
 });
 
 it('FR-07/P1 (интеграция): окно, серия и дата наблюдения в UTC', () => {
   render(
-    <ActivityMetrics
-      report={makeReport([makeMetric('ACT_COMMIT_FREQ', 5)])}
-    />,
+    <ActivityMetrics report={makeReport([makeMetric('ACT_COMMIT_FREQ', 5)])} />,
   );
   expect(
-    screen.getByText('[02.06.2026 00:00:00 UTC, 20.10.2026 00:00:00 UTC)'),
+    screen.getByText(
+      '[02.06.2026 00:00:00 UTC, 20.10.2026 00:00:00 UTC)',
+    ),
   ).toBeTruthy();
   expect(screen.getByText('1, 2, 3')).toBeTruthy();
   expect(screen.getByText('20.10.2026 00:00:00 UTC')).toBeTruthy();
