@@ -10,14 +10,20 @@ const METRIC_LABELS: Partial<Record<MetricId, string>> = {
   ACT_TREND: 'Тренд активности',
 };
 
+function roundHalfUp(value: number, decimals: number): string {
+  const factor = 10 ** decimals;
+  const rounded = Math.round((value + Number.EPSILON) * factor) / factor;
+  return rounded.toFixed(decimals);
+}
+
 function formatRawValue(id: MetricId, raw: unknown): string {
   if (raw === null || raw === undefined) return 'N/A';
   if (typeof raw === 'boolean') return raw ? 'Да' : 'Нет';
   if (typeof raw === 'string') return raw;
   if (typeof raw === 'number' && Number.isFinite(raw)) {
-    if (id === 'ACT_COMMIT_FREQ') return raw.toFixed(2);
+    if (id === 'ACT_COMMIT_FREQ') return roundHalfUp(raw, 2);
     if (id === 'ACT_DAYS_SINCE_LAST') return Math.round(raw).toString();
-    if (id === 'ACT_TREND') return raw.toFixed(4);
+    if (id === 'ACT_TREND') return roundHalfUp(raw, 4);
     return String(raw);
   }
   return 'N/A';
@@ -37,7 +43,18 @@ function formatSample(sample: MetricInput['sample']): string {
 }
 
 function isSafeUrl(url: string | null | undefined): url is string {
-  return typeof url === 'string' && url.startsWith('https://');
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'https:' &&
+      !!parsed.hostname &&
+      !parsed.username &&
+      !parsed.password
+    );
+  } catch {
+    return false;
+  }
 }
 
 function EvidenceList({
@@ -49,7 +66,14 @@ function EvidenceList({
   limited: boolean;
   total: number;
 }) {
-  if (evidence.length === 0) return null;
+  if (!evidence || evidence.length === 0) {
+    return (
+      <div className={styles.evidenceBlock}>
+        <strong>Evidence:</strong> <span className={styles.mono}>Нет данных об источниках</span>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.evidenceBlock}>
       <strong>Evidence:</strong>
@@ -58,13 +82,15 @@ function EvidenceList({
           <li key={ev.id}>
             <span>{ev.description}</span>
             {ev.path && <span className={styles.mono}> ({ev.path})</span>}
-            {isSafeUrl(ev.url) && (
+            {isSafeUrl(ev.url) ? (
               <>
                 {' '}
                 <a href={ev.url} target="_blank" rel="noopener noreferrer">
                   [ссылка]
                 </a>
               </>
+            ) : (
+              <span className={styles.mono}> (Ссылка на источник недоступна)</span>
             )}
           </li>
         ))}
@@ -89,8 +115,12 @@ function MetricRow({ metric }: { metric: Metric }) {
     input.raw_value === undefined;
 
   const displayRaw = isUnavailable ? 'N/A' : formatRawValue(input.id, input.raw_value);
+  
   const reason = isUnavailable && input.reason
-    ? input.reason.cannot_conclude || input.reason.message
+    ? {
+        specific: input.reason.message,
+        general: input.reason.cannot_conclude,
+      }
     : null;
 
   return (
@@ -101,23 +131,47 @@ function MetricRow({ metric }: { metric: Metric }) {
           <span>
             <strong>Сырое значение:</strong>{' '}
             <span className={styles.rawValue}>{displayRaw}</span>
+            {input.unit && <span className={styles.mono}> {input.unit}</span>}
           </span>
-          {reason && <span className={styles.naReason}>({reason})</span>}
+          {reason && (
+            <span className={styles.naReason}>
+              ({reason.specific}. {reason.general})
+            </span>
+          )}
         </div>
         <div>
           <strong>Балл:</strong> {metric.normalized_score ?? 'N/A'}
         </div>
+        {input.status !== 'complete' && (
+          <div>
+            <strong>Состояние:</strong> <span className={styles.mono}>{input.status}</span>
+          </div>
+        )}
         <div>
           <strong>Окно:</strong>{' '}
           {input.window
             ? `[${formatUtc(input.window.from)}, ${formatUtc(input.window.until)})`
             : 'Не определено'}
         </div>
+        {input.observed_at && (
+          <div>
+            <strong>Наблюдалось:</strong> {formatUtc(input.observed_at)}
+          </div>
+        )}
         <div>
           <strong>Выборка:</strong> {formatSample(input.sample)}
         </div>
+        {input.series && input.series.length > 0 && (
+          <div>
+            <strong>Ряд:</strong> <span className={styles.mono}>{input.series.join(', ')}</span>
+          </div>
+        )}
         <div>
           <strong>Правило:</strong> {metric.rule}
+          {metric.threshold !== null && ` (порог: ${metric.threshold})`}
+        </div>
+        <div>
+          <strong>Версия правила:</strong> <span className={styles.mono}>{metric.rule_version}</span>
         </div>
         <EvidenceList
           evidence={input.evidence}

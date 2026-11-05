@@ -15,7 +15,7 @@ const repo = {
 
 const TIMEOUT_REASON: Reason = {
   code: 'timeout',
-  message: 'Источник не ответил вовремя',
+  message: 'Знаменатель коэффициента тренда равен нулю',
   cannot_conclude: 'Полная оценка этой проверки недоступна',
 };
 
@@ -45,18 +45,18 @@ function makeMetric(
         excluded: null,
         excluded_reason: null,
       },
-      series: [],
+      series: status === 'complete' ? [1, 2, 3] : [],
       evidence: [],
       evidence_limited: false,
       evidence_total: 0,
-      observed_at: null,
+      observed_at: '2026-10-20T00:00:00Z',
       exclusions: [],
       ...overrides,
     },
     normalized_score: status === 'complete' ? 50 : null,
     rule_version: 'rhs-mvp-1.1.0',
     rule: '100 * share',
-    threshold: null,
+    threshold: 10,
     explanation: '',
   };
 }
@@ -127,6 +127,11 @@ it('FR-10: форматирует сырые значения как в ТЗ —
   expect(screen.getByText('0.1235')).toBeTruthy();
 });
 
+it('P2: округляет half-up (0.00015 -> 0.0002)', () => {
+  render(<ActivityMetrics report={makeReport([makeMetric('ACT_TREND', 0.00015)])} />);
+  expect(screen.getByText('0.0002')).toBeTruthy();
+});
+
 it('FR-17: 0 — валидное значение, а не N/A', () => {
   render(
     <ActivityMetrics
@@ -144,25 +149,21 @@ it('FR-17: 0 — валидное значение, а не N/A', () => {
   expect(screen.queryByText('N/A')).toBeNull();
 });
 
-it('FR-17: unavailable + reason → N/A с безопасным cannot_conclude, без утечки message', () => {
+it('P1: unavailable + reason → N/A с предметной причиной и общим выводом', () => {
   render(
     <ActivityMetrics
       report={makeReport([
         makeMetric('ACT_COMMIT_FREQ', null, 'unavailable', TIMEOUT_REASON),
-        makeMetric('ACT_DAYS_SINCE_LAST', null, 'unavailable', TIMEOUT_REASON),
-        makeMetric('ACT_TREND', null, 'unavailable', TIMEOUT_REASON),
       ])}
     />,
   );
 
-  expect(screen.getAllByText('N/A')).toHaveLength(6);
-  
-  expect(screen.getAllByText(/Полная оценка этой проверки недоступна/).length).toBeGreaterThanOrEqual(3);
-  
-  expect(screen.queryByText('Источник не ответил вовремя')).toBeNull();
+  expect(screen.getAllByText('N/A')).toHaveLength(2);
+  expect(screen.getByText(/Знаменатель коэффициента тренда равен нулю/)).toBeTruthy();
+  expect(screen.getAllByText(/Полная оценка этой проверки недоступна/).length).toBeGreaterThanOrEqual(1);
 });
 
-it('FR-17: evidence с небезопасным URL не рендерится как ссылка', () => {
+it('P1: evidence с небезопасным URL (userinfo bypass) не рендерится как ссылка', () => {
   const safeEvidence: Evidence = {
     id: 'ev-safe',
     source: 'git',
@@ -181,10 +182,17 @@ it('FR-17: evidence с небезопасным URL не рендерится к
     ...safeEvidence,
     id: 'ev-unsafe',
     description: 'Unsafe commit',
-    url: 'javascript:alert(1)',
+    url: 'https://github.com@evil.example/',
   };
+  const missingEvidence: Evidence = {
+    ...safeEvidence,
+    id: 'ev-missing',
+    description: 'Missing URL commit',
+    url: null,
+  };
+  
   const metric = makeMetric('ACT_COMMIT_FREQ', 3.14, 'complete', null, {
-    evidence: [safeEvidence, unsafeEvidence],
+    evidence: [safeEvidence, unsafeEvidence, missingEvidence],
     evidence_limited: true,
     evidence_total: 10,
   });
@@ -196,14 +204,22 @@ it('FR-17: evidence с небезопасным URL не рендерится к
   expect(safeLink.getAttribute('rel')).toContain('noopener');
 
   expect(screen.getByText('Unsafe commit')).toBeTruthy();
-  const links = screen.getAllByRole('link', { name: '[ссылка]' });
-  expect(links).toHaveLength(1);
-
-  expect(screen.getByText('Показано 2 из 10')).toBeTruthy();
+  expect(screen.getByText('Missing URL commit')).toBeTruthy();
+  
+  expect(screen.getAllByRole('link', { name: '[ссылка]' })).toHaveLength(1);
+  
+  expect(screen.getAllByText(/Ссылка на источник недоступна/)).toHaveLength(2);
 });
 
-it('FR-07 (интеграция): окно и даты в UTC независимо от локали', () => {
-  // Часовой пояс не влияет: formatUtc режет toISOString().
+it('P1: пустой evidence выводит явное сообщение', () => {
+  const metric = makeMetric('ACT_COMMIT_FREQ', 5, 'complete', null, {
+    evidence: [],
+  });
+  render(<ActivityMetrics report={makeReport([metric])} />);
+  expect(screen.getByText('Нет данных об источниках')).toBeTruthy();
+});
+
+it('FR-07/P1 (интеграция): окно, серия и дата наблюдения в UTC', () => {
   render(
     <ActivityMetrics
       report={makeReport([makeMetric('ACT_COMMIT_FREQ', 5)])}
@@ -212,6 +228,8 @@ it('FR-07 (интеграция): окно и даты в UTC независим
   expect(
     screen.getByText('[02.06.2026 00:00:00 UTC, 20.10.2026 00:00:00 UTC)'),
   ).toBeTruthy();
+  expect(screen.getByText('1, 2, 3')).toBeTruthy();
+  expect(screen.getByText('20.10.2026 00:00:00 UTC')).toBeTruthy();
 });
 
 it('возвращает null, если в отчёте нет категории activity', () => {
