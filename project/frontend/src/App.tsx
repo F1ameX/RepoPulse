@@ -1,8 +1,8 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import RepositoryInputPage from './pages/RepositoryInputPage';
-import AnalysisStatusPage from './pages/AnalysisStatusPage';
-import ReportPage from './pages/ReportPage';
-import ErrorPage from './pages/ErrorPage';
+import RepositoryInputPage from './pages/RepositoryInputPage/RepositoryInputPage';
+import AnalysisStatusPage from './pages/AnalysisPages/AnalysisStatusPage';
+import ReportPage from './pages/ReportPage/ReportPage';
+import ErrorPage from './pages/ErrorPages/ErrorPage';
 
 const router = createBrowserRouter([
   {

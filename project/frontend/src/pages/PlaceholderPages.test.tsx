@@ -1,9 +1,9 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it } from 'vitest';
-import AnalysisStatusPage from './AnalysisStatusPage';
-import ReportPage from './ReportPage';
-import ErrorPage from './ErrorPage';
+import AnalysisStatusPage from './AnalysisPages/AnalysisStatusPage';
+import ReportPage from './ReportPage/ReportPage';
+import ErrorPage from './ErrorPages/ErrorPage';
 
 afterEach(cleanup);
 

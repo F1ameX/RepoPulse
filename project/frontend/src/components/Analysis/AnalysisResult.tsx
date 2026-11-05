@@ -5,6 +5,7 @@ import { useReport } from '@/hooks/useReport';
 import type { Repository } from '@/types';
 import { AnalysisTitle } from './AnalysisTitle';
 import { ReportHeader } from './ReportHeader';
+import { ActivityMetrics } from './ActivityMetrics';
 import styles from './Analysis.module.css';
 
 export function AnalysisResult({
@@ -51,7 +52,12 @@ export function AnalysisResult({
         className={styles.feedback}
         view={reportFeedback(state, { onReload: () => void reload() })}
       />
-      {report && <ReportHeader report={report} />}
+      {report && (
+        <>
+          <ReportHeader report={report} />
+          <ActivityMetrics report={report} />
+        </>
+      )}
     </>
   );
 }
