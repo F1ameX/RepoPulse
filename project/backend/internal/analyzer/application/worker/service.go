@@ -205,9 +205,14 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 	// Collector completeness cannot be replaced with a claim of full coverage.
 	data = git.Data()
 	result.Snapshot.Refs = data.Refs
-	sources := append([]domain.SourceState{}, data.Sources...)
+	sources := make([]domain.SourceState, 0, len(data.Sources))
 	collected := map[string]bool{}
 	for _, source := range data.Sources {
+		if source.Source == "git" && source.Scope == domain.ActivityHistoryScope {
+			// Date validation depends on the accepted assessment time.
+			source = data.Activity(a.Window).Source
+		}
+		sources = append(sources, source)
 		collected[source.Source+"/"+source.Scope] = true
 	}
 	for _, source := range result.Snapshot.Sources {
