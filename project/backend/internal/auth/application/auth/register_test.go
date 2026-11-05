@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ type fakeHasher struct {
 	hashed    []string
 	err       error
 	verified  []string // encoded hashes passed to Verify
+	passwords []string // passwords passed to Verify
 	match     bool
 	verifyErr error
 }
@@ -22,8 +24,9 @@ func (h *fakeHasher) Hash(password string) (string, error) {
 	return "hash-of-password", h.err
 }
 
-func (h *fakeHasher) Verify(_, encoded string) (bool, error) {
+func (h *fakeHasher) Verify(password, encoded string) (bool, error) {
 	h.verified = append(h.verified, encoded)
+	h.passwords = append(h.passwords, password)
 	return h.match, h.verifyErr
 }
 
@@ -126,5 +129,18 @@ func TestRegisterHashFailure(t *testing.T) {
 		Register(context.Background(), "flamex", "correct horse battery")
 	if err == nil || users.calls != 0 {
 		t.Fatalf("err = %v, calls = %d; account must not be stored without a hash", err, users.calls)
+	}
+}
+
+// TestRegisterHashesNFCPassword checks the value passed across the application port.
+func TestRegisterHashesNFCPassword(t *testing.T) {
+	users, hasher := &fakeUsers{}, &fakeHasher{}
+	raw := " " + strings.Repeat("a", 14) + "e\u0301 "
+	want := " " + strings.Repeat("a", 14) + "é "
+	if _, err := newRegisterService(users, hasher).Register(context.Background(), "flamex", raw); err != nil {
+		t.Fatal(err)
+	}
+	if len(hasher.hashed) != 1 || hasher.hashed[0] != want {
+		t.Fatal("hasher did not receive the NFC password with spaces preserved")
 	}
 }

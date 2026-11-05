@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -177,6 +178,29 @@ func TestLoginFailuresAreNotInvalidCredentials(t *testing.T) {
 			}
 			if issued.Token != "" {
 				t.Fatal("no token may be returned on failure")
+			}
+		})
+	}
+}
+
+// TestLoginVerifiesNFCPassword also covers the dummy hash path for unknown accounts.
+func TestLoginVerifiesNFCPassword(t *testing.T) {
+	for _, known := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unknown", true: "known"}[known], func(t *testing.T) {
+			users := &fakeUsers{}
+			if known {
+				account := storedAccount
+				users.account = &account
+			}
+			hasher := &fakeHasher{match: true}
+			raw := " " + strings.Repeat("a", 14) + "e\u0301 "
+			want := " " + strings.Repeat("a", 14) + "é "
+			_, err := newLoginService(users, &fakeTokens{}, hasher, fakeGenerator{token: "t", hash: "h"}).Login(context.Background(), "flamex", raw)
+			if known && err != nil || !known && !errors.Is(err, domain.ErrInvalidCredentials) {
+				t.Fatalf("login: %v", err)
+			}
+			if len(hasher.passwords) != 1 || hasher.passwords[0] != want {
+				t.Fatal("Verify did not receive the NFC password with spaces preserved")
 			}
 		})
 	}
