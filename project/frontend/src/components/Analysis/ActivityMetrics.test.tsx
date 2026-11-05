@@ -127,7 +127,7 @@ it('FR-10: форматирует сырые значения как в ТЗ —
   expect(screen.getByText('0.1235')).toBeTruthy();
 });
 
-it('P2: округляет half-up (0.00015 -> 0.0002 и 2.00085 -> 2.0009)', () => {
+it('P2: округляет half-up (0.00015 -> 0.0002, 2.00085 -> 2.0009, 1e-7 -> 0.0000)', () => {
   const { rerender } = render(
     <ActivityMetrics
       report={makeReport([makeMetric('ACT_TREND', 0.00015)])}
@@ -141,6 +141,13 @@ it('P2: округляет half-up (0.00015 -> 0.0002 и 2.00085 -> 2.0009)', ()
     />,
   );
   expect(screen.getByText('2.0009')).toBeTruthy();
+
+  rerender(
+    <ActivityMetrics
+      report={makeReport([makeMetric('ACT_TREND', 1e-7)])}
+    />,
+  );
+  expect(screen.getByText('0.0000')).toBeTruthy();
 });
 
 it('FR-17: 0 — валидное значение, а не N/A', () => {
@@ -170,9 +177,11 @@ it('P1: unavailable + reason → N/A с предметной причиной и
   );
 
   expect(screen.getAllByText('N/A')).toHaveLength(2);
+  
   expect(
-    screen.getByText(/Знаменатель коэффициента тренда равен нулю/),
-  ).toBeTruthy();
+    screen.getAllByText(/Знаменатель коэффициента тренда равен нулю/).length,
+  ).toBeGreaterThanOrEqual(1);
+  
   expect(
     screen.getAllByText(/Полная оценка этой проверки недоступна/).length,
   ).toBeGreaterThanOrEqual(1);
@@ -234,16 +243,17 @@ it('P1: evidence с небезопасным URL (userinfo bypass) не ренд
   expect(screen.getByText('Missing URL commit')).toBeTruthy();
 
   expect(screen.getAllByRole('link', { name: '[ссылка]' })).toHaveLength(1);
-
   expect(screen.getAllByText(/Ссылка на источник недоступна/)).toHaveLength(2);
 });
 
-it('P1: пустой evidence выводит явное сообщение', () => {
-  const metric = makeMetric('ACT_COMMIT_FREQ', 5, 'complete', null, {
+it('P1: пустой evidence выводит причину отсутствия', () => {
+  const metric = makeMetric('ACT_COMMIT_FREQ', null, 'unavailable', TIMEOUT_REASON, {
     evidence: [],
   });
   render(<ActivityMetrics report={makeReport([metric])} />);
-  expect(screen.getByText('Основания не сохранены')).toBeTruthy();
+  expect(
+    screen.getByText(/Основания не сохранены \(Знаменатель коэффициента тренда равен нулю\)/),
+  ).toBeTruthy();
 });
 
 it('FR-07/P1 (интеграция): окно, серия и дата наблюдения в UTC', () => {

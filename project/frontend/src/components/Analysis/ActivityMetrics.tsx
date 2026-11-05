@@ -4,6 +4,7 @@ import type {
   Metric,
   MetricId,
   MetricInput,
+  Reason,
   Report,
 } from '@/types';
 import { formatUtc } from '@/lib/analysisView';
@@ -30,10 +31,23 @@ const STATUS_LABELS: Record<DataStatus, string> = {
 
 function roundHalfUp(value: number, decimals: number): string {
   if (value === 0) return (0).toFixed(decimals);
+
   const sign = Math.sign(value);
   const absValue = Math.abs(value);
-  const shifted = Number(`${absValue}e${decimals}`);
+  const str = absValue.toString();
+
+  let shifted: number;
+  if (str.includes('e')) {
+    shifted = absValue * 10 ** decimals;
+  } else {
+    shifted = Number(`${str}e${decimals}`);
+  }
+
   const rounded = Math.round(shifted);
+
+  if (str.includes('e')) {
+    return (sign * (rounded / 10 ** decimals)).toFixed(decimals);
+  }
   return (sign * Number(`${rounded}e-${decimals}`)).toFixed(decimals);
 }
 
@@ -87,16 +101,21 @@ function EvidenceList({
   evidence,
   limited,
   total,
+  reason,
 }: {
   evidence: Evidence[];
   limited: boolean;
   total: number;
+  reason: Reason | null;
 }) {
   if (!evidence || evidence.length === 0) {
     return (
       <div className={styles.evidenceBlock}>
         <strong>Evidence:</strong>{' '}
-        <span className={styles.mono}>Основания не сохранены</span>
+        <span className={styles.mono}>
+          Основания не сохранены
+          {reason ? ` (${reason.message})` : ''}
+        </span>
       </div>
     );
   }
@@ -108,7 +127,6 @@ function EvidenceList({
         {evidence.map((ev) => (
           <li key={ev.id}>
             <span>{ev.description}</span>
-            {/* Используем шаблонные строки, чтобы React не разбивал текст на куски */}
             <span className={styles.mono}>{` (source: ${ev.source})`}</span>
             {ev.path && <span className={styles.mono}>{` [${ev.path}]`}</span>}
             {ev.revision && (
@@ -220,6 +238,7 @@ function MetricRow({ metric }: { metric: Metric }) {
           evidence={input.evidence}
           limited={input.evidence_limited}
           total={input.evidence_total ?? 0}
+          reason={input.reason}
         />
       </dd>
     </div>
