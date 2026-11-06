@@ -158,6 +158,10 @@ func (s Snapshot) Validate() error {
 	if err := s.Versions.Validate(); err != nil {
 		return err
 	}
+	return s.SnapshotData.Validate()
+}
+
+func (s SnapshotData) Validate() error {
 	if len(s.Inputs) != len(metricCategories) || len(s.Dependencies) > 20 ||
 		s.Refs == nil || s.Sources == nil || s.Dependencies == nil || s.Vulnerabilities == nil {
 		return invalid("snapshot inputs")
@@ -258,6 +262,38 @@ func normalizeTime(at **time.Time) {
 	}
 }
 
+// PrepareSnapshotData detaches collected facts from their producers and applies
+// storage precision without inventing missing observations, counts or values.
+func PrepareSnapshotData(data SnapshotData) (SnapshotData, error) {
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		return SnapshotData{}, invalid("snapshot JSON")
+	}
+	var copied SnapshotData
+	if err := json.Unmarshal(encoded, &copied); err != nil {
+		return SnapshotData{}, invalid("snapshot JSON")
+	}
+	normalizeSnapshotData(&copied)
+	if err := copied.Validate(); err != nil {
+		return SnapshotData{}, err
+	}
+	return copied, nil
+}
+
+func normalizeSnapshotData(data *SnapshotData) {
+	data.Refs, data.Sources = emptySlice(data.Refs), emptySlice(data.Sources)
+	data.Dependencies, data.Vulnerabilities = emptySlice(data.Dependencies), emptySlice(data.Vulnerabilities)
+	for i := range data.Sources {
+		normalizeTime(&data.Sources[i].ObtainedAt)
+	}
+	for i := range data.Vulnerabilities {
+		data.Vulnerabilities[i].ObtainedAt = UTC(data.Vulnerabilities[i].ObtainedAt)
+	}
+	for i := range data.Inputs {
+		normalizeInput(&data.Inputs[i])
+	}
+}
+
 // NewResult copies all caller-owned slices before normalization. Neither a worker
 // nor a transport may replace accepted metadata when publishing the result.
 func NewResult(a Analysis, snapshotID, reportID string, at time.Time, data SnapshotData, report ReportData) (Result, error) {
@@ -286,17 +322,7 @@ func NewResult(a Analysis, snapshotID, reportID string, at time.Time, data Snaps
 		return Result{}, invalid("result JSON")
 	}
 	data, report = copied.Data, copied.Report
-	data.Refs, data.Sources = emptySlice(data.Refs), emptySlice(data.Sources)
-	data.Dependencies, data.Vulnerabilities = emptySlice(data.Dependencies), emptySlice(data.Vulnerabilities)
-	for i := range data.Sources {
-		normalizeTime(&data.Sources[i].ObtainedAt)
-	}
-	for i := range data.Vulnerabilities {
-		data.Vulnerabilities[i].ObtainedAt = UTC(data.Vulnerabilities[i].ObtainedAt)
-	}
-	for i := range data.Inputs {
-		normalizeInput(&data.Inputs[i])
-	}
+	normalizeSnapshotData(&data)
 	snapshot := Snapshot{ID: snapshotID, AnalysisID: a.ID, Owner: a.Owner, Repository: a.Repository,
 		AssessmentAt: a.AssessmentAt, Window: a.Window, Versions: a.Versions, SnapshotData: data}
 	if err := snapshot.Validate(); err != nil {

@@ -28,20 +28,26 @@ request_id отправки остаётся у клиента и в submissions
 | SUBMISSION_PENDING | 409 | ABORTED | Исходная отправка ещё проверяется. Безопасный повтор с тем же request_id; новый job не создаётся |
 | ANALYSIS_NOT_FOUND | 404 | NOT_FOUND | Анализ недоступен; неверный ID/чужой/отсутствующий объект одинаковы |
 | REPORT_NOT_FOUND | 404 | NOT_FOUND | Отчёт недоступен; неверный ID/чужой/отсутствующий объект одинаковы |
+| REPORT_UNAVAILABLE | 503 | UNAVAILABLE / DEADLINE_EXCEEDED | Report Service недоступен или не ответил за REPORT_REQUEST_TIMEOUT; можно повторить чтение сохранённого отчёта |
 | AUTH_UNAVAILABLE | 503 | UNAVAILABLE / DEADLINE_EXCEEDED | Auth недоступен или не ответил за AUTH_REQUEST_TIMEOUT; токены/адреса/внутренние сообщения не раскрываются |
 | INTERNAL_ERROR | 500 | INTERNAL | Не удалось выполнить операцию |
 | NOT_FOUND | 404 | NOT_FOUND | Неизвестный HTTP-маршрут каркаса, без метаданных ресурса |
 | METHOD_NOT_ALLOWED | 405 | UNIMPLEMENTED | Неподдерживаемый HTTP-метод, Allow header |
 | NOT_IMPLEMENTED | 501 | UNIMPLEMENTED | Только существующий каркас; не подтверждает готовность функции |
 
-ANALYSIS_FAILED, BUDGET_EXCEEDED, REPORT_SAVE_FAILED — коды терминального
+ANALYSIS_FAILED, BUDGET_EXCEEDED, GIT_TIME_LIMIT, GIT_SIZE_LIMIT, REPORT_SAVE_FAILED — коды терминального
 AnalysisStatus.error. Чтение сохранённого failed-статуса само возвращает HTTP 200.
 Сбой чтения статуса/отчёта возвращает транспортную ошибку и не меняет анализ.
 Исполнитель сохраняет только разрешённые коды и безопасные сообщения, без
 stderr Git, DSN, исходных текстов и провайдерских ошибок. trace_id фонового
 выполнения — серверный analysis_id, отдельно от request_id отправки.
 [Ограничения Git](architecture/analyzer-execution.md#полнота-и-причины) сохраняются
-в SourceState.reason; это не новые коды транспортных ошибок.
+в SourceState.reason. Если пригодных данных нет, GIT_TIME_LIMIT или GIT_SIZE_LIMIT
+также сохраняются в AnalysisStatus.error с безопасным сообщением о времени/размере.
+Полезный частичный результат публикуется с исходной причиной ограничения.
+Эти коды не превращают чтение failed-статуса в транспортную ошибку.
+Примеры: [лимит времени Git](../contracts/examples/analysis-failed-git-time-limit.json)
+и [лимит размера Git](../contracts/examples/analysis-failed-git-size-limit.json).
 Сбой независимого источника может дать partial-отчёт вместо failed;
 у метрик сохраняются reason.code/message/cannot_conclude.
 

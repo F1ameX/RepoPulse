@@ -34,6 +34,7 @@ type Options struct {
 	CookieSecure bool
 	PublicOrigin string
 	Analyses     AnalysisService
+	Reports      ReportService
 }
 
 func sessionTokens(r *http.Request) domain.SessionTokens {

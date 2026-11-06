@@ -25,7 +25,7 @@ func TestHTTPContract(t *testing.T) {
 		{"GET", "/health", 200, "", ""},
 		{"POST", "/api/v1/analyses", 501, "NOT_IMPLEMENTED", ""},
 		{"GET", "/api/v1/analyses/A123", 501, "NOT_IMPLEMENTED", ""},
-		{"GET", "/api/v1/reports/R123", 501, "NOT_IMPLEMENTED", ""},
+		{"GET", "/api/v1/reports/R123", 401, "SESSION_REQUIRED", ""},
 		{"GET", "/", 404, "NOT_FOUND", ""},
 		{"GET", "/health/extra", 404, "NOT_FOUND", ""},
 		{"GET", "/api/v1/analyses/A123/extra", 404, "NOT_FOUND", ""},

@@ -25,6 +25,8 @@ export function analysisFailure(code: string | null, message?: string): string {
     REPOSITORY_NOT_FOUND_OR_PRIVATE: 'Репозиторий стал недоступен для анализа',
     REPORT_SAVE_FAILED: 'Не удалось сохранить результат анализа',
     BUDGET_EXCEEDED: 'Превышено время анализа',
+    GIT_TIME_LIMIT: 'Превышено время анализа',
+    GIT_SIZE_LIMIT: 'Репозиторий превышает ограничения анализа',
   };
   if (
     code === 'ANALYSIS_FAILED' &&

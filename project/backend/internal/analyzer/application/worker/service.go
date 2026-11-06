@@ -26,6 +26,12 @@ type GitSession interface {
 type GitSource interface {
 	Open(context.Context, domain.RepositoryMetadata) (GitSession, error)
 }
+
+// A source can expose a structured reason even if opening a session failed.
+// The worker only publishes explicitly recognized terminal limit codes.
+type sourceError interface {
+	ReasonCode() string
+}
 type Publisher interface {
 	Complete(context.Context, string, domain.SnapshotData, domain.ReportData) (domain.Result, error)
 }
@@ -133,6 +139,13 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 	}()
 	git, err := s.git.Open(ctx, a.Repository)
 	if err != nil {
+		var failure sourceError
+		if errors.As(err, &failure) {
+			switch failure.ReasonCode() {
+			case "GIT_TIME_LIMIT", "GIT_SIZE_LIMIT":
+				return &jobError{failure.ReasonCode()}
+			}
+		}
 		return err
 	}
 	defer func() {
@@ -200,6 +213,17 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 		}
 	}
 	if !useful(result) {
+		// Keep only recognized, safe terminal reasons from the collector.
+		// Useful partial results bypass this failure decision and are published.
+		for _, source := range git.Data().Sources {
+			if source.Source != "git" || source.Status == "complete" || source.Reason == nil {
+				continue
+			}
+			switch source.Reason.Code {
+			case "GIT_TIME_LIMIT", "GIT_SIZE_LIMIT":
+				return &jobError{source.Reason.Code}
+			}
+		}
 		return &jobError{"ANALYSIS_FAILED"}
 	}
 	// Collector completeness cannot be replaced with a claim of full coverage.
@@ -242,10 +266,18 @@ func minTime(a, b time.Time) time.Time {
 }
 
 func useful(output Output) bool {
+	for _, source := range output.Snapshot.Sources {
+		if source.Source == "git" && source.Scope == domain.ActivityHistoryScope && source.Status == "complete" {
+			return true
+		}
+	}
 	if len(output.Report.Findings) > 0 {
 		return true
 	}
 	for _, input := range output.Snapshot.Inputs {
+		if len(input.Evidence) > 0 && (input.Status == "complete" || input.Status == "partial") {
+			return true
+		}
 		raw, _ := json.Marshal(input.RawValue)
 		if (input.Status == "complete" || input.Status == "partial") && string(raw) != "null" {
 			return true

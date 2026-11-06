@@ -13,6 +13,7 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/repository"
 	httpapi "github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/in/http"
 	authclient "github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/out/auth"
+	reportclient "github.com/F1ameX/RepoPulse/project/backend/internal/api/adapter/out/report"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/api/application/session"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -49,10 +50,16 @@ func newAPIHandler(ctx context.Context, cfg Config, settings AnalysisConfig, ses
 	}
 	client := github.NewClient(nil, cfg.GitHubToken)
 	scenarios := analysis.NewService(analyzerrepo.NewPostgres(pool), client, settings.Versions, cfg.GitHubCheckTimeout)
+	reportConn, err := grpc.NewClient(cfg.ReportGRPCTarget, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		pool.Close()
+		return nil, nil, errors.New("invalid Report service target")
+	}
 	handler := httpapi.NewHandler(repository.NewValidator(client, cfg.GitHubCheckTimeout), sessions, httpapi.Options{
 		Sessions: sessions, CookieSecure: cfg.CookieSecure, PublicOrigin: cfg.PublicOrigin, Analyses: scenarios,
+		Reports: reportclient.NewClient(reportConn, cfg.ReportRequestTimeout),
 	})
-	return handler, pool.Close, nil
+	return handler, func() { reportConn.Close(); pool.Close() }, nil
 }
 
 func newHTTPServer(ctx context.Context, cfg Config, sessions ...*session.Service) *http.Server {
