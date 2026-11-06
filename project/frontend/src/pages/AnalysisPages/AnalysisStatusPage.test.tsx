@@ -5,7 +5,8 @@ import { authService } from '@/services/authService';
 import { repositoryService } from '@/services/repositoryService';
 import type { AnalysisStatus, Report } from '@/types';
 import AnalysisStatusPage from './AnalysisStatusPage';
-import RepositoryInputPage from './RepositoryInputPage';
+import RepositoryInputPage from '../RepositoryInputPage/RepositoryInputPage';
+
 
 const A1 = '6f4a2b18-7c93-4e51-9d20-83a6c0b145ef';
 const R1 = 'a1b2c3d4-1111-2222-3333-444444444444';
