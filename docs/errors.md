@@ -46,6 +46,8 @@ stderr Git, DSN, исходных текстов и провайдерских �
 также сохраняются в AnalysisStatus.error с безопасным сообщением о времени/размере.
 Полезный частичный результат публикуется с исходной причиной ограничения.
 Эти коды не превращают чтение failed-статуса в транспортную ошибку.
+Примеры: [лимит времени Git](../contracts/examples/analysis-failed-git-time-limit.json)
+и [лимит размера Git](../contracts/examples/analysis-failed-git-size-limit.json).
 Сбой независимого источника может дать partial-отчёт вместо failed;
 у метрик сохраняются reason.code/message/cannot_conclude.
 
