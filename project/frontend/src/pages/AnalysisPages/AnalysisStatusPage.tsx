@@ -1,14 +1,17 @@
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Button, FeedbackMessage, Message } from '@/components';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Button, FeedbackMessage } from '@/components';
+import ErrorPage from '../ErrorPages/ErrorPage';
 import { statusFeedback, submissionFeedback } from '@/components/FeedbackMessage/mappers';
 import { AnalysisAccess } from '@/components/Analysis/AnalysisAccess';
+import { GuestAction } from '@/components/Auth/GuestAction';
+import { ButtonLink } from '@/components/Button/ButtonLink';
 import { AnalysisTitle } from '@/components/Analysis/AnalysisTitle';
 import { PageLayout } from '@/components/Page/PageLayout';
 import pageStyles from '@/components/Page/Page.module.css';
 import { AnalysisResult } from '@/components/Analysis/AnalysisResult';
 import { useAnalysisStatus } from '@/hooks/useAnalysisStatus';
 import { useAnalysisSubmission } from '@/hooks/useAnalysisSubmission';
-import { analysisFailure, STAGE_LABELS, STATUS_LABELS } from '@/lib/analysisView';
+import { analysisFailure, isSessionError, STAGE_LABELS, STATUS_LABELS } from '@/lib/analysisView';
 import styles from '@/components/Analysis/Analysis.module.css';
 
 const validId = (value: string | undefined) =>
@@ -23,12 +26,19 @@ function AnalysisLifecycle({ id }: { id: string }) {
   });
   if (state.kind === 'hidden')
     return (
-      <>
+      <div className={pageStyles.recovery}>
         <FeedbackMessage view={statusFeedback(state, { onRefresh: () => void refresh() })} />
-        <Link to="/" className={pageStyles.actionLink}>
-          Новый анализ
-        </Link>
-      </>
+        {isSessionError(state.code) ? (
+          <>
+            <ButtonLink to="/login" state={{ expired: state.code === 'SESSION_EXPIRED' }}>
+              Войти
+            </ButtonLink>
+            <GuestAction />
+          </>
+        ) : (
+          <ButtonLink to="/">Новый анализ</ButtonLink>
+        )}
+      </div>
     );
   const confirmed = 'lastConfirmed' in state ? state.lastConfirmed : null;
   if (confirmed?.status === 'completed' && confirmed.reportId) {
@@ -124,24 +134,12 @@ function AnalysisLifecycle({ id }: { id: string }) {
 }
 export default function AnalysisStatusPage() {
   const { id } = useParams();
+  if (!validId(id)) return <ErrorPage title="Анализ недоступен" action="Новый анализ" />;
   return (
     <PageLayout>
-      {!validId(id) ? (
-        <Message
-          variant="error"
-          actions={
-            <Link to="/" className={pageStyles.actionLink}>
-              Новый анализ
-            </Link>
-          }
-        >
-          Анализ недоступен
-        </Message>
-      ) : (
-        <AnalysisAccess>
-          <AnalysisLifecycle key={id} id={id!} />
-        </AnalysisAccess>
-      )}
+      <AnalysisAccess>
+        <AnalysisLifecycle key={id} id={id!} />
+      </AnalysisAccess>
     </PageLayout>
   );
 }

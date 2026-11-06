@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { authService } from '@/services/authService';
@@ -27,15 +27,38 @@ const report: Report = {
   window: { from: '2026-06-11T09:00:00Z', until: '2026-10-29T09:00:00Z' },
   completed_at: '2026-10-29T10:00:00Z',
   versions: {
-    schema: 'v1', methodology: 'v1', scoring_config: 'v1', collector_profile: 'v1',
-    secret_rules: 'v1', recommendation_catalog: 'v1', explanation_schema: 'v1', prompt: 'v1',
+    schema: 'v1',
+    methodology: 'v1',
+    scoring_config: 'v1',
+    collector_profile: 'v1',
+    secret_rules: 'v1',
+    recommendation_catalog: 'v1',
+    explanation_schema: 'v1',
+    prompt: 'v1',
   },
-  overall_score: null, overall_reason: null, summary: '',
-  coverage: { calculated: 0, total: 0, percentage: 0, partial: 0, unavailable: 0, not_applicable: 0 },
-  categories: [], sources: [], dependencies: [], findings: [], recommendations: [],
+  overall_score: null,
+  overall_reason: null,
+  summary: '',
+  coverage: {
+    calculated: 0,
+    total: 0,
+    percentage: 0,
+    partial: 0,
+    unavailable: 0,
+    not_applicable: 0,
+  },
+  categories: [],
+  sources: [],
+  dependencies: [],
+  findings: [],
+  recommendations: [],
   explanation: {
-    mode: 'deterministic_fallback', fallback_reason: null, model: null,
-    catalog_version: 'v1', schema_version: 'v1', prompt_version: 'v1',
+    mode: 'deterministic_fallback',
+    fallback_reason: null,
+    model: null,
+    catalog_version: 'v1',
+    schema_version: 'v1',
+    prompt_version: 'v1',
   },
 };
 
@@ -69,6 +92,69 @@ it('renders the fetched report', async () => {
   // и в ссылке, поэтому по нему getByText падает на multiple.
   await screen.findByText(A1);
   expect(screen.getByRole('region', { name: 'Шапка отчёта' })).toBeTruthy();
+});
+
+it('renders saved activity on a direct report visit and reload without starting an analysis', async () => {
+  const getReport = vi.spyOn(repositoryService, 'getReport').mockResolvedValue({
+    ...report,
+    categories: [
+      {
+        id: 'activity',
+        score: 37.5,
+        status: 'complete',
+        reason: null,
+        coverage: { ...report.coverage, calculated: 1, total: 1 },
+        effective_weight: null,
+        explanation: '',
+        metrics: [
+          {
+            input: {
+              id: 'ACT_COMMIT_FREQ',
+              raw_value: 0,
+              unit: 'commits_per_week',
+              status: 'complete',
+              reason: null,
+              window: report.window,
+              sample: {
+                collected: 0,
+                total: 0,
+                numerator: 0,
+                denominator: 20,
+                excluded: null,
+                excluded_reason: null,
+              },
+              series: [],
+              evidence: [],
+              evidence_limited: false,
+              evidence_total: 0,
+              observed_at: null,
+              exclusions: [],
+            },
+            normalized_score: 37.5,
+            rule: 'Сохранённое правило',
+            rule_version: 'v1',
+            threshold: 50,
+            explanation: '',
+          },
+        ],
+      },
+    ],
+  });
+  const createAnalysis = vi.spyOn(repositoryService, 'createAnalysis');
+  const path = `/report/${R1}`;
+  const first = renderAt(path);
+  await screen.findByRole('heading', { name: 'Активность репозитория' });
+  first.unmount();
+  renderAt(path);
+  const activity = within(await screen.findByRole('region', { name: 'Показатели активности' }));
+  expect(activity.getByText('0.00')).toBeTruthy();
+  expect(activity.getByText(/37\.5/)).toBeTruthy();
+  expect(activity.getByText(/коммитов: 0, недель: 20/)).toBeTruthy();
+  expect(activity.getByText('Порог:').parentElement?.textContent).toContain('50');
+  expect(activity.getByText('Версия методики:').parentElement?.textContent).toContain('v1');
+  expect(activity.queryByText('Сохранённое правило')).toBeNull();
+  expect(getReport).toHaveBeenCalledTimes(2);
+  expect(createAnalysis).not.toHaveBeenCalled();
 });
 
 it('N07: shows "Не удалось загрузить отчёт" with retry', async () => {

@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import type { InputHTMLAttributes, Ref } from 'react';
+import type { InputHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/utils';
 import styles from './Input.module.css';
 
@@ -9,6 +9,7 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   label?: string;
   hint?: string;
   error?: string;
+  action?: ReactNode;
   size?: InputSize;
   ref?: Ref<HTMLInputElement>;
 }
@@ -17,6 +18,7 @@ export function Input({
   label,
   hint,
   error,
+  action,
   size = 'md',
   id,
   className,
@@ -34,6 +36,17 @@ export function Input({
       .filter(Boolean)
       .join(' ') || undefined;
 
+  const input = (
+    <input
+      ref={ref}
+      id={inputId}
+      aria-invalid={error ? true : undefined}
+      aria-describedby={describedBy}
+      className={cn(styles.input, styles[size], error && styles.hasError)}
+      {...rest}
+    />
+  );
+
   return (
     <div className={cn(styles.field, className)}>
       {label && (
@@ -46,14 +59,14 @@ export function Input({
           )}
         </label>
       )}
-      <input
-        ref={ref}
-        id={inputId}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy}
-        className={cn(styles.input, styles[size], error && styles.hasError)}
-        {...rest}
-      />
+      {action ? (
+        <div className={styles.control}>
+          {input}
+          {action}
+        </div>
+      ) : (
+        input
+      )}
       {error && (
         <span id={errorId} className={styles.error} role="alert">
           {error}

@@ -121,6 +121,77 @@
   margin-bottom: 8px;
 }
 
+.activitySection {
+  margin-top: 48px;
+  line-height: 24px;
+}
+
+.sectionTitle {
+  margin: 0 0 16px;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.metricRow {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 8px 24px;
+  padding: 16px 0;
+}
+
+.metricId {
+  display: block;
+  color: var(--color-muted);
+  font: 13px/20px var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.metricDetails {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.metricValueLine {
+  display: grid;
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.metricCaption {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.metricValue {
+  font-size: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.naReason,
+.hint {
+  color: var(--color-muted);
+}
+
+.sectionWarning {
+  color: var(--color-warning);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.evidenceBlock ul {
+  margin: 4px 0 0;
+  padding-inline-start: 20px;
+}
+
 @keyframes status-spin {
   to {
     transform: rotate(360deg);
@@ -131,91 +202,4 @@
   .spinner {
     animation: none;
   }
-}
-
-.activitySection {
-  margin-top: 40px;
-  font-size: 15px;
-  line-height: 24px;
-}
-
-.sectionTitle {
-  margin: 0 0 16px;
-  font-size: 20px;
-  font-weight: 500;
-  line-height: 1.3;
-}
-
-.sectionWarning {
-  margin: -8px 0 16px;
-  color: var(--color-warning);
-  font-size: 14px;
-  line-height: 20px;
-  overflow-wrap: anywhere;
-}
-
-.metricRow {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 8px 24px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.metricRow:last-child {
-  border-bottom: none;
-}
-
-.metricLabel {
-  color: var(--color-text-secondary);
-  font-weight: 400;
-  overflow-wrap: anywhere;
-}
-
-.metricDetails {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.metricValueLine {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.rawValue {
-  font-family: var(--font-mono);
-  font-size: 14px;
-}
-
-.naReason {
-  color: var(--color-warning);
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-
-.evidenceBlock {
-  margin-top: 8px;
-}
-
-.evidenceBlock ul {
-  margin: 4px 0 0;
-  padding-left: 20px;
-}
-
-.mono {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--color-muted);
-}
-
-.hint {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--color-muted);
 }

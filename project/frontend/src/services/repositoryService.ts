@@ -4,6 +4,7 @@ import type {
   CreateAnalysisRequest,
   CreateAnalysisResponse,
   AnalysisStatus,
+  HistoryPage,
   Report,
 } from '@/types';
 
@@ -79,6 +80,15 @@ export const repositoryService = {
 
   async getReport(reportId: string, signal?: AbortSignal): Promise<Report> {
     const { data } = await api.get(`/reports/${encodeURIComponent(reportId)}`, {
+      timeout: 15_000,
+      signal,
+    });
+    return data;
+  },
+
+  async listReports(cursor?: string, signal?: AbortSignal): Promise<HistoryPage> {
+    const { data } = await api.get<HistoryPage>('/reports', {
+      params: { cursor },
       timeout: 15_000,
       signal,
     });
