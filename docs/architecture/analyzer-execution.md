@@ -45,6 +45,9 @@ Processor возвращает типизированные SnapshotData и Repo
    утверждением Processor о полной выборке.
 6. Если подтверждённых входов/находок нет — ANALYSIS_FAILED; ошибка публикации —
    REPORT_SAVE_FAILED; истечение общего срока — BUDGET_EXCEEDED.
+   Если пригодных данных нет после ограничения Git, сохраняются безопасные
+   GIT_TIME_LIMIT или GIT_SIZE_LIMIT. Пригодный partial-результат публикуется
+   с причиной ограничения, без перехода в failed.
    Ошибка хранится в AnalysisStatus.error, stage очищается.
 
 Completed и failed неизменяемы. Чтения статуса и результата только читают БД.

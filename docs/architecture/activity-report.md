@@ -33,7 +33,8 @@ ACTIVITY_ONLY до реализации #18527. Категория activity со
 `GET /api/v1/reports/{report_id}` получает VerifiedContext через Auth.ResolveContext.
 Gateway вызывает существующий бинарный RPC Report.GetReport и явно переносит поля
 protobuf в HTTP JSON. HTTP DTO сохраняет snake_case, неизвестные скаляры и `[]`.
-Баллы округляются half-up до одного знака только на публичной HTTP-границе.
+Баллы и Coverage.percentage отчёта/категорий округляются half-up до одного знака
+только на публичной HTTP-границе.
 Сырые значения, счётчики и сохранённый результат остаются в исходной точности.
 
 Report Service читает `report.reports` и проверяет соответствие owner_id одному

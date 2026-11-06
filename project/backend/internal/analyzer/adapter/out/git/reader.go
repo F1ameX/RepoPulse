@@ -116,7 +116,8 @@ func (s *Session) Close() error {
 
 type readError struct{ code string }
 
-func (e *readError) Error() string { return e.code }
+func (e *readError) Error() string      { return e.code }
+func (e *readError) ReasonCode() string { return e.code }
 func ReasonCode(err error) string {
 	var failure *readError
 	if errors.As(err, &failure) {

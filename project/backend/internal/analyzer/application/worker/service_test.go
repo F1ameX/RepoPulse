@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -66,10 +67,14 @@ func (s *fakeSession) Close() error                                     { s.clos
 type source struct {
 	s     *fakeSession
 	opens int
+	err   error
 }
 
 func (s *source) Open(context.Context, domain.RepositoryMetadata) (GitSession, error) {
 	s.opens++
+	if s.err != nil {
+		return nil, s.err
+	}
 	return s.s, nil
 }
 
@@ -185,6 +190,74 @@ func TestWorkerFailuresAndCleanup(t *testing.T) {
 			}
 			if git.opens != 1 || q.analysis.Error != original {
 				t.Fatal("terminal job changed")
+			}
+		})
+	}
+}
+
+func TestWorkerPreservesGitLimitsOnlyWhenNoUsefulResult(t *testing.T) {
+	for _, code := range []string{"GIT_TIME_LIMIT", "GIT_SIZE_LIMIT", "UNKNOWN_PROVIDER_ERROR"} {
+		for _, usable := range []bool{false, true} {
+			name := code + "/failed"
+			if usable {
+				name = code + "/partial"
+			}
+			t.Run(name, func(t *testing.T) {
+				process := processorFunc(func(context.Context, domain.Analysis, GitSession, func(string) error) (Output, error) {
+					if usable {
+						return usefulOutput(), nil
+					}
+					return Output{}, nil
+				})
+				runner, q, git, published := setup(process, time.Second)
+				git.s.data.Sources[0].Reason = &domain.Reason{Code: code, Message: "private provider detail", CannotConclude: "token-must-not-leak"}
+				if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
+					t.Fatalf("worked=%v err=%v", worked, err)
+				}
+				if !git.s.closed {
+					t.Fatal("Git session was not cleaned up")
+				}
+				if usable {
+					if q.analysis.Status != "completed" || q.analysis.Error != nil || published.calls != 1 || published.output.Sources[0].Reason.Code != code {
+						t.Fatal("Git limit discarded the useful partial result")
+					}
+					return
+				}
+				want := code
+				if code == "UNKNOWN_PROVIDER_ERROR" {
+					want = "ANALYSIS_FAILED"
+				}
+				if q.analysis.Status != "failed" || q.analysis.Error == nil || q.analysis.Error.Code != want || published.calls != 0 {
+					t.Fatalf("incorrect terminal result: %+v", q.analysis)
+				}
+				if q.analysis.Error.Message == "private provider detail" || q.analysis.Error.TraceID != q.analysis.ID || len(q.analysis.Error.FieldErrors) != 0 {
+					t.Fatal("unsafe collector details escaped into the terminal failure")
+				}
+			})
+		}
+	}
+}
+
+type failedSource struct{ code string }
+
+func (e failedSource) Error() string      { return "private provider detail" }
+func (e failedSource) ReasonCode() string { return e.code }
+
+func TestWorkerPreservesStructuredOpenLimitWithoutLeakingError(t *testing.T) {
+	for _, code := range []string{"GIT_TIME_LIMIT", "GIT_SIZE_LIMIT", "UNKNOWN_PROVIDER_ERROR"} {
+		t.Run(code, func(t *testing.T) {
+			runner, q, git, published := setup(nil, time.Second)
+			git.err = fmt.Errorf("private process path: %w", failedSource{code})
+			if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
+				t.Fatalf("worked=%v err=%v", worked, err)
+			}
+			want := code
+			if code == "UNKNOWN_PROVIDER_ERROR" {
+				want = "ANALYSIS_FAILED"
+			}
+			if q.analysis.Status != "failed" || q.analysis.Error == nil || q.analysis.Error.Code != want || published.calls != 0 ||
+				q.analysis.Error.Message != domain.Failure(want, q.analysis.ID).Message {
+				t.Fatalf("unsafe or incorrect failure: %+v", q.analysis)
 			}
 		})
 	}

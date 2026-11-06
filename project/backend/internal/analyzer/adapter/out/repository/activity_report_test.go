@@ -185,6 +185,17 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 				!report.AssessmentAt.Equal(a.AssessmentAt) || !report.CompletedAt.Equal(stored.Report.CompletedAt) || !report.Window.From.Equal(a.Window.From) {
 				t.Fatal("stored metadata changed at HTTP boundary")
 			}
+			if report.Coverage.Percentage != math.Round(stored.Report.Coverage.Percentage*10)/10 || report.Coverage.Calculated != stored.Report.Coverage.Calculated {
+				t.Fatal("public coverage is not rounded or its count changed")
+			}
+			for i, category := range report.Categories {
+				if category.Coverage.Percentage != math.Round(stored.Report.Categories[i].Coverage.Percentage*10)/10 {
+					t.Fatal("public category coverage is not rounded")
+				}
+			}
+			if strings.HasPrefix(filepath.Base(path), "ACT-06") && (report.Coverage.Percentage != 8.3 || report.Categories[0].Coverage.Percentage != 33.3 || stored.Report.Coverage.Percentage == 8.3) {
+				t.Fatal("ACT-06 must expose 8.3%/33.3% while retaining storage precision")
+			}
 			for _, metric := range report.Categories[0].Metrics {
 				want, exists := vector.Expected.Metrics[metric.Input.ID]
 				if !exists {
@@ -233,6 +244,64 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 	var snapshots int
 	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM analyzer.snapshots").Scan(&snapshots); err != nil || snapshots != 7 {
 		t.Fatalf("published %d snapshots: %v", snapshots, err)
+	}
+}
+
+func TestActivityGitLimitsPersistFailureOrUsefulPartialReport(t *testing.T) {
+	pool := testDatabase(t)
+	pg := repository.NewPostgres(pool)
+	store := storage.NewService(pg)
+	fixture, _ := loadFixtures(t)
+	owner := domain.NewID()
+	if _, err := pool.Exec(t.Context(), "INSERT INTO auth.principals(id,kind,created_at) VALUES ($1,'guest',now())", owner); err != nil {
+		t.Fatal(err)
+	}
+	engine, err := scoring.Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, code := range []string{"GIT_TIME_LIMIT", "GIT_SIZE_LIMIT"} {
+		for _, partial := range []bool{false, true} {
+			name := code + "/empty"
+			if partial {
+				name = code + "/observed"
+			}
+			t.Run(name, func(t *testing.T) {
+				a := domain.Analysis{ID: domain.NewID(), SubmissionID: domain.NewID(), RequestID: domain.NewID(), Owner: domain.Owner{Kind: "guest", ID: owner},
+					Repository: fixture.Repository, Versions: fixture.Versions, AssessmentAt: fixture.AssessmentAt, CreatedAt: fixture.AssessmentAt, Window: fixture.Window, Status: "queued"}
+				data := domain.GitData{Repository: a.Repository, Sources: []domain.SourceState{{Source: "git", Scope: domain.ActivityHistoryScope, Status: "unavailable",
+					Reason: &domain.Reason{Code: code, Message: "Прерван сбор Git", CannotConclude: "Полнота истории неизвестна"}}}}
+				if partial {
+					data.Sources[0].Status = "partial"
+					data.MainCommits = []domain.ActivityCommit{{SHA: *a.Repository.CommitSHA, CommittedAt: a.AssessmentAt.Add(-time.Hour)}}
+				}
+				if _, err := pg.Create(t.Context(), a); err != nil {
+					t.Fatal(err)
+				}
+				git := &snapshotSource{session: &snapshotSession{data: data}}
+				runner := worker.NewService(pg, git, activity.NewProcessor(engine), store, time.Minute)
+				if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
+					t.Fatalf("worker: worked=%v err=%v", worked, err)
+				}
+				state, err := pg.Get(t.Context(), a.ID)
+				if err != nil || !git.session.closed {
+					t.Fatalf("state/cleanup: %v", err)
+				}
+				if !partial {
+					if state.Status != "failed" || state.Error == nil || state.Error.Code != code || state.ReportID != nil {
+						t.Fatalf("limit reason was lost: %+v", state)
+					}
+					return
+				}
+				result, err := store.GetResult(t.Context(), identity(owner, "guest"), a.ID)
+				if state.Status != "completed" || err != nil {
+					t.Fatalf("useful partial result was lost: state=%+v err=%v", state, err)
+				}
+				if result.Report.Categories[0].Metrics[0].Input.Reason.Code != code || result.Report.Categories[0].Metrics[0].NormalizedScore != nil {
+					t.Fatal("partial report lost the reason or invented a score")
+				}
+			})
+		}
 	}
 }
 

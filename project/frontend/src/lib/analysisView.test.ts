@@ -4,6 +4,8 @@ import { analysisFailure } from './analysisView';
 it.each([
   ['REPOSITORY_NOT_FOUND_OR_PRIVATE', 'internal detail', 'Репозиторий стал недоступен для анализа'],
   ['BUDGET_EXCEEDED', 'internal detail', 'Превышено время анализа'],
+  ['GIT_TIME_LIMIT', 'internal detail', 'Превышено время анализа'],
+  ['GIT_SIZE_LIMIT', 'internal detail', 'Репозиторий превышает ограничения анализа'],
   [
     'ANALYSIS_FAILED',
     'Репозиторий превышает ограничения анализа',

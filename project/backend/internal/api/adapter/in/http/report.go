@@ -42,12 +42,14 @@ func getReport(reports ReportService, resolver ContextResolver) http.HandlerFunc
 			writeAnalysisError(w, r, err)
 			return
 		}
-		// Storage retains the unrounded values. Only scores at the public JSON
+		// Storage retains the unrounded values. Scores and coverage at the public JSON
 		// boundary use the methodology's half-up rounding to one decimal place.
 		report.OverallScore = publicScore(report.OverallScore)
+		report.Coverage.Percentage = publicNumber(report.Coverage.Percentage)
 		for i := range report.Categories {
 			category := &report.Categories[i]
 			category.Score = publicScore(category.Score)
+			category.Coverage.Percentage = publicNumber(category.Coverage.Percentage)
 			for j := range category.Metrics {
 				metric := &category.Metrics[j]
 				metric.NormalizedScore = publicScore(metric.NormalizedScore)
@@ -61,6 +63,8 @@ func publicScore(value *float64) *float64 {
 	if value == nil {
 		return nil
 	}
-	rounded := math.Round(*value*10) / 10
+	rounded := publicNumber(*value)
 	return &rounded
 }
+
+func publicNumber(value float64) float64 { return math.Round(value*10) / 10 }

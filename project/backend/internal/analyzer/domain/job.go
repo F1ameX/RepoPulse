@@ -20,6 +20,10 @@ func Failure(code, traceID string) AnalysisFailure {
 	switch code {
 	case "BUDGET_EXCEEDED":
 		message = "Превышен допустимый бюджет анализа"
+	case "GIT_TIME_LIMIT":
+		message = "Превышено время анализа"
+	case "GIT_SIZE_LIMIT":
+		message = "Репозиторий превышает ограничения анализа"
 	case "REPORT_SAVE_FAILED":
 		message = "Не удалось сохранить результат анализа"
 	default:
