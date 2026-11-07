@@ -5,6 +5,18 @@
   font-family: inherit;
 }
 
+.control {
+  position: relative;
+}
+
+.control > .input {
+  padding-inline-end: 44px;
+}
+
+.control > .input::-ms-reveal {
+  display: none;
+}
+
 .label {
   font-size: 14px;
   font-weight: 500;

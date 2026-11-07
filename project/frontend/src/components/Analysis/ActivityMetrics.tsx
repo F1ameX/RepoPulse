@@ -1,20 +1,8 @@
-import type {
-  DataStatus,
-  Evidence,
-  Metric,
-  MetricId,
-  MetricInput,
-  Reason,
-  Report,
-} from '@/types';
+import type { DataStatus, Evidence, Metric, MetricId, MetricInput, Reason, Report } from '@/types';
 import { formatUtc } from '@/lib/analysisView';
 import styles from './Analysis.module.css';
 
-const TARGET_METRICS: MetricId[] = [
-  'ACT_COMMIT_FREQ',
-  'ACT_DAYS_SINCE_LAST',
-  'ACT_TREND',
-];
+const TARGET_METRICS: MetricId[] = ['ACT_COMMIT_FREQ', 'ACT_DAYS_SINCE_LAST', 'ACT_TREND'];
 
 const METRIC_LABELS: Partial<Record<MetricId, string>> = {
   ACT_COMMIT_FREQ: 'Частота коммитов',
@@ -64,33 +52,27 @@ function formatRawValue(id: MetricId, raw: unknown): string {
   return 'N/A';
 }
 
-function formatSample(sample: MetricInput['sample']): string {
-  const { collected, total, numerator, denominator } = sample;
-  if (
-    collected === null &&
-    total === null &&
-    numerator === null &&
-    denominator === null
-  ) {
-    return 'Не определено';
-  }
+function formatSample(sample: MetricInput['sample'], id: MetricId): string {
+  const { collected, total, numerator, denominator, excluded, excluded_reason } = sample;
   const parts: string[] = [];
   if (collected !== null) parts.push(`собрано: ${collected}`);
   if (total !== null) parts.push(`всего: ${total}`);
-  if (numerator !== null) parts.push(`числитель: ${numerator}`);
-  if (denominator !== null) parts.push(`знаменатель: ${denominator}`);
+  if (collected === null && total === null) parts.push('Размер выборки неизвестен');
+  if (numerator !== null)
+    parts.push(`${id === 'ACT_COMMIT_FREQ' ? 'коммитов' : 'числитель'}: ${numerator}`);
+  if (denominator !== null)
+    parts.push(`${id === 'ACT_COMMIT_FREQ' ? 'недель' : 'знаменатель'}: ${denominator}`);
+  if (excluded !== null)
+    parts.push(`исключено: ${excluded}${excluded_reason ? ` (${excluded_reason})` : ''}`);
   return parts.join(', ');
 }
 
 function isSafeUrl(url: string | null | undefined): url is string {
-  if (!url) return false;
+  if (!url || !/^https:\/\/[^/\\]/i.test(url)) return false;
   try {
     const parsed = new URL(url);
     return (
-      parsed.protocol === 'https:' &&
-      !!parsed.hostname &&
-      !parsed.username &&
-      !parsed.password
+      parsed.protocol === 'https:' && !!parsed.hostname && !parsed.username && !parsed.password
     );
   } catch {
     return false;
@@ -105,15 +87,15 @@ function EvidenceList({
 }: {
   evidence: Evidence[];
   limited: boolean;
-  total: number;
+  total: number | null;
   reason: Reason | null;
 }) {
   if (!evidence || evidence.length === 0) {
     return (
       <div className={styles.evidenceBlock}>
-        <strong>Evidence:</strong>{' '}
+        <strong>Основания:</strong>{' '}
         <span className={styles.mono}>
-          Основания не сохранены
+          Основания недоступны
           {reason ? ` (${reason.message})` : ''}
         </span>
       </div>
@@ -122,17 +104,17 @@ function EvidenceList({
 
   return (
     <div className={styles.evidenceBlock}>
-      <strong>Evidence:</strong>
+      <strong>Основания:</strong>
       <ul>
         {evidence.map((ev) => (
           <li key={ev.id}>
-            <span>{ev.description}</span>
-            <span className={styles.mono}>{` (source: ${ev.source})`}</span>
-            {ev.path && <span className={styles.mono}>{` [${ev.path}]`}</span>}
-            {ev.revision && (
-              <span className={styles.mono}>{` rev: ${ev.revision}`}</span>
+            <span>{ev.secret_match_type ?? ev.description}</span>
+            {!ev.secret_match_type && (
+              <span className={styles.mono}>{` (источник: ${ev.source})`}</span>
             )}
-            {isSafeUrl(ev.url) ? (
+            {ev.path && <span className={styles.mono}>{` [${ev.path}]`}</span>}
+            {ev.revision && <span className={styles.mono}>{` rev: ${ev.revision}`}</span>}
+            {ev.secret_match_type ? null : isSafeUrl(ev.url) ? (
               <>
                 {' '}
                 <a href={ev.url} target="_blank" rel="noopener noreferrer">
@@ -143,21 +125,23 @@ function EvidenceList({
               <span className={styles.mono}>
                 {' '}
                 (Ссылка на источник недоступна)
+                {ev.url && ` ${ev.url}`}
               </span>
             )}
           </li>
         ))}
       </ul>
-      {limited && total > evidence.length && (
+      {limited && (
         <p className={styles.hint}>
-          Показано {evidence.length} из {total}
+          Показано {evidence.length} оснований; список ограничен профилем.
+          {total !== null && ` Всего: ${total}.`}
         </p>
       )}
     </div>
   );
 }
 
-function MetricRow({ metric }: { metric: Metric }) {
+function MetricRow({ metric, sha }: { metric: Metric; sha: string | null }) {
   const { input } = metric;
   const label = METRIC_LABELS[input.id] ?? input.id;
 
@@ -167,9 +151,7 @@ function MetricRow({ metric }: { metric: Metric }) {
     input.raw_value === null ||
     input.raw_value === undefined;
 
-  const displayRaw = isUnavailable
-    ? 'N/A'
-    : formatRawValue(input.id, input.raw_value);
+  const displayRaw = isUnavailable ? 'N/A' : formatRawValue(input.id, input.raw_value);
 
   const reason =
     isUnavailable && input.reason
@@ -181,63 +163,80 @@ function MetricRow({ metric }: { metric: Metric }) {
 
   return (
     <div className={styles.metricRow}>
-      <dt className={styles.metricLabel}>{label}:</dt>
+      <dt>
+        {label}
+        <span className={styles.metricId}>{input.id}</span>
+      </dt>
       <dd className={styles.metricDetails}>
         <div className={styles.metricValueLine}>
-          <span>
-            <strong>Сырое значение:</strong>{' '}
-            <span className={styles.rawValue}>{displayRaw}</span>
-            {input.unit && (
-              <span className={styles.mono}> {input.unit}</span>
+          <div>
+            <span className={styles.metricCaption}>Исходное значение</span>
+            <span className={styles.metricValue}>{displayRaw}</span>
+            {!isUnavailable && input.id !== 'ACT_TREND' && (
+              <span> {input.id === 'ACT_COMMIT_FREQ' ? 'коммитов в неделю' : 'дн.'}</span>
             )}
-          </span>
-          {reason && (
-            <span className={styles.naReason}>
-              ({reason.specific}. {reason.general})
+          </div>
+          <div>
+            <span className={styles.metricCaption}>Балл</span>
+            <span className={styles.metricValue}>
+              {metric.normalized_score === null
+                ? 'Не рассчитан'
+                : roundHalfUp(metric.normalized_score, 1)}
             </span>
-          )}
+          </div>
         </div>
-        <div>
-          <strong>Балл:</strong> {metric.normalized_score ?? 'N/A'}
-        </div>
+        {reason && (
+          <div className={styles.naReason}>
+            {reason.specific}. {reason.general}
+          </div>
+        )}
         <div>
           <strong>Состояние:</strong>{' '}
-          <span className={styles.mono}>
-            {STATUS_LABELS[input.status] ?? input.status}
-          </span>
+          <span className={styles.mono}>{STATUS_LABELS[input.status] ?? input.status}</span>
         </div>
         <div>
           <strong>Окно:</strong>{' '}
           {input.window
             ? `[${formatUtc(input.window.from)}, ${formatUtc(input.window.until)})`
-            : 'Не определено'}
+            : sha
+              ? `По снимку ${sha}`
+              : 'Не определено'}
         </div>
         {input.observed_at && (
           <div>
-            <strong>Наблюдалось:</strong> {formatUtc(input.observed_at)}
+            <strong>
+              {input.id === 'ACT_DAYS_SINCE_LAST' ? 'Последний коммит:' : 'Дата наблюдения:'}
+            </strong>{' '}
+            {formatUtc(input.observed_at)}
           </div>
         )}
         <div>
-          <strong>Выборка:</strong> {formatSample(input.sample)}
+          <strong>Выборка:</strong> {formatSample(input.sample, input.id)}
         </div>
+        {input.exclusions.length > 0 && (
+          <div>
+            <strong>Исключения:</strong>{' '}
+            {input.exclusions.map(({ reason, count }) => `${reason}: ${count}`).join(', ')}
+          </div>
+        )}
         {input.series && input.series.length > 0 && (
           <div>
-            <strong>Ряд:</strong>{' '}
+            <strong>Коммиты по периодам:</strong>{' '}
             <span className={styles.mono}>{input.series.join(', ')}</span>
           </div>
         )}
         <div>
-          <strong>Правило:</strong> {metric.rule}
-          {metric.threshold !== null && ` (порог: ${metric.threshold})`}
+          <strong>Порог:</strong> {metric.threshold ?? 'Не задан'}
         </div>
+        {metric.explanation && <div>{metric.explanation}</div>}
         <div>
-          <strong>Версия правила:</strong>{' '}
+          <strong>Версия методики:</strong>{' '}
           <span className={styles.mono}>{metric.rule_version}</span>
         </div>
         <EvidenceList
           evidence={input.evidence}
           limited={input.evidence_limited}
-          total={input.evidence_total ?? 0}
+          total={input.evidence_total}
           reason={input.reason}
         />
       </dd>
@@ -256,20 +255,16 @@ export function ActivityMetrics({ report }: { report: Report }) {
   if (metrics.length === 0) return null;
 
   return (
-    <section
-      aria-label="Показатели активности"
-      className={styles.activitySection}
-    >
+    <section aria-label="Показатели активности" className={styles.activitySection}>
       <h2 className={styles.sectionTitle}>Активность репозитория</h2>
       {activityCategory.status === 'unavailable' && activityCategory.reason && (
         <p className={styles.sectionWarning} role="status">
-          {activityCategory.reason.cannot_conclude ||
-            activityCategory.reason.message}
+          {activityCategory.reason.cannot_conclude || activityCategory.reason.message}
         </p>
       )}
       <dl className={styles.fields}>
         {metrics.map((metric) => (
-          <MetricRow key={metric.input.id} metric={metric} />
+          <MetricRow key={metric.input.id} metric={metric} sha={report.repository.commit_sha} />
         ))}
       </dl>
     </section>

@@ -1,0 +1,24 @@
+.subtitle {
+  margin: 8px 0 0;
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 500;
+}
+
+.content {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actions > [role='alert'] {
+  flex-basis: 100%;
+}

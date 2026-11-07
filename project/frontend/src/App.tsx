@@ -1,8 +1,11 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { AuthProvider } from '@/components/Auth/AuthProvider';
 import RepositoryInputPage from './pages/RepositoryInputPage/RepositoryInputPage';
 import AnalysisStatusPage from './pages/AnalysisPages/AnalysisStatusPage';
 import ReportPage from './pages/ReportPage/ReportPage';
 import ErrorPage from './pages/ErrorPages/ErrorPage';
+import AuthPage from './pages/AuthPage/AuthPage';
+import HistoryPage from './pages/HistoryPage/HistoryPage';
 
 const router = createBrowserRouter([
   {
@@ -11,15 +14,18 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
   },
   {
-    path: '/analysis/:id',
+    path: '/analysis/:id?',
     element: <AnalysisStatusPage />,
     errorElement: <ErrorPage />,
   },
   {
-    path: '/report/:id',
+    path: '/report/:id?',
     element: <ReportPage />,
     errorElement: <ErrorPage />,
   },
+  { path: '/login', element: <AuthPage key="login" mode="login" /> },
+  { path: '/register', element: <AuthPage key="register" mode="register" /> },
+  { path: '/history', element: <HistoryPage /> },
   {
     path: '/error',
     element: <ErrorPage />,
@@ -31,7 +37,11 @@ const router = createBrowserRouter([
 ]);
 
 function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
+  );
 }
 
 export default App;

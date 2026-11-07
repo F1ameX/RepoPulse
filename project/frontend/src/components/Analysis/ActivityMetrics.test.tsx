@@ -129,24 +129,14 @@ it('FR-10: форматирует сырые значения как в ТЗ —
 
 it('P2: округляет half-up (0.00015 -> 0.0002, 2.00085 -> 2.0009, 1e-7 -> 0.0000)', () => {
   const { rerender } = render(
-    <ActivityMetrics
-      report={makeReport([makeMetric('ACT_TREND', 0.00015)])}
-    />,
+    <ActivityMetrics report={makeReport([makeMetric('ACT_TREND', 0.00015)])} />,
   );
   expect(screen.getByText('0.0002')).toBeTruthy();
 
-  rerender(
-    <ActivityMetrics
-      report={makeReport([makeMetric('ACT_TREND', 2.00085)])}
-    />,
-  );
+  rerender(<ActivityMetrics report={makeReport([makeMetric('ACT_TREND', 2.00085)])} />);
   expect(screen.getByText('2.0009')).toBeTruthy();
 
-  rerender(
-    <ActivityMetrics
-      report={makeReport([makeMetric('ACT_TREND', 1e-7)])}
-    />,
-  );
+  rerender(<ActivityMetrics report={makeReport([makeMetric('ACT_TREND', 1e-7)])} />);
   expect(screen.getByText('0.0000')).toBeTruthy();
 });
 
@@ -170,29 +160,24 @@ it('FR-17: 0 — валидное значение, а не N/A', () => {
 it('P1: unavailable + reason → N/A с предметной причиной и общим выводом', () => {
   render(
     <ActivityMetrics
-      report={makeReport([
-        makeMetric('ACT_COMMIT_FREQ', null, 'unavailable', TIMEOUT_REASON),
-      ])}
+      report={makeReport([makeMetric('ACT_COMMIT_FREQ', null, 'unavailable', TIMEOUT_REASON)])}
     />,
   );
 
-  expect(screen.getAllByText('N/A')).toHaveLength(2);
-  
+  expect(screen.getByText('N/A')).toBeTruthy();
+  expect(screen.getByText('Не рассчитан')).toBeTruthy();
+
   expect(
     screen.getAllByText(/Знаменатель коэффициента тренда равен нулю/).length,
   ).toBeGreaterThanOrEqual(1);
-  
+
   expect(
     screen.getAllByText(/Полная оценка этой проверки недоступна/).length,
   ).toBeGreaterThanOrEqual(1);
 });
 
 it('P1: выводит статус полноты (complete -> «Полные данные»)', () => {
-  render(
-    <ActivityMetrics
-      report={makeReport([makeMetric('ACT_COMMIT_FREQ', 5, 'complete')])}
-    />,
-  );
+  render(<ActivityMetrics report={makeReport([makeMetric('ACT_COMMIT_FREQ', 5, 'complete')])} />);
   expect(screen.getByText('Полные данные')).toBeTruthy();
 });
 
@@ -231,7 +216,7 @@ it('P1: evidence с небезопасным URL (userinfo bypass) не ренд
   });
   render(<ActivityMetrics report={makeReport([metric])} />);
 
-  expect(screen.getAllByText(/source: git/).length).toBe(3);
+  expect(screen.getAllByText(/источник: git/).length).toBe(3);
   expect(screen.getAllByText(/rev: abc123/).length).toBe(3);
 
   const safeLink = screen.getByRole('link', { name: '[ссылка]' });
@@ -252,19 +237,13 @@ it('P1: пустой evidence выводит причину отсутствия
   });
   render(<ActivityMetrics report={makeReport([metric])} />);
   expect(
-    screen.getByText(/Основания не сохранены \(Знаменатель коэффициента тренда равен нулю\)/),
+    screen.getByText(/Основания недоступны \(Знаменатель коэффициента тренда равен нулю\)/),
   ).toBeTruthy();
 });
 
 it('FR-07/P1 (интеграция): окно, серия и дата наблюдения в UTC', () => {
-  render(
-    <ActivityMetrics report={makeReport([makeMetric('ACT_COMMIT_FREQ', 5)])} />,
-  );
-  expect(
-    screen.getByText(
-      '[02.06.2026 00:00:00 UTC, 20.10.2026 00:00:00 UTC)',
-    ),
-  ).toBeTruthy();
+  render(<ActivityMetrics report={makeReport([makeMetric('ACT_COMMIT_FREQ', 5)])} />);
+  expect(screen.getByText('[02.06.2026 00:00:00 UTC, 20.10.2026 00:00:00 UTC)')).toBeTruthy();
   expect(screen.getByText('1, 2, 3')).toBeTruthy();
   expect(screen.getByText('20.10.2026 00:00:00 UTC')).toBeTruthy();
 });

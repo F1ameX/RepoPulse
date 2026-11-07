@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
+import { SESSION_CHANGED } from '@/lib/authNavigation';
 import { ApiError } from '@/services/api';
 import { authService, type SessionContext } from '@/services/authService';
 import { AnalysisAccess } from './AnalysisAccess';
@@ -12,6 +13,7 @@ const session: SessionContext = {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -67,5 +69,48 @@ it('removes confirmed content when the session is denied', async () => {
   await screen.findByText('Сохранённый отчёт');
   fireEvent(document, new Event('visibilitychange'));
   await screen.findByText('Сессия истекла. Войдите снова');
+  expect(screen.queryByText('Сохранённый отчёт')).toBeNull();
+});
+
+it('removes the previous report as soon as the session changes', async () => {
+  vi.spyOn(authService, 'getSessionContext')
+    .mockResolvedValueOnce(session)
+    .mockImplementationOnce(() => new Promise(() => {}));
+  render(
+    <MemoryRouter>
+      <AnalysisAccess>
+        <p>Сохранённый отчёт</p>
+      </AnalysisAccess>
+    </MemoryRouter>,
+  );
+  await screen.findByText('Сохранённый отчёт');
+  fireEvent(window, new Event(SESSION_CHANGED));
+  expect(screen.queryByText('Сохранённый отчёт')).toBeNull();
+});
+
+it('hides a confirmed report at session expiry even if rechecking access fails offline', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  vi.spyOn(authService, 'getSessionContext')
+    .mockResolvedValueOnce({
+      account: null,
+      guest: { kind: 'guest', login: null, expires_at: new Date(Date.now() + 1_000).toISOString() },
+    })
+    .mockRejectedValue(new ApiError('NETWORK_ERROR', ''));
+  render(
+    <MemoryRouter>
+      <AnalysisAccess>
+        <p>Сохранённый отчёт</p>
+      </AnalysisAccess>
+    </MemoryRouter>,
+  );
+  await act(async () => {});
+  expect(screen.getByText('Сохранённый отчёт')).toBeTruthy();
+
+  await act(async () => fireEvent(window, new Event('focus')));
+  expect(screen.getByText('Не удалось проверить сессию')).toBeTruthy();
+  expect(screen.getByText('Сохранённый отчёт')).toBeTruthy();
+
+  await act(async () => vi.advanceTimersByTimeAsync(1_000));
   expect(screen.queryByText('Сохранённый отчёт')).toBeNull();
 });
