@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom';
 import { Button, FeedbackMessage, Message } from '@/components';
+import { ButtonLink } from '@/components/Button/ButtonLink';
 import { reportFeedback } from '@/components/FeedbackMessage/mappers';
 import { useReport } from '@/hooks/useReport';
 import type { Repository } from '@/types';
+import { ActivityMetrics } from './ActivityMetrics';
 import { AnalysisTitle } from './AnalysisTitle';
 import { ReportHeader } from './ReportHeader';
 import styles from './Analysis.module.css';
@@ -21,7 +22,7 @@ export function AnalysisResult({
     return (
       <>
         <FeedbackMessage view={reportFeedback(state, { onReload: () => void reload() })} />
-        <Link to="/">Новый анализ</Link>
+        <ButtonLink to="/">Новый анализ</ButtonLink>
       </>
     );
   const report = 'data' in state ? state.data : null;
@@ -51,7 +52,12 @@ export function AnalysisResult({
         className={styles.feedback}
         view={reportFeedback(state, { onReload: () => void reload() })}
       />
-      {report && <ReportHeader report={report} />}
+      {report && (
+        <>
+          <ReportHeader report={report} repositoryInTitle />
+          <ActivityMetrics report={report} />
+        </>
+      )}
     </>
   );
 }

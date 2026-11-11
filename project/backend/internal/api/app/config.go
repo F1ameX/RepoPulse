@@ -11,18 +11,20 @@ import (
 )
 
 type Config struct {
-	HTTPAddr           string
-	ReadHeaderTimeout  time.Duration
-	ReadTimeout        time.Duration
-	WriteTimeout       time.Duration
-	IdleTimeout        time.Duration
-	ShutdownTimeout    time.Duration
-	GitHubCheckTimeout time.Duration
-	GitHubToken        string
-	AuthGRPCTarget     string
-	AuthRequestTimeout time.Duration
-	PublicOrigin       string
-	CookieSecure       bool
+	HTTPAddr             string
+	ReadHeaderTimeout    time.Duration
+	ReadTimeout          time.Duration
+	WriteTimeout         time.Duration
+	IdleTimeout          time.Duration
+	ShutdownTimeout      time.Duration
+	GitHubCheckTimeout   time.Duration
+	GitHubToken          string
+	AuthGRPCTarget       string
+	AuthRequestTimeout   time.Duration
+	ReportGRPCTarget     string
+	ReportRequestTimeout time.Duration
+	PublicOrigin         string
+	CookieSecure         bool
 }
 
 // LoadConfig reads API settings from the process environment.
@@ -56,6 +58,12 @@ func loadConfig(lookup func(string) (string, bool)) (Config, error) {
 		return Config{}, fmt.Errorf("AUTH_GRPC_TARGET must use host:port")
 	}
 	cfg.PublicOrigin = value("PUBLIC_ORIGIN", "http://localhost:3000")
+	cfg.ReportGRPCTarget = value("REPORT_GRPC_TARGET", "127.0.0.1:9091")
+	reportHost, reportPort, reportErr := net.SplitHostPort(cfg.ReportGRPCTarget)
+	reportPortNumber, reportPortErr := strconv.Atoi(reportPort)
+	if reportErr != nil || reportHost == "" || reportPortErr != nil || reportPortNumber < 1 || reportPortNumber > 65535 {
+		return Config{}, fmt.Errorf("REPORT_GRPC_TARGET must use host:port")
+	}
 	origin, err := url.Parse(cfg.PublicOrigin)
 	if err != nil || (origin.Scheme != "http" && origin.Scheme != "https") || origin.Host == "" || origin.User != nil || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" || origin.ForceQuery {
 		return Config{}, fmt.Errorf("PUBLIC_ORIGIN must be an http(s) origin without path")
@@ -77,6 +85,7 @@ func loadConfig(lookup func(string) (string, bool)) (Config, error) {
 		{"SHUTDOWN_TIMEOUT", "10s", &cfg.ShutdownTimeout},
 		{"GITHUB_CHECK_TIMEOUT", "25s", &cfg.GitHubCheckTimeout},
 		{"AUTH_REQUEST_TIMEOUT", "3s", &cfg.AuthRequestTimeout},
+		{"REPORT_REQUEST_TIMEOUT", "3s", &cfg.ReportRequestTimeout},
 	} {
 		duration, err := time.ParseDuration(value(setting.key, setting.fallback))
 		if err != nil || duration <= 0 {
@@ -89,6 +98,9 @@ func loadConfig(lookup func(string) (string, bool)) (Config, error) {
 	}
 	if cfg.AuthRequestTimeout >= cfg.WriteTimeout/2 || cfg.AuthRequestTimeout >= cfg.WriteTimeout-cfg.GitHubCheckTimeout {
 		return Config{}, fmt.Errorf("AUTH_REQUEST_TIMEOUT must leave time within HTTP_WRITE_TIMEOUT for two Auth calls or an Auth call followed by GITHUB_CHECK_TIMEOUT")
+	}
+	if cfg.AuthRequestTimeout+cfg.ReportRequestTimeout >= cfg.WriteTimeout {
+		return Config{}, fmt.Errorf("Auth and Report timeouts must fit within HTTP_WRITE_TIMEOUT")
 	}
 	return cfg, nil
 }

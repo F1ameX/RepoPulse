@@ -38,6 +38,7 @@ services:
     environment:
       HTTP_ADDR: 0.0.0.0:8080
       AUTH_GRPC_TARGET: auth:9090
+      REPORT_GRPC_TARGET: report:9091
       PUBLIC_ORIGIN: http://localhost:3000
       COOKIE_SECURE: "false"
       ANALYZER_DATABASE_URL: postgres://repopulse:repopulse@postgres:5432/repopulse?sslmode=disable
@@ -68,6 +69,12 @@ services:
       context: ./project/backend
       args:
         SERVICE: report
+    environment:
+      REPORT_GRPC_ADDR: 0.0.0.0:9091
+      REPORT_DATABASE_URL: postgres://repopulse:repopulse@postgres:5432/repopulse?sslmode=disable
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
 
   analyzer:
     build:

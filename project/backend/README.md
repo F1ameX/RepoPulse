@@ -12,7 +12,7 @@ Go 1.26. API Gateway обслуживает HTTP. Auth отвечает за с�
 cmd/api, cmd/auth, cmd/report, cmd/analyzer  точки входа
 internal/api                              HTTP Gateway
 internal/auth                             gRPC Auth Service
-internal/report                           каркас Report
+internal/report                           чтение сохранённых отчётов по gRPC
 internal/pkg/grpcerr                      формат gRPC-ошибок
 pkg/proto                                 код, сгенерированный из contracts
 internal/analyzer                         очередь, безопасный Git и PostgreSQL-хранилище
@@ -23,7 +23,7 @@ migrations/report                          отчёты и история
 
 Из `project/backend`: `go run ./cmd/api`. Проверка процесса:
 `curl http://127.0.0.1:8080/health` → `200 {"status":"ok"}`.
-Остановка — Ctrl+C. Report пока инициализирует логгер и ждёт завершения.
+Остановка — Ctrl+C. Report запускается с настройками PostgreSQL и gRPC из раздела ниже.
 Analyzer открывает PostgreSQL и исполняет очередь; см.
 [пошаговый запуск](#запуск-analyzer-с-postgresql).
 Auth запускает gRPC-сервер, см. раздел «Auth Service».
@@ -108,11 +108,15 @@ POST /api/v1/analyses и GET /api/v1/analyses/{analysis_id} с тем же Auth-
    остановка — `Ctrl+C`, в логе появится `Service stopped`.
 
 Analyzer забирает принятые queued-задания из PostgreSQL и получает Git. Он
-не открывает HTTP/gRPC-порт: HTTP-запуск/статус — #18478. Нормализаторы входов
-(#18479), вычисления и объяснение подключаются через `worker.Processor` в
-`app.RunWithProcessor`. В штатном `cmd/analyzer` Processor пока отсутствует:
-пригодного результата нет, поэтому job получает failed/ANALYSIS_FAILED,
-а не фиктивный completed. Статический сбор Git уже работает.
+не открывает HTTP/gRPC-порт: HTTP-запуск/статус — #18478. Сборка безопасных входов
+#18479 реализована в `application/snapshot`: `app.RunWithInputs` связывает
+реальные `snapshot.Collector` и `snapshot.Calculator` с исполнителем. Коллектор
+передаёт типизированные значения и состояния использованных scopes; калькулятор
+получает готовый снимок для расчёта без повторных запросов к источникам.
+[Правила сборки, неизвестности и подключения](../../docs/architecture/analyzer-inputs.md).
+Произвольный `worker.Processor` по-прежнему подключается через `app.RunWithProcessor`.
+Штатный `cmd/analyzer` подключает `application/activity.Processor`: реальные входы
+основной ветки проходят расчёт, сборку снимка и атомарную публикацию отчёта активности.
 `GET /health` на порту 8080 относится к API Gateway.
 [Очередь, лимиты, подключение Processor и проверки](../../docs/architecture/analyzer-execution.md).
 
@@ -132,8 +136,8 @@ Analyzer забирает принятые queued-задания из PostgreSQL
 Конфигурация встроена в бинарный файл; дополнительных переменных окружения нет.
 В ней зафиксированы веса всех пяти категорий и 12 метрик; реализован расчёт
 категории activity. Полная агрегация пяти категорий — #18527.
-Сбор активности и сохранение/выдача отчёта — #18490/#18491: штатный Processor
-этим модулем автоматически не подменяется.
+Сбор и сохранение/выдача подключены в #18490/#18491.
+[Жизненный цикл и проверки отчёта](../../docs/architecture/activity-report.md).
 
 Проверка: `go test -race ./internal/analyzer/application/scoring`.
 
@@ -199,10 +203,9 @@ SUBMISSION_CHANGED. Чтение failed возвращает HTTP 200; ошиб�
 отдельную HTTP-ошибку. Используются общий PUBLIC_ORIGIN и AUTH_REQUEST_TIMEOUT.
 Текущий Auth подтверждает гостя; account cookie без подтверждения возвращает
 SESSION_EXPIRED и не превращается в гостевой запуск.
-В этой ветке ещё нет исполнителя #18476 и HTTP чтения Report: новый анализ
-остаётся queued до подключения исполнителя. Для FR-28 sources/reasons,
-выборки и ограничения профиля передаются существующим Report-контрактом;
-API статуса не выдаёт вымышленные результаты сбора.
+Analyzer выполняет очередь и сохраняет отчёт активности.
+GET /api/v1/reports/{report_id} читает его через Report Service с проверкой владельца.
+Sources, причины и ограничения передаются в сохранённом виде.
 
 Логи пишутся в stdout в JSON. Логгер передаётся через контекст:
 `logger.With(ctx, log)` и `logger.From(ctx)`. Если его нет в контексте,
@@ -400,3 +403,36 @@ raw_value SEC_SECRETS отклоняется. Коллекторы и расчё
 $env:REPOPULSE_TEST_DATABASE_URL = 'postgres://test_user:test_password@127.0.0.1:5432/postgres?sslmode=disable'
 go test -race ./...
 ```
+
+
+## Report Service
+
+Report читает опубликованные строки схемы report. Сначала примените миграции
+в порядке auth → analyzer → report через Goose либо запустите Docker Compose.
+Вне Compose выполните из `project/backend` в отдельном PowerShell:
+
+```powershell
+$env:REPORT_DATABASE_URL = 'postgres://repopulse:local-password@127.0.0.1:5432/repopulse?sslmode=disable'
+$env:REPORT_GRPC_ADDR = '127.0.0.1:9091'
+go run ./cmd/report
+```
+
+Готовность подтверждается логом `Report gRPC ready`. Остановка — Ctrl+C.
+Затем запустите Auth, API и Analyzer по инструкциям выше. API использует
+REPORT_GRPC_TARGET=127.0.0.1:9091, в Compose — report:9091.
+В конфигурации процесса задаются следующие параметры.
+
+| Параметр | Значение по умолчанию | Назначение |
+|---|---|---|
+| REPORT_DATABASE_URL | обязательный | Report, та же PostgreSQL с миграцией report |
+| REPORT_GRPC_ADDR | 127.0.0.1:9091 | Адрес сервера Report |
+| REPORT_DATABASE_TIMEOUT | 5s | Подключение и верхняя граница времени RPC |
+| REPORT_GRPC_TARGET | 127.0.0.1:9091 | API, адрес Report |
+| REPORT_REQUEST_TIMEOUT | 3s | API, срок RPC чтения отчёта, входит в HTTP_WRITE_TIMEOUT вместе с Auth |
+| SHUTDOWN_TIMEOUT | 10s | Срок завершения активных RPC |
+
+После POST /api/v1/analyses дождитесь completed через GET /api/v1/analyses/{analysis_id}.
+Используйте возвращённый report_id для GET /api/v1/reports/{report_id} с исходной
+cookie. Повторное чтение сохраняет результат. HTTP 404 означает недоступный отчёт,
+401 — необходимость восстановить сессию, 503 — возможность повторить чтение позже.
+[Метаданные, полнота, эталоны и права](../../docs/architecture/activity-report.md).

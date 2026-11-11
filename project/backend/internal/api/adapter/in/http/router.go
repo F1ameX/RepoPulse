@@ -45,7 +45,7 @@ func NewHandler(validator RepositoryValidator, resolver ContextResolver, options
 		route("/api/v1/analyses", http.MethodPost, sameOrigin(cfg.PublicOrigin, createAnalysis(cfg.Analyses, resolver)))
 		route("/api/v1/analyses/{analysis_id}", http.MethodGet, getAnalysis(cfg.Analyses, resolver))
 	}
-	route("/api/v1/reports/{report_id}", http.MethodGet, notImplemented)
+	route("/api/v1/reports/{report_id}", http.MethodGet, getReport(cfg.Reports, resolver))
 	route("/api/v1/reports", http.MethodGet, notImplemented)
 	route("/api/v1/repositories/validate", http.MethodPost, sameOrigin(cfg.PublicOrigin, validateRepository(validator, resolver)))
 	route("/api/v1/auth/register", http.MethodPost, sameOrigin(cfg.PublicOrigin, register(cfg.Sessions)))

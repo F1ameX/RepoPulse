@@ -11,7 +11,27 @@ export interface SessionContext {
   guest: SessionInfo | null;
 }
 
+interface Credentials {
+  login: string;
+  password: string;
+}
+
+interface RegistrationResult {
+  login: string;
+  message: string;
+}
+
 export const authService = {
+  async register(credentials: Credentials, signal?: AbortSignal): Promise<RegistrationResult> {
+    const { data } = await api.post<RegistrationResult>('/auth/register', credentials, { signal });
+    return data;
+  },
+
+  async login(credentials: Credentials, signal?: AbortSignal): Promise<SessionInfo> {
+    const { data } = await api.post<SessionInfo>('/auth/login', credentials, { signal });
+    return data;
+  },
+
   async createGuestSession(signal?: AbortSignal): Promise<SessionInfo> {
     const { data } = await api.post<SessionInfo>('/auth/guest-session', undefined, { signal });
     return data;
@@ -22,7 +42,7 @@ export const authService = {
     return data;
   },
 
-  async logout(): Promise<void> {
-    await api.post('/auth/logout');
+  async logout(signal?: AbortSignal): Promise<void> {
+    await api.post('/auth/logout', undefined, { signal, timeout: 15_000 });
   },
 };

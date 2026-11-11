@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	authpassword "github.com/F1ameX/RepoPulse/project/backend/internal/auth/adapter/out/password"
+	authapp "github.com/F1ameX/RepoPulse/project/backend/internal/auth/application/auth"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
 )
 
@@ -172,5 +174,50 @@ func TestFindAccountByID(t *testing.T) {
 	}
 	if _, err := users.FindAccountByID(ctx, uuid.NewString()); !errors.Is(err, domain.ErrPrincipalNotFound) {
 		t.Fatalf("unknown id: err = %v, want ErrPrincipalNotFound", err)
+	}
+}
+
+// The application normalizes distinct inputs before the real database enforces uniqueness.
+func TestConcurrentRegisterNormalizedLoginCreatesOneAccount(t *testing.T) {
+	pool := testPool(t)
+	users := NewUsers(pool)
+	hasher, err := authpassword.NewArgon2id(authpassword.Params{HashMem: authpassword.MinMemoryKiB, HashTime: 1, HashThreads: 1, KeyLen: 32, SaltLen: 16})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := authapp.NewService(nil, users, nil, nil, time.Now, domain.Options{}, hasher)
+	login := uniqueLogin("flamex")
+	variants := []string{login, strings.ToUpper(login), " " + login + " ", "  " + strings.ToUpper(login) + "  "}
+	start := make(chan struct{})
+	results := make(chan error, len(variants))
+	var wg sync.WaitGroup
+	for _, raw := range variants {
+		wg.Go(func() {
+			<-start
+			result, err := svc.Register(context.Background(), raw, "correct horse battery")
+			if err == nil && (result.Login != login || result.Message != "Аккаунт создан. Войдите в систему") {
+				results <- errors.New("incorrect registration result")
+				return
+			}
+			results <- err
+		})
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	successes := 0
+	for err := range results {
+		if err == nil {
+			successes++
+		} else if !errors.Is(err, domain.ErrLoginTaken) {
+			t.Fatalf("registration: %v", err)
+		}
+	}
+	var rows int
+	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM auth.principals WHERE login = $1", login).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if successes != 1 || rows != 1 {
+		t.Fatalf("successes=%d rows=%d; want one", successes, rows)
 	}
 }

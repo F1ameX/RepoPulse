@@ -25,6 +25,7 @@ func TestDefaults(t *testing.T) {
 		ShutdownTimeout:    10 * time.Second,
 		GitHubCheckTimeout: 25 * time.Second,
 		AuthGRPCTarget:     "127.0.0.1:9090", AuthRequestTimeout: 3 * time.Second,
+		ReportGRPCTarget: "127.0.0.1:9091", ReportRequestTimeout: 3 * time.Second,
 		PublicOrigin: "http://localhost:3000", CookieSecure: true,
 	}
 	if cfg != want {
@@ -39,6 +40,7 @@ func TestEnvironmentOverrides(t *testing.T) {
 		"HTTP_WRITE_TIMEOUT": "3s", "HTTP_IDLE_TIMEOUT": "4s", "SHUTDOWN_TIMEOUT": "500ms",
 		"GITHUB_CHECK_TIMEOUT": "2s", "GITHUB_TOKEN": "service-test-token",
 		"AUTH_GRPC_TARGET": "auth:9191", "AUTH_REQUEST_TIMEOUT": "500ms",
+		"REPORT_GRPC_TARGET": "report:9192", "REPORT_REQUEST_TIMEOUT": "1s",
 		"PUBLIC_ORIGIN": "https://repopulse.example", "COOKIE_SECURE": "false",
 	}))
 	if err != nil {
@@ -51,6 +53,7 @@ func TestEnvironmentOverrides(t *testing.T) {
 		ShutdownTimeout:    500 * time.Millisecond,
 		GitHubCheckTimeout: 2 * time.Second, GitHubToken: "service-test-token",
 		AuthGRPCTarget: "auth:9191", AuthRequestTimeout: 500 * time.Millisecond,
+		ReportGRPCTarget: "report:9192", ReportRequestTimeout: time.Second,
 		PublicOrigin: "https://repopulse.example", CookieSecure: false,
 	}
 	if cfg != want {
@@ -64,6 +67,7 @@ func TestInvalidEnvironmentFailsEarly(t *testing.T) {
 		{"HTTP_ADDR", "localhost:0"}, {"HTTP_ADDR", "localhost:65536"},
 		{"HTTP_ADDR", "localhost:http"},
 		{"AUTH_GRPC_TARGET", ""}, {"AUTH_GRPC_TARGET", ":9090"}, {"AUTH_GRPC_TARGET", "auth"}, {"AUTH_GRPC_TARGET", "auth:65536"},
+		{"REPORT_GRPC_TARGET", ""}, {"REPORT_GRPC_TARGET", "report"}, {"REPORT_GRPC_TARGET", "report:0"},
 		{"PUBLIC_ORIGIN", ""}, {"PUBLIC_ORIGIN", "null"}, {"PUBLIC_ORIGIN", "https://site/path"}, {"PUBLIC_ORIGIN", "https://user@site"},
 		{"COOKIE_SECURE", ""}, {"COOKIE_SECURE", "invalid"},
 	}
@@ -71,6 +75,7 @@ func TestInvalidEnvironmentFailsEarly(t *testing.T) {
 		"HTTP_READ_HEADER_TIMEOUT", "HTTP_READ_TIMEOUT", "HTTP_WRITE_TIMEOUT",
 		"HTTP_IDLE_TIMEOUT", "SHUTDOWN_TIMEOUT",
 		"GITHUB_CHECK_TIMEOUT", "AUTH_REQUEST_TIMEOUT",
+		"REPORT_REQUEST_TIMEOUT",
 	} {
 		for _, value := range []string{"", "0s", "-1s", "30", "invalid"} {
 			cases = append(cases, struct{ key, value string }{key, value})

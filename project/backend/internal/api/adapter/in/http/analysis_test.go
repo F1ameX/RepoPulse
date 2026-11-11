@@ -117,6 +117,8 @@ func TestAnalysisReadFailureAndAuthUnavailableAreTransportErrors(t *testing.T) {
 func TestAnalysisHTTPUsesWorkerErrorModelAndSanitizesStoredDetails(t *testing.T) {
 	for _, tc := range []struct{ storedCode, publicCode string }{
 		{"BUDGET_EXCEEDED", "BUDGET_EXCEEDED"},
+		{"GIT_TIME_LIMIT", "GIT_TIME_LIMIT"},
+		{"GIT_SIZE_LIMIT", "GIT_SIZE_LIMIT"},
 		{"REPORT_SAVE_FAILED", "REPORT_SAVE_FAILED"},
 		{"UNKNOWN_PROVIDER_ERROR", "ANALYSIS_FAILED"},
 	} {
