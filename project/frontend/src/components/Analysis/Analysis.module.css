@@ -203,3 +203,50 @@
     animation: none;
   }
 }
+
+.categoryList {
+  margin-top: 48px;
+  line-height: 24px;
+}
+
+.categoryCard {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.categoryHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.categoryTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.categoryScore {
+  text-align: right;
+}
+
+.categoryMeta {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.categoryDetails {
+  margin-top: 8px;
+}
+
+.categorySummary {
+  cursor: pointer;
+  font-weight: 500;
+  margin-bottom: 8px;
+  outline-offset: 4px;
+}
