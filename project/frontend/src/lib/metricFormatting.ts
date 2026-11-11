@@ -13,6 +13,11 @@ export const METRIC_LABELS: Partial<Record<MetricId, string>> = {
   ACT_TREND: 'Тренд активности',
 };
 
+const PERCENTAGE_IDS: ReadonlySet<MetricId> = new Set<MetricId>([
+  'DOC_SUPPORT_SHARE',
+  'CI_SUCCESS_RATE',
+]);
+
 export function roundHalfUp(value: number, decimals: number): string {
   if (value === 0) return (0).toFixed(decimals);
 
@@ -37,9 +42,10 @@ export function roundHalfUp(value: number, decimals: number): string {
 
 export function formatRawValue(id: MetricId, raw: unknown): string {
   if (raw === null || raw === undefined) return 'N/A';
-  if (typeof raw === 'boolean') return raw ? 'Да' : 'Нет';
+  if (typeof raw === 'boolean') return raw ? 'Обнаружено' : 'Не обнаружено';
   if (typeof raw === 'string') return raw;
   if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (PERCENTAGE_IDS.has(id)) return `${roundHalfUp(raw * 100, 1)}%`;
     if (id === 'ACT_COMMIT_FREQ') return roundHalfUp(raw, 2);
     if (id === 'ACT_DAYS_SINCE_LAST') return Math.round(raw).toString();
     if (id === 'ACT_TREND') return roundHalfUp(raw, 4);
@@ -53,13 +59,22 @@ export function formatSample(sample: Sample, id: MetricId): string {
   const parts: string[] = [];
   if (collected !== null) parts.push(`собрано: ${collected}`);
   if (total !== null) parts.push(`всего: ${total}`);
-  if (collected === null && total === null) parts.push('Размер выборки неизвестен');
-  if (numerator !== null)
+  if (collected === null && total === null) {
+    parts.push('Размер выборки неизвестен');
+  } else if (collected !== null && total === null) {
+    parts.push('полный объём неизвестен');
+  } else if (collected === null && total !== null) {
+    parts.push('собрано неизвестно');
+  }
+  if (numerator !== null) {
     parts.push(`${id === 'ACT_COMMIT_FREQ' ? 'коммитов' : 'числитель'}: ${numerator}`);
-  if (denominator !== null)
+  }
+  if (denominator !== null) {
     parts.push(`${id === 'ACT_COMMIT_FREQ' ? 'недель' : 'знаменатель'}: ${denominator}`);
-  if (excluded !== null)
+  }
+  if (excluded !== null) {
     parts.push(`исключено: ${excluded}${excluded_reason ? ` (${excluded_reason})` : ''}`);
+  }
   return parts.join(', ');
 }
 

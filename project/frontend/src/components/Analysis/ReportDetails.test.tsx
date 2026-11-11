@@ -71,9 +71,9 @@ it('FR-13: 0 — валидное значение, не N/A', () => {
   expect(screen.queryByText('N/A')).toBeNull();
 });
 
-it('FR-13: false рендерится как «Нет», не N/A', () => {
+it('FR-13: false рендерится как «Не обнаружено», не N/A', () => {
   render(<MetricDetails metric={makeMetric({ id: 'TEST_PRESENCE', raw_value: false })} />);
-  expect(screen.getByText('Нет')).toBeTruthy();
+  expect(screen.getByText('Не обнаружено')).toBeTruthy();
   expect(screen.queryByText('N/A')).toBeNull();
 });
 
@@ -160,10 +160,11 @@ it('FR-10: javascript:/userinfo/секреты — не ссылки', () => {
   expect(screen.queryByText('https://github.com/a/b')).toBeNull();
 });
 
-it('FR-09: карточка без балла — «Не рассчитан», причина и «Неизвестно»', () => {
+it('FR-09: карточка без балла — «Нет данных», причина и «Неизвестно»', () => {
   render(<CategoryCard category={makeCategory()} />);
-  expect(screen.getByText('Не рассчитан')).toBeTruthy();
-  expect(screen.getByText(/Нет данных/)).toBeTruthy();
+  const score = screen.getByText('Балл').parentElement!;
+  expect(score.textContent).toContain('Нет данных');
+  expect(screen.getAllByText(/Нет данных/).length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText(/Вывод невозможен/)).toBeTruthy();
   expect(screen.getByText('Неизвестно')).toBeTruthy();
 });
@@ -212,4 +213,105 @@ it('CategoryList рендерит все категории', () => {
   expect(screen.getByRole('region', { name: 'Категории отчёта' })).toBeTruthy();
   expect(screen.getByRole('region', { name: 'Категория: Активность' })).toBeTruthy();
   expect(screen.getByRole('region', { name: 'Категория: Безопасность' })).toBeTruthy();
+});
+
+it('FR-13: partial с причиной → причина показана рядом с баллом', () => {
+  render(
+    <MetricDetails
+      metric={makeMetric({
+        raw_value: 12,
+        status: 'partial',
+        reason: {
+          code: 'partial_data',
+          message: 'Получена часть истории',
+          cannot_conclude: 'Полная оценка недоступна',
+        },
+      })}
+    />,
+  );
+  expect(screen.getByText('12.00')).toBeTruthy();
+  expect(screen.getAllByText(/Получена часть истории/).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText(/Полная оценка недоступна/).length).toBeGreaterThanOrEqual(1);
+});
+
+it('FR-13: collected известен, total — нет → явно сказано «полный объём неизвестен»', () => {
+  render(
+    <MetricDetails
+      metric={makeMetric({
+        sample: {
+          collected: 20,
+          total: null,
+          numerator: null,
+          denominator: null,
+          excluded: null,
+          excluded_reason: null,
+        },
+      })}
+    />,
+  );
+  const sampleLine = screen.getByText(/Выборка:/).parentElement!;
+  expect(sampleLine.textContent).toContain('собрано: 20');
+  expect(sampleLine.textContent).toContain('полный объём неизвестен');
+});
+
+it('FR-10: порог и версия методики выводятся, rule — нет', () => {
+  render(
+    <MetricDetails
+      metric={makeMetric(undefined, {
+        rule: 'commits_in_window / weeks',
+        rule_version: 'rhs-mvp-1.1.0',
+        threshold: 10,
+      })}
+    />,
+  );
+  expect(screen.getByText(/Порог:/).parentElement?.textContent).toContain('10');
+  expect(screen.getByText(/Версия методики:/).parentElement?.textContent).toContain(
+    'rhs-mvp-1.1.0',
+  );
+  expect(screen.queryByText(/Правило:/)).toBeNull();
+});
+
+it('FR-10: CI_SUCCESS_RATE показывается процентом с одним знаком', () => {
+  render(<MetricDetails metric={makeMetric({ id: 'CI_SUCCESS_RATE', raw_value: 0.75 })} />);
+  expect(screen.getByText('75.0%')).toBeTruthy();
+});
+
+it('FR-10: DOC_SUPPORT_SHARE показывается процентом с одним знаком', () => {
+  render(<MetricDetails metric={makeMetric({ id: 'DOC_SUPPORT_SHARE', raw_value: 0.4567 })} />);
+  expect(screen.getByText('45.7%')).toBeTruthy();
+});
+
+it('FR-09: score null и все метрики not_applicable → «Неприменимо»', () => {
+  render(
+    <CategoryCard
+      category={makeCategory({
+        reason: null,
+        status: 'not_applicable',
+        metrics: [
+          makeMetric({ status: 'not_applicable', raw_value: null }, { normalized_score: null }),
+        ],
+      })}
+    />,
+  );
+  expect(screen.getByText('Неприменимо')).toBeTruthy();
+  expect(screen.queryByText('Нет данных')).toBeNull();
+});
+
+it('FR-09: score null при наличии применимых метрик → «Нет данных»', () => {
+  render(
+    <CategoryCard
+      category={makeCategory({ reason: null, status: 'unavailable', metrics: [makeMetric()] })}
+    />,
+  );
+  expect(screen.getByText('Нет данных')).toBeTruthy();
+  expect(screen.queryByText('Неприменимо')).toBeNull();
+});
+
+it('FR-09: category.explanation выводится в карточке', () => {
+  render(
+    <CategoryCard
+      category={makeCategory({ reason: null, explanation: 'Пояснение категории' })}
+    />,
+  );
+  expect(screen.getByText('Пояснение категории')).toBeTruthy();
 });

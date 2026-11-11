@@ -30,14 +30,14 @@ export function MetricDetails({
     input.raw_value === undefined;
 
   const displayRaw = isUnavailable ? 'N/A' : formatRawValue(input.id, input.raw_value);
+  const showUnit = !isUnavailable && !!unit && !displayRaw.endsWith('%');
 
-  const reason =
-    isUnavailable && input.reason
-      ? {
-          specific: input.reason.message,
-          general: input.reason.cannot_conclude,
-        }
-      : null;
+  const reason = input.reason
+    ? {
+        specific: input.reason.message,
+        general: input.reason.cannot_conclude,
+      }
+    : null;
 
   return (
     <div className={styles.metricRow}>
@@ -50,7 +50,7 @@ export function MetricDetails({
           <div>
             <span className={styles.metricCaption}>Исходное значение</span>
             <span className={styles.metricValue}>{displayRaw}</span>
-            {!isUnavailable && unit && <span> {unit}</span>}
+            {showUnit && <span> {unit}</span>}
           </div>
           <div>
             <span className={styles.metricCaption}>Балл</span>
@@ -101,6 +101,7 @@ export function MetricDetails({
             <span className={styles.mono}>{input.series.join(', ')}</span>
           </div>
         )}
+        {/* По обновлённому FR-10: порог и версия методики. metric.rule не выводится. */}
         <div>
           <strong>Порог:</strong> {metric.threshold ?? 'Не задан'}
         </div>

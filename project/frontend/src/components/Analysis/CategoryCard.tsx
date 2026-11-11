@@ -11,6 +11,16 @@ const CATEGORY_LABELS: Partial<Record<CategoryId, string>> = {
   ci_cd: 'CI/CD',
 };
 
+function emptyScoreLabel(category: Category): string {
+  if (
+    category.metrics.length > 0 &&
+    category.metrics.every((metric) => metric.input.status === 'not_applicable')
+  ) {
+    return 'Неприменимо';
+  }
+  return 'Нет данных';
+}
+
 export function CategoryCard({
   category,
   sha,
@@ -24,6 +34,7 @@ export function CategoryCard({
 }) {
   const label = title ?? CATEGORY_LABELS[category.id] ?? category.id;
   const hasScore = category.score !== null;
+  const scoreText = hasScore ? roundHalfUp(category.score!, 1) : emptyScoreLabel(category);
 
   return (
     <section className={styles.categoryCard} aria-label={`Категория: ${label}`}>
@@ -31,9 +42,7 @@ export function CategoryCard({
         <h3 className={styles.categoryTitle}>{label}</h3>
         <div className={styles.categoryScore}>
           <span className={styles.metricCaption}>Балл</span>
-          <span className={styles.metricValue}>
-            {hasScore ? roundHalfUp(category.score!, 1) : 'Не рассчитан'}
-          </span>
+          <span className={styles.metricValue}>{scoreText}</span>
         </div>
       </header>
 
@@ -54,6 +63,8 @@ export function CategoryCard({
           {category.reason.message}. {category.reason.cannot_conclude}
         </p>
       )}
+
+      {category.explanation && <p className={styles.hint}>{category.explanation}</p>}
 
       {category.metrics.length > 0 ? (
         <details className={styles.categoryDetails} open={defaultOpen}>
