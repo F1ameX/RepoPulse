@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/dependencies"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/scoring"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/snapshot"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/worker"
@@ -18,6 +19,11 @@ func NewProcessor(engine *scoring.Engine) *Processor { return &Processor{engine:
 
 func (p *Processor) Process(ctx context.Context, a domain.Analysis, session worker.GitSession, advance func(string) error) (worker.Output, error) {
 	if err := ctx.Err(); err != nil {
+		return worker.Output{}, err
+	}
+	collector := dependencies.Collector{}
+	dependencyCollection, err := collector.Collect(ctx, a, session)
+	if err != nil {
 		return worker.Output{}, err
 	}
 	if err := advance("calculating"); err != nil {
@@ -53,7 +59,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 		addEvidence(&input, a.Repository, commits)
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{key}})
 	}
-	data, err := snapshot.Build(a, git, collection)
+	data, err := snapshot.Build(a, git, collection, dependencyCollection)
 	if err != nil {
 		return worker.Output{}, err
 	}
