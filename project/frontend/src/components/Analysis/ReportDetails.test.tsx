@@ -315,3 +315,129 @@ it('FR-09: category.explanation выводится в карточке', () => {
   );
   expect(screen.getByText('Пояснение категории')).toBeTruthy();
 });
+
+it('FR-10: 0.0055 доли → 0.6% (half-up по проценту, не по сырому числу)', () => {
+  render(<MetricDetails metric={makeMetric({ id: 'DOC_SUPPORT_SHARE', raw_value: 0.0055 })} />);
+  expect(screen.getByText('0.6%')).toBeTruthy();
+  expect(screen.queryByText('0.5%')).toBeNull();
+});
+
+it('FR-10: CI_SUCCESS_RATE тоже half-up по проценту', () => {
+  render(<MetricDetails metric={makeMetric({ id: 'CI_SUCCESS_RATE', raw_value: 0.0055 })} />);
+  expect(screen.getByText('0.6%')).toBeTruthy();
+});
+
+it('FR-10: чистые проценты не регрессируют (0.75 → 75.0%)', () => {
+  render(<MetricDetails metric={makeMetric({ id: 'CI_SUCCESS_RATE', raw_value: 0.75 })} />);
+  expect(screen.getByText('75.0%')).toBeTruthy();
+});
+
+it('FR-10: CI run/attempt выводятся', () => {
+  const base: Evidence = {
+    id: 'e1', source: 'github', kind: 'run', description: 'CI run',
+    path: null, revision: null, url: null, run_id: null, attempt: null,
+    dependency: null, vulnerability_id: null, secret_match_type: null,
+  };
+  render(
+    <MetricDetails
+      metric={makeMetric({ raw_value: 1, evidence: [{ ...base, run_id: '12345', attempt: 2 }] })}
+    />,
+  );
+  expect(screen.getByText(/run: 12345\/2/)).toBeTruthy();
+});
+
+it('FR-10: dependency (ecosystem/package@version) выводится', () => {
+  const base: Evidence = {
+    id: 'e1', source: 'osv', kind: 'dependency', description: 'dep',
+    path: null, revision: null, url: null, run_id: null, attempt: null,
+    dependency: null, vulnerability_id: null, secret_match_type: null,
+  };
+  render(
+    <MetricDetails
+      metric={makeMetric({
+        raw_value: 1,
+        evidence: [{
+          ...base,
+          dependency: {
+            ecosystem: 'npm', package: 'lodash', version: '4.17.21',
+            manifest_path: 'package.json', version_source: 'lock', origins: [],
+          },
+        }],
+      })}
+    />,
+  );
+  expect(screen.getByText(/npm\/lodash@4\.17\.21/)).toBeTruthy();
+});
+
+it('FR-10: vulnerability_id выводится', () => {
+  const base: Evidence = {
+    id: 'e1', source: 'osv', kind: 'vuln', description: 'CVE',
+    path: null, revision: null, url: null, run_id: null, attempt: null,
+    dependency: null, vulnerability_id: null, secret_match_type: null,
+  };
+  render(
+    <MetricDetails
+      metric={makeMetric({ raw_value: 1, evidence: [{ ...base, vulnerability_id: 'CVE-2024-1234' }] })}
+    />,
+  );
+  expect(screen.getByText(/vuln: CVE-2024-1234/)).toBeTruthy();
+});
+
+it('FR-10: секрет не показывает run/dependency/vulnerability', () => {
+  const base: Evidence = {
+    id: 'e1', source: 'git', kind: 'secret', description: 'leak',
+    path: 'src/index.ts', revision: 'abc123', url: null, run_id: null, attempt: null,
+    dependency: null, vulnerability_id: null, secret_match_type: null,
+  };
+  render(
+    <MetricDetails
+      metric={makeMetric({
+        raw_value: 1,
+        evidence: [{
+          ...base,
+          secret_match_type: 'aws_key',
+          run_id: '12345',
+          dependency: {
+            ecosystem: 'npm', package: 'lodash', version: '4.17.21',
+            manifest_path: 'package.json', version_source: 'lock', origins: [],
+          },
+          vulnerability_id: 'CVE-2024-1234',
+        }],
+      })}
+    />,
+  );
+  expect(screen.queryByText(/run:/)).toBeNull();
+  expect(screen.queryByText(/lodash/)).toBeNull();
+  expect(screen.queryByText(/vuln:/)).toBeNull();
+  expect(screen.getByText('aws_key')).toBeTruthy();
+  expect(screen.getByText(/\[src\/index\.ts\]/)).toBeTruthy();
+  expect(screen.getByText(/rev: abc123/)).toBeTruthy();
+});
+
+it('FR-10: пустой evidence при reason: null → «причина не указана»', () => {
+  render(<MetricDetails metric={makeMetric({ raw_value: 1, evidence: [] })} />);
+  expect(screen.getByText(/Основания недоступны \(причина не указана\)/)).toBeTruthy();
+});
+
+it('FR-10: TEST_PRESENCE показывает не более 10 путей', () => {
+  const base: Evidence = {
+    id: 'e', source: 'git', kind: 'test', description: 'test file',
+    path: null, revision: null, url: null, run_id: null, attempt: null,
+    dependency: null, vulnerability_id: null, secret_match_type: null,
+  };
+  const many: Evidence[] = Array.from({ length: 15 }, (_, i) => ({
+    ...base,
+    id: `e${i}`,
+    path: `tests/t${i}.test.ts`,
+  }));
+  render(
+    <MetricDetails
+      metric={makeMetric({
+        id: 'TEST_PRESENCE', raw_value: true,
+        evidence: many, evidence_total: 15, evidence_limited: false,
+      })}
+    />,
+  );
+  expect(screen.getAllByText(/источник: git/)).toHaveLength(10);
+  expect(screen.getByText(/Показано 10 из 15/)).toBeTruthy();
+});

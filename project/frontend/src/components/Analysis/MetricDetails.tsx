@@ -39,6 +39,8 @@ export function MetricDetails({
       }
     : null;
 
+  const evidenceLimit = input.id === 'TEST_PRESENCE' ? 10 : undefined;
+
   return (
     <div className={styles.metricRow}>
       <dt>
@@ -115,6 +117,7 @@ export function MetricDetails({
           limited={input.evidence_limited}
           total={input.evidence_total}
           reason={input.reason}
+          limit={evidenceLimit}
         />
       </dd>
     </div>

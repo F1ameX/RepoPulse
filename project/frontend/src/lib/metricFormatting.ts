@@ -40,12 +40,32 @@ export function roundHalfUp(value: number, decimals: number): string {
   return (sign * Number(`${rounded}e-${decimals}`)).toFixed(decimals);
 }
 
+function formatPercentHalfUp(raw: number, decimals: number): string {
+  if (!Number.isFinite(raw)) return 'N/A';
+  if (raw === 0) return `${(0).toFixed(decimals)}%`;
+
+  const sign = Math.sign(raw);
+  const absValue = Math.abs(raw);
+  const str = absValue.toString();
+  const shift = decimals + 2;
+
+  let shifted: number;
+  if (str.includes('e')) {
+    shifted = absValue * 10 ** shift;
+  } else {
+    shifted = Number(`${str}e${shift}`);
+  }
+  const rounded = Math.round(shifted);
+  const percentValue = rounded / 10 ** decimals;
+  return `${(sign * percentValue).toFixed(decimals)}%`;
+}
+
 export function formatRawValue(id: MetricId, raw: unknown): string {
   if (raw === null || raw === undefined) return 'N/A';
   if (typeof raw === 'boolean') return raw ? 'Обнаружено' : 'Не обнаружено';
   if (typeof raw === 'string') return raw;
   if (typeof raw === 'number' && Number.isFinite(raw)) {
-    if (PERCENTAGE_IDS.has(id)) return `${roundHalfUp(raw * 100, 1)}%`;
+    if (PERCENTAGE_IDS.has(id)) return formatPercentHalfUp(raw, 1);
     if (id === 'ACT_COMMIT_FREQ') return roundHalfUp(raw, 2);
     if (id === 'ACT_DAYS_SINCE_LAST') return Math.round(raw).toString();
     if (id === 'ACT_TREND') return roundHalfUp(raw, 4);

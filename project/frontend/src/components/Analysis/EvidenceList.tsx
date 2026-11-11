@@ -7,11 +7,13 @@ export function EvidenceList({
   limited,
   total,
   reason,
+  limit,
 }: {
   evidence: Evidence[];
   limited: boolean;
   total: number | null;
   reason: Reason | null;
+  limit?: number;
 }) {
   if (!evidence || evidence.length === 0) {
     return (
@@ -19,44 +21,66 @@ export function EvidenceList({
         <strong>Основания:</strong>{' '}
         <span className={styles.mono}>
           Основания недоступны
-          {reason ? ` (${reason.message})` : ''}
+          {reason ? ` (${reason.message})` : ' (причина не указана)'}
         </span>
       </div>
     );
   }
 
+  const visible = limit !== undefined ? evidence.slice(0, limit) : evidence;
+  const truncated = visible.length < evidence.length;
+  const showHint = limited || truncated;
+
   return (
     <div className={styles.evidenceBlock}>
       <strong>Основания:</strong>
       <ul>
-        {evidence.map((ev) => (
-          <li key={ev.id}>
-            <span>{ev.secret_match_type ?? ev.description}</span>
-            {!ev.secret_match_type && (
-              <span className={styles.mono}>{` (источник: ${ev.source})`}</span>
-            )}
-            {ev.path && <span className={styles.mono}>{` [${ev.path}]`}</span>}
-            {ev.revision && <span className={styles.mono}>{` rev: ${ev.revision}`}</span>}
-            {ev.secret_match_type ? null : isSafeUrl(ev.url) ? (
-              <>
-                {' '}
-                <a href={ev.url} target="_blank" rel="noopener noreferrer">
-                  [ссылка]
-                </a>
-              </>
-            ) : (
-              <span className={styles.mono}>
-                {' '}
-                (Ссылка на источник недоступна)
-                {ev.url && ` ${ev.url}`}
-              </span>
-            )}
-          </li>
-        ))}
+        {visible.map((ev) => {
+          const secret = !!ev.secret_match_type;
+          return (
+            <li key={ev.id}>
+              <span>{ev.secret_match_type ?? ev.description}</span>
+              {!secret && (
+                <span className={styles.mono}>{` (источник: ${ev.source})`}</span>
+              )}
+              {ev.path && <span className={styles.mono}>{` [${ev.path}]`}</span>}
+              {ev.revision && <span className={styles.mono}>{` rev: ${ev.revision}`}</span>}
+              {!secret && ev.run_id && (
+                <span className={styles.mono}>
+                  {` run: ${ev.run_id}${ev.attempt !== null ? `/${ev.attempt}` : ''}`}
+                </span>
+              )}
+              {!secret && ev.dependency && (
+                <span className={styles.mono}>
+                  {` ${ev.dependency.ecosystem}/${ev.dependency.package}@${ev.dependency.version}`}
+                </span>
+              )}
+              {!secret && ev.vulnerability_id && (
+                <span className={styles.mono}>{` vuln: ${ev.vulnerability_id}`}</span>
+              )}
+              {secret ? null : isSafeUrl(ev.url) ? (
+                <>
+                  {' '}
+                  <a href={ev.url} target="_blank" rel="noopener noreferrer">
+                    [ссылка]
+                  </a>
+                </>
+              ) : (
+                <span className={styles.mono}>
+                  {' '}
+                  (Ссылка на источник недоступна)
+                  {ev.url && ` ${ev.url}`}
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
-      {limited && (
+      {showHint && (
         <p className={styles.hint}>
-          Показано {evidence.length} оснований; список ограничен профилем.
+          Показано {visible.length}
+          {truncated && ` из ${evidence.length}`} оснований
+          {limited && '; список ограничен профилем'}.
           {total !== null && ` Всего: ${total}.`}
         </p>
       )}
