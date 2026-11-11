@@ -49,9 +49,7 @@ export function CategoryCard({
       <div className={styles.categoryMeta}>
         <div>
           <strong>Состояние:</strong>{' '}
-          <span className={styles.mono}>
-            {STATUS_LABELS[category.status] ?? category.status}
-          </span>
+          <span className={styles.mono}>{STATUS_LABELS[category.status] ?? category.status}</span>
         </div>
         <div>
           <strong>Покрытие:</strong> {formatCoverage(category.coverage)}

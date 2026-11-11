@@ -309,9 +309,7 @@ it('FR-09: score null при наличии применимых метрик �
 
 it('FR-09: category.explanation выводится в карточке', () => {
   render(
-    <CategoryCard
-      category={makeCategory({ reason: null, explanation: 'Пояснение категории' })}
-    />,
+    <CategoryCard category={makeCategory({ reason: null, explanation: 'Пояснение категории' })} />,
   );
   expect(screen.getByText('Пояснение категории')).toBeTruthy();
 });
@@ -334,9 +332,18 @@ it('FR-10: чистые проценты не регрессируют (0.75 →
 
 it('FR-10: CI run/attempt выводятся', () => {
   const base: Evidence = {
-    id: 'e1', source: 'github', kind: 'run', description: 'CI run',
-    path: null, revision: null, url: null, run_id: null, attempt: null,
-    dependency: null, vulnerability_id: null, secret_match_type: null,
+    id: 'e1',
+    source: 'github',
+    kind: 'run',
+    description: 'CI run',
+    path: null,
+    revision: null,
+    url: null,
+    run_id: null,
+    attempt: null,
+    dependency: null,
+    vulnerability_id: null,
+    secret_match_type: null,
   };
   render(
     <MetricDetails
@@ -348,21 +355,36 @@ it('FR-10: CI run/attempt выводятся', () => {
 
 it('FR-10: dependency (ecosystem/package@version) выводится', () => {
   const base: Evidence = {
-    id: 'e1', source: 'osv', kind: 'dependency', description: 'dep',
-    path: null, revision: null, url: null, run_id: null, attempt: null,
-    dependency: null, vulnerability_id: null, secret_match_type: null,
+    id: 'e1',
+    source: 'osv',
+    kind: 'dependency',
+    description: 'dep',
+    path: null,
+    revision: null,
+    url: null,
+    run_id: null,
+    attempt: null,
+    dependency: null,
+    vulnerability_id: null,
+    secret_match_type: null,
   };
   render(
     <MetricDetails
       metric={makeMetric({
         raw_value: 1,
-        evidence: [{
-          ...base,
-          dependency: {
-            ecosystem: 'npm', package: 'lodash', version: '4.17.21',
-            manifest_path: 'package.json', version_source: 'lock', origins: [],
+        evidence: [
+          {
+            ...base,
+            dependency: {
+              ecosystem: 'npm',
+              package: 'lodash',
+              version: '4.17.21',
+              manifest_path: 'package.json',
+              version_source: 'lock',
+              origins: [],
+            },
           },
-        }],
+        ],
       })}
     />,
   );
@@ -371,13 +393,25 @@ it('FR-10: dependency (ecosystem/package@version) выводится', () => {
 
 it('FR-10: vulnerability_id выводится', () => {
   const base: Evidence = {
-    id: 'e1', source: 'osv', kind: 'vuln', description: 'CVE',
-    path: null, revision: null, url: null, run_id: null, attempt: null,
-    dependency: null, vulnerability_id: null, secret_match_type: null,
+    id: 'e1',
+    source: 'osv',
+    kind: 'vuln',
+    description: 'CVE',
+    path: null,
+    revision: null,
+    url: null,
+    run_id: null,
+    attempt: null,
+    dependency: null,
+    vulnerability_id: null,
+    secret_match_type: null,
   };
   render(
     <MetricDetails
-      metric={makeMetric({ raw_value: 1, evidence: [{ ...base, vulnerability_id: 'CVE-2024-1234' }] })}
+      metric={makeMetric({
+        raw_value: 1,
+        evidence: [{ ...base, vulnerability_id: 'CVE-2024-1234' }],
+      })}
     />,
   );
   expect(screen.getByText(/vuln: CVE-2024-1234/)).toBeTruthy();
@@ -385,24 +419,39 @@ it('FR-10: vulnerability_id выводится', () => {
 
 it('FR-10: секрет не показывает run/dependency/vulnerability', () => {
   const base: Evidence = {
-    id: 'e1', source: 'git', kind: 'secret', description: 'leak',
-    path: 'src/index.ts', revision: 'abc123', url: null, run_id: null, attempt: null,
-    dependency: null, vulnerability_id: null, secret_match_type: null,
+    id: 'e1',
+    source: 'git',
+    kind: 'secret',
+    description: 'leak',
+    path: 'src/index.ts',
+    revision: 'abc123',
+    url: null,
+    run_id: null,
+    attempt: null,
+    dependency: null,
+    vulnerability_id: null,
+    secret_match_type: null,
   };
   render(
     <MetricDetails
       metric={makeMetric({
         raw_value: 1,
-        evidence: [{
-          ...base,
-          secret_match_type: 'aws_key',
-          run_id: '12345',
-          dependency: {
-            ecosystem: 'npm', package: 'lodash', version: '4.17.21',
-            manifest_path: 'package.json', version_source: 'lock', origins: [],
+        evidence: [
+          {
+            ...base,
+            secret_match_type: 'aws_key',
+            run_id: '12345',
+            dependency: {
+              ecosystem: 'npm',
+              package: 'lodash',
+              version: '4.17.21',
+              manifest_path: 'package.json',
+              version_source: 'lock',
+              origins: [],
+            },
+            vulnerability_id: 'CVE-2024-1234',
           },
-          vulnerability_id: 'CVE-2024-1234',
-        }],
+        ],
       })}
     />,
   );
@@ -421,9 +470,18 @@ it('FR-10: пустой evidence при reason: null → «причина не �
 
 it('FR-10: TEST_PRESENCE показывает не более 10 путей', () => {
   const base: Evidence = {
-    id: 'e', source: 'git', kind: 'test', description: 'test file',
-    path: null, revision: null, url: null, run_id: null, attempt: null,
-    dependency: null, vulnerability_id: null, secret_match_type: null,
+    id: 'e',
+    source: 'git',
+    kind: 'test',
+    description: 'test file',
+    path: null,
+    revision: null,
+    url: null,
+    run_id: null,
+    attempt: null,
+    dependency: null,
+    vulnerability_id: null,
+    secret_match_type: null,
   };
   const many: Evidence[] = Array.from({ length: 15 }, (_, i) => ({
     ...base,
@@ -433,8 +491,11 @@ it('FR-10: TEST_PRESENCE показывает не более 10 путей', ()
   render(
     <MetricDetails
       metric={makeMetric({
-        id: 'TEST_PRESENCE', raw_value: true,
-        evidence: many, evidence_total: 15, evidence_limited: false,
+        id: 'TEST_PRESENCE',
+        raw_value: true,
+        evidence: many,
+        evidence_total: 15,
+        evidence_limited: false,
       })}
     />,
   );

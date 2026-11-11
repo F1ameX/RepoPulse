@@ -40,9 +40,7 @@ export function EvidenceList({
           return (
             <li key={ev.id}>
               <span>{ev.secret_match_type ?? ev.description}</span>
-              {!secret && (
-                <span className={styles.mono}>{` (источник: ${ev.source})`}</span>
-              )}
+              {!secret && <span className={styles.mono}>{` (источник: ${ev.source})`}</span>}
               {ev.path && <span className={styles.mono}>{` [${ev.path}]`}</span>}
               {ev.revision && <span className={styles.mono}>{` rev: ${ev.revision}`}</span>}
               {!secret && ev.run_id && (
@@ -80,8 +78,7 @@ export function EvidenceList({
         <p className={styles.hint}>
           Показано {visible.length}
           {truncated && ` из ${evidence.length}`} оснований
-          {limited && '; список ограничен профилем'}.
-          {total !== null && ` Всего: ${total}.`}
+          {limited && '; список ограничен профилем'}.{total !== null && ` Всего: ${total}.`}
         </p>
       )}
     </div>
