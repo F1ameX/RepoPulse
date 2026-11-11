@@ -26,7 +26,7 @@ func Run(ctx context.Context) error {
 // RunWithInputs assembles collected inputs before invoking a real calculator.
 // The worker publishes snapshot/report/completed together through storage.
 func RunWithInputs(ctx context.Context, collectors []snapshot.Collector, calculator snapshot.Calculator) error {
-	return RunWithProcessor(ctx, snapshot.NewProcessor(collectors, calculator))
+	return RunWithProcessor(ctx, newInputProcessor(collectors, calculator))
 }
 
 // RunWithProcessor is wired to real normalization/calculation adapters as those

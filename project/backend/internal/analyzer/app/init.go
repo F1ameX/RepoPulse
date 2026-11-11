@@ -7,10 +7,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	gitreader "github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/git"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/osv"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/repository"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/snapshot"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/storage"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/worker"
 )
+
+func newInputProcessor(collectors []snapshot.Collector, calculator snapshot.Calculator) *snapshot.Processor {
+	return snapshot.NewProcessorWithOSV(collectors, calculator, osv.NewClient(nil))
+}
 
 // openRepository checks the shared schema; Compose or the developer applies
 // migrations before starting the service.
