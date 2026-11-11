@@ -1,0 +1,56 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "TEST-06",
+  "title": "Доказательства ограничены десятью путями",
+  "requirement": "FR-20",
+  "input": {
+    "tree_status": "complete",
+    "source_files": [
+      "src/app.py"
+    ],
+    "files": [
+      "src/app.py",
+      "tests/test_case_01.py",
+      "tests/test_case_02.py",
+      "tests/test_case_03.py",
+      "tests/test_case_04.py",
+      "tests/test_case_05.py",
+      "tests/test_case_06.py",
+      "tests/test_case_07.py",
+      "tests/test_case_08.py",
+      "tests/test_case_09.py",
+      "tests/test_case_10.py",
+      "tests/test_case_11.py",
+      "tests/test_case_12.py"
+    ]
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "TEST_PRESENCE": {
+        "raw_value": true,
+        "normalized_score": 100,
+        "status": "complete",
+        "reason": null,
+        "evidence_paths": [
+          "tests/test_case_01.py",
+          "tests/test_case_02.py",
+          "tests/test_case_03.py",
+          "tests/test_case_04.py",
+          "tests/test_case_05.py",
+          "tests/test_case_06.py",
+          "tests/test_case_07.py",
+          "tests/test_case_08.py",
+          "tests/test_case_09.py",
+          "tests/test_case_10.py"
+        ]
+      }
+    }
+  },
+  "notes": [
+    "Проверка лимита 10 evidence paths. Если порядок путей контрактом не закреплён, сравнивать множество путей, а не порядок."
+  ]
+}

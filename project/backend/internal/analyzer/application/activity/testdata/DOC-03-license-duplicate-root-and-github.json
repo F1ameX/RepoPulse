@@ -1,0 +1,37 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "DOC-03",
+  "title": "LICENSE продублирован в root и .github",
+  "requirement": "FR-19",
+  "input": {
+    "tree_status": "complete",
+    "files": [
+      "LICENSE",
+      ".github/LICENSE",
+      "CONTRIBUTING.md"
+    ]
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "DOC_README": {
+        "raw_value": false,
+        "normalized_score": 0,
+        "status": "complete",
+        "reason": null
+      },
+      "DOC_SUPPORT_SHARE": {
+        "raw_value": 0.6666666666666666,
+        "normalized_score": 66.7,
+        "status": "complete",
+        "reason": null
+      }
+    }
+  },
+  "notes": [
+    "LICENSE учитывается один раз, даже если найден в нескольких допустимых местах. Нормализованное значение показано как процент от 100, округление только для отображения."
+  ]
+}

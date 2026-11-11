@@ -1,0 +1,33 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "TEST-02",
+  "title": "Есть исходный код, тестовых файлов нет",
+  "requirement": "FR-20",
+  "input": {
+    "tree_status": "complete",
+    "source_files": [
+      "src/main.py",
+      "src/utils.py"
+    ],
+    "files": [
+      "src/main.py",
+      "src/utils.py"
+    ]
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "TEST_PRESENCE": {
+        "raw_value": false,
+        "normalized_score": 0,
+        "status": "complete",
+        "reason": null,
+        "evidence_paths": []
+      }
+    }
+  },
+  "notes": []
+}

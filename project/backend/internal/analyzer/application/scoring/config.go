@@ -60,8 +60,8 @@ type Engine struct{ config configuration }
 func Default() (*Engine, error) { return Load(bytes.NewReader(defaultConfig)) }
 
 // Load rejects missing weights/parameters and unknown or duplicate metric IDs.
-// The current engine implements the activity category; the other four category
-// definitions are checked now so later calculators use the same normative config.
+// Category definitions share the normative configuration, including those
+// whose metrics are implemented in later sprints.
 func Load(reader io.Reader) (*Engine, error) {
 	var cfg configuration
 	decoder := json.NewDecoder(reader)
@@ -86,6 +86,16 @@ func (c configuration) validate() error {
 		c.Platform != "github" || c.WindowDays != 140 || c.PeriodDays != 7 || c.MaxPeriods != 20 ||
 		c.DisplayDecimalPlaces != 1 || c.ScoreMetricCount != 12 || len(c.Categories) != 5 {
 		return invalid("configuration metadata")
+	}
+	if len(c.SupportingDocuments) != 3 {
+		return invalid("supporting documents")
+	}
+	documents := map[string]bool{}
+	for _, name := range c.SupportingDocuments {
+		if !domain.ValidEvidencePath(name) || strings.Contains(name, "/") || documents[name] {
+			return invalid("supporting document name")
+		}
+		documents[name] = true
 	}
 	expected := map[string]map[string]string{
 		"activity":      {"ACT_COMMIT_FREQ": "log", "ACT_DAYS_SINCE_LAST": "decay", "ACT_TREND": "trend"},

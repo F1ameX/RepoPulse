@@ -168,8 +168,7 @@ func (e *Engine) ActivityFromInputs(at time.Time, window domain.Window, versions
 			break
 		}
 	}
-	category := domain.Category{ID: "activity", Metrics: []domain.Metric{}, Coverage: domain.Coverage{Total: len(cfg.Metrics)}, Explanation: "Оценка наблюдаемой активности основной ветки; не гарантирует качество кода."}
-	var weighted, weights float64
+	metrics := make([]domain.Metric, 0, len(cfg.Metrics))
 	for _, spec := range cfg.Metrics {
 		input, ok := byID[spec.ID]
 		if !ok {
@@ -181,42 +180,12 @@ func (e *Engine) ActivityFromInputs(at time.Time, window domain.Window, versions
 		}
 		threshold := e.config.FindingThresholds[spec.ID]
 		metric := domain.Metric{Input: input, NormalizedScore: score, RuleVersion: e.config.MethodologyVersion, Rule: e.formula(spec), Threshold: &threshold, Explanation: "Баллы рассчитаны по методике №909 без промежуточного округления."}
-		if score != nil {
-			category.Coverage.Calculated++
-			nextWeight := weights + spec.Weight
-			weighted += (*score - weighted) * (spec.Weight / nextWeight)
-			weights = nextWeight
-		} else {
+		if score == nil {
 			metric.Explanation = "Численная оценка отсутствует: см. полноту и причину входа."
 		}
-		switch input.Status {
-		case "partial":
-			category.Coverage.Partial++
-		case "unavailable":
-			category.Coverage.Unavailable++
-		case "not_applicable":
-			category.Coverage.NotApplicable++
-		}
-		category.Metrics = append(category.Metrics, metric)
+		metrics = append(metrics, metric)
 	}
-	category.Coverage.Percentage = float64(category.Coverage.Calculated) * 100 / float64(category.Coverage.Total)
-	switch {
-	case category.Coverage.Calculated == category.Coverage.Total:
-		category.Status = "complete"
-	case category.Coverage.Calculated > 0:
-		category.Status = "partial"
-		category.Reason = reason("INCOMPLETE_METRICS", "Доступны не все метрики активности")
-	case category.Coverage.NotApplicable == category.Coverage.Total:
-		category.Status = "not_applicable"
-		category.Reason = reason("NO_APPLICABLE_METRICS", "Нет применимых метрик активности")
-	default:
-		category.Status = "unavailable"
-		category.Reason = reason("NO_DATA", "Нет достаточных данных для оценки активности")
-	}
-	if weights > 0 {
-		category.Score = pointer(weighted)
-	}
-	return category, nil
+	return summarizeCategory(cfg, metrics, "активности", "Оценка наблюдаемой активности основной ветки; не гарантирует качество кода."), nil
 }
 
 func (e *Engine) checkContext(at time.Time, window domain.Window, versions domain.Versions) error {

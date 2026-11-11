@@ -138,6 +138,13 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 				source.Reason = &domain.Reason{Code: vector.Input.Reason, Message: "Обход истории прерван", CannotConclude: "Полная активность неизвестна"}
 			}
 			data := domain.GitData{Repository: a.Repository, Sources: []domain.SourceState{source}}
+			withTree := strings.HasPrefix(filepath.Base(path), "ACT-01")
+			if withTree {
+				data.Sources = append(data.Sources, domain.SourceState{Source: "git", Scope: "tree", Status: "complete", ObtainedAt: &vector.Input.At})
+				for _, name := range []string{"README.md", "LICENSE", ".github/LICENSE", "src/main.go", "src/main_test.go"} {
+					data.Files = append(data.Files, domain.GitFile{Path: name, Mode: "100644"})
+				}
+			}
 			// ACT-06's expected last-commit score assumes independent proof of
 			// the pinned walk, as documented by the scoring golden-vector tests.
 			data.MainWalkComplete = vector.Input.Status == "partial"
@@ -216,6 +223,17 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 				}
 				if !sameNumber(metric.NormalizedScore, score) {
 					t.Fatalf("%s score=%v want %v", metric.Input.ID, metric.NormalizedScore, score)
+				}
+			}
+			if withTree {
+				docs, tests := report.Categories[1], report.Categories[2]
+				share := docs.Metrics[1]
+				test := tests.Metrics[0]
+				if docs.ID != "documentation" || tests.ID != "testing" || report.Coverage.Calculated != 6 ||
+					share.NormalizedScore == nil || *share.NormalizedScore != 33.3 || len(share.Input.Evidence) != 2 ||
+					test.NormalizedScore == nil || *test.NormalizedScore != 100 || len(test.Input.Evidence) != 1 ||
+					test.Input.Evidence[0].Path == nil || *test.Input.Evidence[0].Path != "src/main_test.go" {
+					t.Fatalf("tree evidence or scores changed at HTTP boundary: docs=%+v tests=%+v", docs, tests)
 				}
 			}
 			if strings.Contains(response.Body.String(), owner) || !git.session.closed {

@@ -1,0 +1,43 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "TEST-05",
+  "title": "Проверка распознавания разных шаблонов тестов",
+  "requirement": "FR-20",
+  "input": {
+    "tree_status": "complete",
+    "source_files": [
+      "src/app.js"
+    ],
+    "files": [
+      "src/app.js",
+      "src/app.test.js",
+      "lib/util_spec.py",
+      "test_api.py",
+      "__tests__/button.jsx",
+      "spec/router_spec.rb"
+    ]
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "TEST_PRESENCE": {
+        "raw_value": true,
+        "normalized_score": 100,
+        "status": "complete",
+        "reason": null,
+        "evidence_paths": [
+          "src/app.test.js",
+          "test_api.py",
+          "__tests__/button.jsx",
+          "spec/router_spec.rb"
+        ]
+      }
+    }
+  },
+  "notes": [
+    "lib/util_spec.py не соответствует разрешённым шаблонам. spec/router_spec.rb учитывается по каталогу spec. Остальные допустимые пути сохранены."
+  ]
+}

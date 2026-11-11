@@ -1,0 +1,34 @@
+{
+  "fixture_version": "1.0.1",
+  "case_id": "DOC-01",
+  "title": "README в корне",
+  "requirement": "FR-19",
+  "input": {
+    "tree_status": "complete",
+    "files": [
+      "README.md",
+      "src/main.go"
+    ]
+  },
+  "expected": {
+    "input_completeness": {
+      "status": "complete",
+      "reason": null
+    },
+    "metrics": {
+      "DOC_README": {
+        "raw_value": true,
+        "normalized_score": 100,
+        "status": "complete",
+        "reason": null
+      },
+      "DOC_SUPPORT_SHARE": {
+        "raw_value": 0.0,
+        "normalized_score": 0,
+        "status": "complete",
+        "reason": null
+      }
+    }
+  },
+  "notes": []
+}
