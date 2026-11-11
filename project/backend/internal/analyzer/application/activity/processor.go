@@ -103,7 +103,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 		id          string
 		from, until int
 	}{{"security", 6, 9}, {"ci_cd", 9, 12}} {
-		unknown := domain.Category{ID: spec.id, Status: "unavailable", Reason: pending,
+		unknown := domain.Category{ID: spec.id, Status: "unavailable", Reason: pending, Explanation: pending.Message,
 			Coverage: domain.Coverage{Total: spec.until - spec.from, Unavailable: spec.until - spec.from}, Metrics: []domain.Metric{}}
 		for _, input := range data.Inputs[spec.from:spec.until] {
 			unknown.Metrics = append(unknown.Metrics, domain.Metric{Input: input, RuleVersion: a.Versions.Methodology,
