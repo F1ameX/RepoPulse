@@ -1,5 +1,5 @@
 import type { Category, CategoryId } from '@/types';
-import { formatCoverage, roundHalfUp, STATUS_LABELS } from '@/lib/metricFormatting';
+import { formatCoverage, isKnownStatus, roundHalfUp, STATUS_LABELS } from '@/lib/metricFormatting';
 import { MetricDetails } from './MetricDetails';
 import styles from './Analysis.module.css';
 
@@ -33,6 +33,20 @@ export function CategoryCard({
   defaultOpen?: boolean;
 }) {
   const label = title ?? CATEGORY_LABELS[category.id] ?? category.id;
+
+  if (!isKnownStatus(category.status)) {
+    return (
+      <section className={styles.categoryCard} aria-label={`Категория: ${label}`}>
+        <header className={styles.categoryHeader}>
+          <h3 className={styles.categoryTitle}>{label}</h3>
+        </header>
+        <p className={styles.naReason} role="alert">
+          Не удалось отобразить категорию: отсутствует состояние полноты данных.
+        </p>
+      </section>
+    );
+  }
+
   const hasScore = category.score !== null;
   const scoreText = hasScore ? roundHalfUp(category.score!, 1) : emptyScoreLabel(category);
 
@@ -49,7 +63,7 @@ export function CategoryCard({
       <div className={styles.categoryMeta}>
         <div>
           <strong>Состояние:</strong>{' '}
-          <span className={styles.mono}>{STATUS_LABELS[category.status] ?? category.status}</span>
+          <span className={styles.mono}>{STATUS_LABELS[category.status]}</span>
         </div>
         <div>
           <strong>Покрытие:</strong> {formatCoverage(category.coverage)}

@@ -7,16 +7,29 @@ export const STATUS_LABELS: Record<DataStatus, string> = {
   not_applicable: 'Не применимо',
 };
 
-export const METRIC_LABELS: Partial<Record<MetricId, string>> = {
+export const METRIC_LABELS: Record<MetricId, string> = {
   ACT_COMMIT_FREQ: 'Частота коммитов',
   ACT_DAYS_SINCE_LAST: 'Дней с последнего коммита',
   ACT_TREND: 'Тренд активности',
+  DOC_README: 'README',
+  DOC_SUPPORT_SHARE: 'Доля поддерживающих файлов',
+  TEST_PRESENCE: 'Наличие тестов',
+  SEC_SECRETS: 'Секреты',
+  SEC_VULN_RISK: 'Риск уязвимостей',
+  SEC_SAST: 'SAST',
+  CI_PRESENT: 'Наличие CI',
+  CI_SUCCESS_RATE: 'Успешность CI',
+  CI_REQUIRED_CHECKS: 'Обязательные проверки CI',
 };
 
 const PERCENTAGE_IDS: ReadonlySet<MetricId> = new Set<MetricId>([
   'DOC_SUPPORT_SHARE',
   'CI_SUCCESS_RATE',
 ]);
+
+export function isKnownStatus(value: unknown): value is DataStatus {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(STATUS_LABELS, value);
+}
 
 export function roundHalfUp(value: number, decimals: number): string {
   if (value === 0) return (0).toFixed(decimals);

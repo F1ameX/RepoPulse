@@ -502,3 +502,62 @@ it('FR-10: TEST_PRESENCE показывает не более 10 путей', ()
   expect(screen.getAllByText(/источник: git/)).toHaveLength(10);
   expect(screen.getByText(/Показано 10 из 15/)).toBeTruthy();
 });
+
+it('FR-10: DOC_README показывает название и ID', () => {
+  render(<MetricDetails metric={makeMetric({ id: 'DOC_README', raw_value: true })} />);
+  expect(screen.getByText('README')).toBeTruthy();
+  expect(screen.getByText('DOC_README')).toBeTruthy();
+});
+
+it('FR-10: TEST_PRESENCE показывает название и ID', () => {
+  render(<MetricDetails metric={makeMetric({ id: 'TEST_PRESENCE', raw_value: false })} />);
+  expect(screen.getByText('Наличие тестов')).toBeTruthy();
+  expect(screen.getByText('TEST_PRESENCE')).toBeTruthy();
+});
+
+it('FR-10: DOC_SUPPORT_SHARE показывает название и ID', () => {
+  render(<MetricDetails metric={makeMetric({ id: 'DOC_SUPPORT_SHARE', raw_value: 0.5 })} />);
+  expect(screen.getByText('Доля поддерживающих файлов')).toBeTruthy();
+  expect(screen.getByText('DOC_SUPPORT_SHARE')).toBeTruthy();
+});
+
+it('FR-10: SEC_SAST, CI_PRESENT и CI_REQUIRED_CHECKS тоже подписаны', () => {
+  const { rerender } = render(
+    <MetricDetails metric={makeMetric({ id: 'SEC_SAST', raw_value: false })} />,
+  );
+  expect(screen.getByText('SAST')).toBeTruthy();
+  expect(screen.getByText('SEC_SAST')).toBeTruthy();
+
+  rerender(<MetricDetails metric={makeMetric({ id: 'CI_PRESENT', raw_value: true })} />);
+  expect(screen.getByText('Наличие CI')).toBeTruthy();
+  expect(screen.getByText('CI_PRESENT')).toBeTruthy();
+
+  rerender(<MetricDetails metric={makeMetric({ id: 'CI_REQUIRED_CHECKS', raw_value: false })} />);
+  expect(screen.getByText('Обязательные проверки CI')).toBeTruthy();
+  expect(screen.getByText('CI_REQUIRED_CHECKS')).toBeTruthy();
+});
+
+it('FR-13: отсутствующий input.status → ошибка в блоке, без значения и N/A', () => {
+  const metric = makeMetric({ raw_value: 12 });
+  (metric.input as unknown as { status: unknown }).status = undefined;
+  render(<MetricDetails metric={metric} />);
+  expect(screen.getByRole('alert').textContent).toMatch(/отсутствует состояние полноты данных/i);
+  expect(screen.queryByText('12.00')).toBeNull();
+  expect(screen.queryByText('N/A')).toBeNull();
+  expect(screen.queryByText('Не рассчитан')).toBeNull();
+});
+
+it('FR-13: неизвестное значение input.status → ошибка в блоке', () => {
+  const metric = makeMetric({ raw_value: 12 });
+  (metric.input as unknown as { status: unknown }).status = 'broken';
+  render(<MetricDetails metric={metric} />);
+  expect(screen.getByRole('alert').textContent).toMatch(/отсутствует состояние полноты данных/i);
+  expect(screen.queryByText('12.00')).toBeNull();
+});
+
+it('FR-13: отсутствующий category.status → ошибка в карточке', () => {
+  const category = makeCategory();
+  (category as unknown as { status: unknown }).status = undefined;
+  render(<CategoryCard category={category} />);
+  expect(screen.getByRole('alert').textContent).toMatch(/отсутствует состояние полноты данных/i);
+});

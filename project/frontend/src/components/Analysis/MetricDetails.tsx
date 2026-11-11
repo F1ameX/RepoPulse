@@ -3,6 +3,7 @@ import { formatUtc } from '@/lib/analysisView';
 import {
   formatRawValue,
   formatSample,
+  isKnownStatus,
   METRIC_LABELS,
   roundHalfUp,
   STATUS_LABELS,
@@ -23,6 +24,22 @@ export function MetricDetails({
   const title = label ?? METRIC_LABELS[input.id] ?? input.id;
   const unit = input.unit;
 
+  if (!isKnownStatus(input.status)) {
+    return (
+      <div className={styles.metricRow}>
+        <dt>
+          {title}
+          <span className={styles.metricId}>{input.id}</span>
+        </dt>
+        <dd className={styles.metricDetails}>
+          <div className={styles.naReason} role="alert">
+            Не удалось отобразить метрику: отсутствует состояние полноты данных.
+          </div>
+        </dd>
+      </div>
+    );
+  }
+
   const isUnavailable =
     input.status === 'unavailable' ||
     input.status === 'not_applicable' ||
@@ -33,10 +50,7 @@ export function MetricDetails({
   const showUnit = !isUnavailable && !!unit && !displayRaw.endsWith('%');
 
   const reason = input.reason
-    ? {
-        specific: input.reason.message,
-        general: input.reason.cannot_conclude,
-      }
+    ? { specific: input.reason.message, general: input.reason.cannot_conclude }
     : null;
 
   const evidenceLimit = input.id === 'TEST_PRESENCE' ? 10 : undefined;
@@ -70,7 +84,7 @@ export function MetricDetails({
         )}
         <div>
           <strong>Состояние:</strong>{' '}
-          <span className={styles.mono}>{STATUS_LABELS[input.status] ?? input.status}</span>
+          <span className={styles.mono}>{STATUS_LABELS[input.status]}</span>
         </div>
         <div>
           <strong>Окно:</strong>{' '}
