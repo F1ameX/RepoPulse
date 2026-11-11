@@ -10,9 +10,17 @@ import {
 import { EvidenceList } from './EvidenceList';
 import styles from './Analysis.module.css';
 
-export function MetricDetails({ metric, sha }: { metric: Metric; sha?: string | null }) {
+export function MetricDetails({
+  metric,
+  sha,
+  label,
+}: {
+  metric: Metric;
+  sha?: string | null;
+  label?: string;
+}) {
   const { input } = metric;
-  const label = METRIC_LABELS[input.id] ?? input.id;
+  const title = label ?? METRIC_LABELS[input.id] ?? input.id;
   const unit = input.unit;
 
   const isUnavailable =
@@ -34,7 +42,7 @@ export function MetricDetails({ metric, sha }: { metric: Metric; sha?: string | 
   return (
     <div className={styles.metricRow}>
       <dt>
-        {label}
+        {title}
         <span className={styles.metricId}>{input.id}</span>
       </dt>
       <dd className={styles.metricDetails}>

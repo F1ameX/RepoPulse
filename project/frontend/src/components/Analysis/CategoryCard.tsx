@@ -3,7 +3,7 @@ import { formatCoverage, roundHalfUp, STATUS_LABELS } from '@/lib/metricFormatti
 import { MetricDetails } from './MetricDetails';
 import styles from './Analysis.module.css';
 
-const CATEGORY_LABELS: Record<CategoryId, string> = {
+const CATEGORY_LABELS: Partial<Record<CategoryId, string>> = {
   activity: 'Активность',
   documentation: 'Документация',
   testing: 'Тестирование',
@@ -14,13 +14,15 @@ const CATEGORY_LABELS: Record<CategoryId, string> = {
 export function CategoryCard({
   category,
   sha,
+  title,
   defaultOpen = false,
 }: {
   category: Category;
   sha?: string | null;
+  title?: string;
   defaultOpen?: boolean;
 }) {
-  const label = CATEGORY_LABELS[category.id] ?? category.id;
+  const label = title ?? CATEGORY_LABELS[category.id] ?? category.id;
   const hasScore = category.score !== null;
 
   return (
