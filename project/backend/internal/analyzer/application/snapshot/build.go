@@ -116,7 +116,7 @@ func Build(a domain.Analysis, git domain.GitData, collections ...Collection) (do
 	if err != nil {
 		return domain.SnapshotData{}, err
 	}
-	data.Dependencies, err = dependencies(data.Dependencies)
+	data.Dependencies, err = NormalizeDependencies(data.Dependencies)
 	if err != nil {
 		return domain.SnapshotData{}, err
 	}

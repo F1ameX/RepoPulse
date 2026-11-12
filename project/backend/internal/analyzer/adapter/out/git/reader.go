@@ -129,6 +129,15 @@ func ReasonCode(err error) string {
 // command receives only explicit arguments and a clean environment. No user Git
 // configuration, credential helper, pager, textconv or shell command is inherited.
 func (s *Session) command(ctx context.Context, input string, limit int64, args ...string) ([]byte, error) {
+	output := &limitedBuffer{max: limit}
+	err := s.runCommand(ctx, input, output, args...)
+	if output.exceeded && ReasonCode(err) != "GIT_TIME_LIMIT" {
+		return output.Bytes(), &readError{"GIT_OUTPUT_LIMIT"}
+	}
+	return output.Bytes(), err
+}
+
+func (s *Session) runCommand(ctx context.Context, input string, output io.Writer, args ...string) error {
 	prefix := []string{"--no-pager", "--git-dir=" + s.dir, "-c", "core.hooksPath=" + filepath.Join(s.root, "hooks"), "-c", "core.fsmonitor=false", "-c", "credential.helper=", "-c", "credential.interactive=false", "-c", "protocol.allow=never", "-c", "protocol.http.allow=always", "-c", "http.followRedirects=false", "-c", "gc.auto=0", "-c", "fetch.unpackLimit=1", "-c", "fetch.fsckObjects=true", "-c", "submodule.recurse=false"}
 	cmd := exec.CommandContext(ctx, s.reader.binary, append(prefix, args...)...)
 	cmd.Dir = s.root
@@ -137,19 +146,15 @@ func (s *Session) command(ctx context.Context, input string, limit int64, args .
 	cmd.Stderr = io.Discard
 	cmd.WaitDelay = 250 * time.Millisecond
 	isolateProcess(cmd)
-	output := &limitedBuffer{max: limit}
 	cmd.Stdout = output
 	err := cmd.Run()
 	if ctx.Err() != nil {
-		return output.Bytes(), &readError{"GIT_TIME_LIMIT"}
-	}
-	if output.exceeded {
-		return output.Bytes(), &readError{"GIT_OUTPUT_LIMIT"}
+		return &readError{"GIT_TIME_LIMIT"}
 	}
 	if err != nil {
-		return output.Bytes(), &readError{"GIT_READ_FAILED"}
+		return &readError{"GIT_READ_FAILED"}
 	}
-	return output.Bytes(), nil
+	return nil
 }
 
 type limitedBuffer struct {
@@ -353,57 +358,7 @@ func source(scope string, count int, code, failureState string) domain.SourceSta
 }
 
 func (s *Session) readObjects(ctx context.Context, fetchCode string, empty bool) {
-	sha := s.data.Repository.CommitSHA
-	if sha == nil {
-		code := fetchCode
-		if code == "" && !empty {
-			code = "GIT_REVISION_UNAVAILABLE"
-		}
-		if ctx.Err() != nil {
-			code = "GIT_TIME_LIMIT"
-		}
-		s.data.Sources = append(s.data.Sources, source("tree", 0, code, "unavailable"))
-	} else {
-		kind, kindErr := s.command(ctx, "", 64, "cat-file", "-t", *sha)
-		tree, err := s.command(ctx, "", 100<<20, "ls-tree", "-r", "-l", "-z", "--full-tree", *sha)
-		treeCode := ""
-		if err != nil {
-			treeCode = "GIT_TREE_INTERRUPTED"
-		}
-		if kindErr != nil || strings.TrimSpace(string(kind)) != "commit" {
-			treeCode = "GIT_REVISION_UNAVAILABLE"
-			tree = nil
-		}
-		for _, record := range bytes.Split(tree, []byte{0}) {
-			if ctx.Err() != nil {
-				break
-			}
-			if len(record) == 0 {
-				continue
-			}
-			header, path, ok := bytes.Cut(record, []byte{'\t'})
-			fields := strings.Fields(string(header))
-			if !ok || len(fields) != 4 || !hash(fields[2]) || !utf8.Valid(path) {
-				treeCode = "GIT_TREE_INVALID"
-				continue
-			}
-			if len(s.data.Files) >= s.reader.limits.Paths {
-				treeCode = "GIT_PATH_LIMIT"
-				break
-			}
-			size, _ := strconv.ParseInt(fields[3], 10, 64)
-			s.data.Files = append(s.data.Files, domain.GitFile{Path: string(path), Mode: fields[0], ObjectSHA: fields[2], Size: size})
-		}
-		if ctx.Err() != nil {
-			treeCode = "GIT_TIME_LIMIT"
-		}
-		state := "unavailable"
-		if len(s.data.Files) > 0 {
-			state = "partial"
-		}
-		s.data.Sources = append(s.data.Sources, source("tree", len(s.data.Files), treeCode, state))
-	}
-
+	s.readTree(ctx, fetchCode, empty)
 	s.readHistory(ctx, fetchCode, empty)
 }
 

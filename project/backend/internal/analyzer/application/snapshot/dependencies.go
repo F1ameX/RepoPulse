@@ -9,7 +9,9 @@ import (
 
 type dependencyKey struct{ ecosystem, name, version string }
 
-func dependencies(items []domain.Dependency) ([]domain.Dependency, error) {
+// NormalizeDependencies merges equal ecosystem/package/version tuples and their origins
+// in a stable order. The caller owns the input.
+func NormalizeDependencies(items []domain.Dependency) ([]domain.Dependency, error) {
 	byKey := map[dependencyKey]domain.Dependency{}
 	for _, item := range items {
 		if err := item.Validate(); err != nil {
