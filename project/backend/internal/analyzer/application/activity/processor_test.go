@@ -18,7 +18,8 @@ func (s controlSession) ReadBlob(context.Context, string) ([]byte, error) {
 }
 func (s controlSession) Close() error { return nil }
 
-func TestPartialHistoryPreservesIndependentLastCommitProof(t *testing.T) {
+func runningAnalysis(t *testing.T) domain.Analysis {
+	t.Helper()
 	body, err := os.ReadFile("../../../../../../contracts/examples/snapshot.json")
 	if err != nil {
 		t.Fatal(err)
@@ -27,8 +28,12 @@ func TestPartialHistoryPreservesIndependentLastCommitProof(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := domain.Analysis{ID: fixture.AnalysisID, SubmissionID: domain.NewID(), RequestID: domain.NewID(), Owner: fixture.Owner, Repository: fixture.Repository,
-		AssessmentAt: fixture.AssessmentAt, CreatedAt: fixture.AssessmentAt, Window: fixture.Window, Versions: fixture.Versions, Status: "running"}
+	return domain.Analysis{ID: fixture.AnalysisID, SubmissionID: domain.NewID(), RequestID: domain.NewID(), Owner: fixture.Owner, Repository: fixture.Repository,
+		AssessmentAt: fixture.AssessmentAt, CreatedAt: fixture.AssessmentAt, Window: fixture.Window, Versions: fixture.Versions, Status: "running", StartedAt: &fixture.AssessmentAt}
+}
+
+func TestPartialHistoryPreservesIndependentLastCommitProof(t *testing.T) {
+	a := runningAnalysis(t)
 	engine, err := scoring.Default()
 	if err != nil {
 		t.Fatal(err)

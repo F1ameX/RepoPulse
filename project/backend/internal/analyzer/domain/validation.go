@@ -49,7 +49,8 @@ func safeURL(raw *string) bool {
 		u.RawQuery == "" && u.Fragment == "" && !u.ForceQuery
 }
 
-func safePath(value string) bool {
+// ValidEvidencePath checks whether a repository-relative path can be stored as evidence.
+func ValidEvidencePath(value string) bool {
 	return value != "" && value != "." && !strings.ContainsAny(value, "\\\x00\r\n:") &&
 		!strings.HasPrefix(value, "/") && value != ".." && !strings.HasPrefix(value, "../") &&
 		path.Clean(value) == value
@@ -61,13 +62,13 @@ func dependencyKey(ecosystem, pkg, version string) string {
 
 func (d Dependency) Validate() error {
 	if (d.Ecosystem != "npm" && d.Ecosystem != "Maven" && d.Ecosystem != "Go") ||
-		d.Package == "" || d.Version == "" || !safePath(d.ManifestPath) || d.VersionSource == "" || len(d.Origins) == 0 {
+		d.Package == "" || d.Version == "" || !ValidEvidencePath(d.ManifestPath) || d.VersionSource == "" || len(d.Origins) == 0 {
 		return invalid("dependency")
 	}
 	found := false
 	seen := map[DependencyOrigin]bool{}
 	for _, origin := range d.Origins {
-		if !safePath(origin.ManifestPath) || origin.VersionSource == "" || seen[origin] {
+		if !ValidEvidencePath(origin.ManifestPath) || origin.VersionSource == "" || seen[origin] {
 			return invalid("dependency origins")
 		}
 		seen[origin] = true
@@ -115,7 +116,7 @@ func (m MetricInput) Validate() error {
 	seen := map[string]bool{}
 	for _, e := range m.Evidence {
 		if e.ID == "" || seen[e.ID] || (e.Source != "git" && e.Source != "github" && e.Source != "osv") ||
-			!safeURL(e.URL) || (e.Path != nil && !safePath(*e.Path)) ||
+			!safeURL(e.URL) || (e.Path != nil && !ValidEvidencePath(*e.Path)) ||
 			(e.Revision != nil && !shaPattern.MatchString(*e.Revision)) ||
 			(e.Attempt != nil && *e.Attempt < 1) {
 			return invalid("evidence")
