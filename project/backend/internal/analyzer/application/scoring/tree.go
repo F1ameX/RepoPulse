@@ -2,6 +2,7 @@ package scoring
 
 import (
 	"encoding/json"
+	"fmt"
 	"path"
 	"slices"
 	"strconv"
@@ -159,18 +160,17 @@ func (e *Engine) treeMetric(input domain.MetricInput, spec metricConfig) (domain
 		return domain.Metric{}, err
 	}
 	metric := domain.Metric{Input: input, RuleVersion: e.config.MethodologyVersion,
-		Rule: "true → 100, false → 0", Explanation: "Балл за наличие файла в дереве основной ветки."}
+		Rule: "true → 100, false → 0", Explanation: unscoredExplanation}
 	if spec.Normalization == "share" {
 		metric.Rule = "100 × число найденных видов / число видов в методике"
-		metric.Explanation = "Каждый вид сопровождающего документа учитывается один раз."
-	}
-	if input.ID == "TEST_PRESENCE" {
-		metric.Explanation = testExplanation
 	}
 	if threshold, exists := e.config.FindingThresholds[spec.ID]; exists {
 		metric.Threshold = &threshold
 	}
 	if input.Status != "complete" {
+		if input.ID == "TEST_PRESENCE" {
+			metric.Explanation += " " + testExplanation
+		}
 		return metric, nil
 	}
 	raw, _ := input.RawValue.MarshalJSON()
@@ -184,6 +184,16 @@ func (e *Engine) treeMetric(input domain.MetricInput, spec metricConfig) (domain
 		if *present {
 			score = 100
 		}
+		metric.Explanation = "Полная проверка корня дала 0 совпадений с именами README, поэтому балл равен 0."
+		if *present {
+			metric.Explanation = "README найден в корне репозитория, поэтому метрика даёт 100 баллов."
+		}
+		if input.ID == "TEST_PRESENCE" {
+			metric.Explanation = "Полная проверка дерева с исходниками дала 0 файловых признаков тестов, поэтому балл равен 0. " + testExplanation
+			if *present {
+				metric.Explanation = "В дереве найден файловый признак тестов, поэтому метрика даёт 100 баллов. " + testExplanation
+			}
+		}
 	case "share":
 		var share *float64
 		count, total := input.Sample.Numerator, input.Sample.Denominator
@@ -193,6 +203,8 @@ func (e *Engine) treeMetric(input domain.MetricInput, spec metricConfig) (domain
 			return domain.Metric{}, invalid("documentation share sample/raw_value mismatch")
 		}
 		score = *share * 100
+		metric.Explanation = fmt.Sprintf("Найдено %d из %d видов сопроводительных документов. Балл равен доле найденных видов, умноженной на 100. Каждый вид учитывается один раз.",
+			*count, *total)
 	}
 	metric.NormalizedScore = &score
 	return metric, nil

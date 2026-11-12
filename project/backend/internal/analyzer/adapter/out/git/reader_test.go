@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"io"
@@ -337,5 +338,57 @@ func TestGitTimeoutAndCancellationCleanTemporaryData(t *testing.T) {
 	entries, _ = os.ReadDir(reader.tempRoot)
 	if len(entries) != 0 {
 		t.Fatal("temporary Git data survived cancellation")
+	}
+}
+
+func TestTransportPreservesGzipUploadPackRequest(t *testing.T) {
+	const payload = "upload-pack request"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Header.Get("Content-Encoding") != "gzip" {
+			http.Error(w, "gzip header missing", http.StatusBadRequest)
+			return
+		}
+		reader, err := gzip.NewReader(req.Body)
+		if err != nil {
+			http.Error(w, "invalid gzip body", http.StatusBadRequest)
+			return
+		}
+		defer reader.Close()
+		body, err := io.ReadAll(reader)
+		if err != nil || string(body) != payload {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	proxy := &transport{client: upstream.Client(), upstream: upstream.URL, maximum: 1 << 20}
+	endpoint, closeProxy, err := proxy.serve(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeProxy()
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	if _, err := io.WriteString(writer, payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, endpoint+"/git-upload-pack", &compressed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
+	req.Header.Set("Content-Encoding", "gzip")
+	resp, err := upstream.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("compressed upload-pack request failed: HTTP %d", resp.StatusCode)
 	}
 }
