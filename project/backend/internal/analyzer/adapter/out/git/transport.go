@@ -86,7 +86,8 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 			return
 		}
 		request.ContentLength = r.ContentLength
-		for _, name := range []string{"Content-Type", "Accept", "Git-Protocol"} {
+		// Git may gzip the upload-pack request. Forward its encoding with the body.
+		for _, name := range []string{"Content-Type", "Content-Encoding", "Accept", "Git-Protocol"} {
 			if value := r.Header.Get(name); value != "" {
 				request.Header.Set(name, value)
 			}

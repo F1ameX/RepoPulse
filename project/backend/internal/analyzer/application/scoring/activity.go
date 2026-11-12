@@ -179,9 +179,12 @@ func (e *Engine) ActivityFromInputs(at time.Time, window domain.Window, versions
 			return domain.Category{}, err
 		}
 		threshold := e.config.FindingThresholds[spec.ID]
-		metric := domain.Metric{Input: input, NormalizedScore: score, RuleVersion: e.config.MethodologyVersion, Rule: e.formula(spec), Threshold: &threshold, Explanation: "Баллы рассчитаны по методике №909 без промежуточного округления."}
-		if score == nil {
-			metric.Explanation = "Численная оценка отсутствует: см. полноту и причину входа."
+		metric := domain.Metric{
+			Input: input, NormalizedScore: score, RuleVersion: e.config.MethodologyVersion,
+			Rule: e.formula(spec), Threshold: &threshold, Explanation: unscoredExplanation,
+		}
+		if score != nil {
+			metric.Explanation = activityExplanation(input, spec)
 		}
 		metrics = append(metrics, metric)
 	}
@@ -262,6 +265,24 @@ func (e *Engine) normalizeActivity(at time.Time, window domain.Window, input dom
 		}
 	}
 	return &result, nil
+}
+
+const unscoredExplanation = "В оценку категории входят только метрики с рассчитанным баллом."
+
+func activityExplanation(input domain.MetricInput, spec metricConfig) string {
+	switch input.ID {
+	case "ACT_COMMIT_FREQ":
+		return fmt.Sprintf("Частота рассчитана по числу коммитов в окне (%d) и его длине (%d недель). Чем выше частота, тем выше балл. Частота от %g коммитов в неделю даёт 100 баллов.",
+			*input.Sample.Numerator, *input.Sample.Denominator, *spec.Parameters.Max)
+	case "ACT_DAYS_SINCE_LAST":
+		days, _ := input.RawValue.MarshalJSON()
+		return fmt.Sprintf("Полных суток с последнего коммита — %s. Чем длиннее пауза, тем ниже балл. После %g суток он составляет около 37 из 100.",
+			days, *spec.Parameters.K)
+	case "ACT_TREND":
+		return fmt.Sprintf("Взвешенные суммы коммитов в более свежих и предыдущих неделях равны %d и %d. Чем выше их отношение, тем выше балл. При равных суммах метрика даёт %g из 100.",
+			*input.Sample.Numerator, *input.Sample.Denominator, *spec.Parameters.M0)
+	}
+	return ""
 }
 
 // The public contract stores the applied formula and actual configuration parameters.
