@@ -2,6 +2,9 @@ package domain
 
 import "time"
 
+// GitTreeScope identifies the pinned tree used by documentation and test inputs.
+const GitTreeScope = "tree"
+
 // GitData contains transient structural facts, never file/patch contents or
 // commit messages. A processor turns these into the normalized Snapshot contract.
 type GitData struct {
@@ -18,7 +21,7 @@ type GitData struct {
 }
 type GitFile struct {
 	Path, Mode, ObjectSHA string
-	Size                  int64
+	Size                  int64 // -1 for a submodule reference, which has no blob size.
 }
 type GitCommit struct {
 	SHA         string
