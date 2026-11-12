@@ -38,6 +38,16 @@ func (t *transport) state() (int64, string) {
 	return t.received, t.reason
 }
 
+// The optional tree fetch and the full fetch have separate outcomes but share
+// the same HTTP attempt and byte counters.
+func (t *transport) clearReason() {
+	t.requestMu.Lock()
+	defer t.requestMu.Unlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.reason = ""
+}
+
 func (t *transport) serve(ctx context.Context) (string, func(), error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

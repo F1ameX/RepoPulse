@@ -141,7 +141,7 @@ func (s *Session) runCommand(ctx context.Context, input string, output io.Writer
 	prefix := []string{"--no-pager", "--git-dir=" + s.dir, "-c", "core.hooksPath=" + filepath.Join(s.root, "hooks"), "-c", "core.fsmonitor=false", "-c", "credential.helper=", "-c", "credential.interactive=false", "-c", "protocol.allow=never", "-c", "protocol.http.allow=always", "-c", "http.followRedirects=false", "-c", "gc.auto=0", "-c", "fetch.unpackLimit=1", "-c", "fetch.fsckObjects=true", "-c", "submodule.recurse=false"}
 	cmd := exec.CommandContext(ctx, s.reader.binary, append(prefix, args...)...)
 	cmd.Dir = s.root
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "LANG=C", "LC_ALL=C", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=" + filepath.Join(s.root, "disabled-askpass"), "GIT_LFS_SKIP_SMUDGE=1"}
+	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "LANG=C", "LC_ALL=C", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=" + filepath.Join(s.root, "disabled-askpass"), "GIT_LFS_SKIP_SMUDGE=1", "GIT_NO_LAZY_FETCH=1"}
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Stderr = io.Discard
 	cmd.WaitDelay = 250 * time.Millisecond
@@ -244,6 +244,17 @@ func (r *Reader) Open(ctx context.Context, metadata domain.RepositoryMetadata) (
 		refState = "partial"
 	}
 	s.data.Sources = append(s.data.Sources, source("refs", len(refs), refCode, refState))
+	var pinnedFiles []domain.GitFile
+	var pinnedTree domain.SourceState
+	if refCode == "" && s.data.Repository.CommitSHA != nil {
+		pinnedFiles, pinnedTree = s.collectPinnedTree(acquire, local)
+		_, reason := transport.state()
+		if pinnedTree.Status == "" && reason == "GIT_TIME_LIMIT" && acquire.Err() == nil {
+			transport.clearReason()
+			pinnedFiles, pinnedTree = s.collectPinnedTree(acquire, local)
+		}
+		transport.clearReason()
+	}
 	fetchCode := refCode
 	if len(refs) > 0 || s.data.Repository.CommitSHA != nil {
 		var input strings.Builder
@@ -269,7 +280,13 @@ func (r *Reader) Open(ctx context.Context, metadata domain.RepositoryMetadata) (
 	}
 	// The Git budget covers local object traversal as well as the fetch.
 	empty := refCode == "" && headSHA == "" && len(refs) == 0
-	s.readObjects(acquire, fetchCode, empty)
+	s.readTree(acquire, fetchCode, empty, true)
+	tree := &s.data.Sources[len(s.data.Sources)-1]
+	if tree.Status != "complete" && (pinnedTree.Status == "complete" || len(pinnedFiles) > len(s.data.Files)) {
+		*tree = pinnedTree
+		s.data.Files = pinnedFiles
+	}
+	s.readHistory(acquire, fetchCode, empty)
 	fingerprint := sha256.New()
 	if s.data.Repository.CommitSHA != nil {
 		_, _ = io.WriteString(fingerprint, *s.data.Repository.CommitSHA)
@@ -355,11 +372,6 @@ func source(scope string, count int, code, failureState string) domain.SourceSta
 		state.Reason = &domain.Reason{Code: code, Message: "Сбор Git ограничен или прерван", CannotConclude: "Полнота зависимых показателей не подтверждена"}
 	}
 	return state
-}
-
-func (s *Session) readObjects(ctx context.Context, fetchCode string, empty bool) {
-	s.readTree(ctx, fetchCode, empty)
-	s.readHistory(ctx, fetchCode, empty)
 }
 
 func (s *Session) ReadBlob(ctx context.Context, objectSHA string) ([]byte, error) {
