@@ -35,7 +35,7 @@ func getReport(reports ReportService, resolver ContextResolver) http.HandlerFunc
 			return
 		}
 		if errors.Is(err, apidomain.ErrReportUnavailable) {
-			writeError(w, 503, "REPORT_UNAVAILABLE", "Сервис отчётов временно недоступен")
+			writeError(w, http.StatusServiceUnavailable, "INTERNAL_ERROR", "Не удалось загрузить отчёт")
 			return
 		}
 		if err != nil {

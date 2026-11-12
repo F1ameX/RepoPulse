@@ -77,7 +77,7 @@ func getAnalysis(service AnalysisService, resolver ContextResolver) http.Handler
 		if result.Status == "failed" {
 			failure := domain.Failure("ANALYSIS_FAILED", "")
 			if result.Error != nil {
-				failure = domain.Failure(result.Error.Code, result.Error.TraceID)
+				failure = result.Error.Sanitized()
 			}
 			response.Error = &apiError{Code: failure.Code, Message: failure.Message, TraceID: failure.TraceID, FieldErrors: []fieldError{}}
 		}

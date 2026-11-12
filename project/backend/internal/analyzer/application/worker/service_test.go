@@ -196,11 +196,17 @@ func TestWorkerFailuresAndCleanup(t *testing.T) {
 }
 
 func TestWorkerPreservesGitLimitsOnlyWhenNoUsefulResult(t *testing.T) {
-	for _, code := range []string{"GIT_TIME_LIMIT", "GIT_SIZE_LIMIT", "UNKNOWN_PROVIDER_ERROR"} {
+	for _, tc := range []struct{ reason, code, message string }{
+		{"GIT_TIME_LIMIT", "BUDGET_EXCEEDED", "Превышено время анализа"},
+		{"GIT_SIZE_LIMIT", "ANALYSIS_FAILED", "Репозиторий превышает ограничения анализа"},
+		{"GIT_PATH_LIMIT", "ANALYSIS_FAILED", "Репозиторий превышает ограничения анализа"},
+		{"GIT_COMMIT_LIMIT", "ANALYSIS_FAILED", "Репозиторий превышает ограничения анализа"},
+		{"UNKNOWN_PROVIDER_ERROR", "ANALYSIS_FAILED", "Не удалось получить данные для анализа"},
+	} {
 		for _, usable := range []bool{false, true} {
-			name := code + "/failed"
+			name := tc.reason + "/failed"
 			if usable {
-				name = code + "/partial"
+				name = tc.reason + "/partial"
 			}
 			t.Run(name, func(t *testing.T) {
 				process := processorFunc(func(context.Context, domain.Analysis, GitSession, func(string) error) (Output, error) {
@@ -210,7 +216,7 @@ func TestWorkerPreservesGitLimitsOnlyWhenNoUsefulResult(t *testing.T) {
 					return Output{}, nil
 				})
 				runner, q, git, published := setup(process, time.Second)
-				git.s.data.Sources[0].Reason = &domain.Reason{Code: code, Message: "private provider detail", CannotConclude: "token-must-not-leak"}
+				git.s.data.Sources[0].Reason = &domain.Reason{Code: tc.reason, Message: "private provider detail", CannotConclude: "token-must-not-leak"}
 				if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
 					t.Fatalf("worked=%v err=%v", worked, err)
 				}
@@ -218,19 +224,15 @@ func TestWorkerPreservesGitLimitsOnlyWhenNoUsefulResult(t *testing.T) {
 					t.Fatal("Git session was not cleaned up")
 				}
 				if usable {
-					if q.analysis.Status != "completed" || q.analysis.Error != nil || published.calls != 1 || published.output.Sources[0].Reason.Code != code {
+					if q.analysis.Status != "completed" || q.analysis.Error != nil || published.calls != 1 || published.output.Sources[0].Reason.Code != tc.reason {
 						t.Fatal("Git limit discarded the useful partial result")
 					}
 					return
 				}
-				want := code
-				if code == "UNKNOWN_PROVIDER_ERROR" {
-					want = "ANALYSIS_FAILED"
-				}
-				if q.analysis.Status != "failed" || q.analysis.Error == nil || q.analysis.Error.Code != want || published.calls != 0 {
+				if q.analysis.Status != "failed" || q.analysis.Error == nil || q.analysis.Error.Code != tc.code || published.calls != 0 {
 					t.Fatalf("incorrect terminal result: %+v", q.analysis)
 				}
-				if q.analysis.Error.Message == "private provider detail" || q.analysis.Error.TraceID != q.analysis.ID || len(q.analysis.Error.FieldErrors) != 0 {
+				if q.analysis.Error.Message != tc.message || q.analysis.Error.TraceID != q.analysis.ID || len(q.analysis.Error.FieldErrors) != 0 {
 					t.Fatal("unsafe collector details escaped into the terminal failure")
 				}
 			})
@@ -244,19 +246,19 @@ func (e failedSource) Error() string      { return "private provider detail" }
 func (e failedSource) ReasonCode() string { return e.code }
 
 func TestWorkerPreservesStructuredOpenLimitWithoutLeakingError(t *testing.T) {
-	for _, code := range []string{"GIT_TIME_LIMIT", "GIT_SIZE_LIMIT", "UNKNOWN_PROVIDER_ERROR"} {
-		t.Run(code, func(t *testing.T) {
+	for _, tc := range []struct{ reason, code, message string }{
+		{"GIT_TIME_LIMIT", "BUDGET_EXCEEDED", "Превышено время анализа"},
+		{"GIT_SIZE_LIMIT", "ANALYSIS_FAILED", "Репозиторий превышает ограничения анализа"},
+		{"UNKNOWN_PROVIDER_ERROR", "ANALYSIS_FAILED", "Не удалось завершить анализ"},
+	} {
+		t.Run(tc.reason, func(t *testing.T) {
 			runner, q, git, published := setup(nil, time.Second)
-			git.err = fmt.Errorf("private process path: %w", failedSource{code})
+			git.err = fmt.Errorf("private process path: %w", failedSource{tc.reason})
 			if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
 				t.Fatalf("worked=%v err=%v", worked, err)
 			}
-			want := code
-			if code == "UNKNOWN_PROVIDER_ERROR" {
-				want = "ANALYSIS_FAILED"
-			}
-			if q.analysis.Status != "failed" || q.analysis.Error == nil || q.analysis.Error.Code != want || published.calls != 0 ||
-				q.analysis.Error.Message != domain.Failure(want, q.analysis.ID).Message {
+			if q.analysis.Status != "failed" || q.analysis.Error == nil || q.analysis.Error.Code != tc.code || published.calls != 0 ||
+				q.analysis.Error.Message != tc.message {
 				t.Fatalf("unsafe or incorrect failure: %+v", q.analysis)
 			}
 		})

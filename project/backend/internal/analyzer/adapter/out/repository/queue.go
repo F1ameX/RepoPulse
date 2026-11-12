@@ -104,7 +104,8 @@ func (p *Postgres) Pin(ctx context.Context, id string, metadata domain.Repositor
 }
 
 func (p *Postgres) Fail(ctx context.Context, id string, at time.Time, failure domain.AnalysisFailure) error {
-	safe := domain.Failure(failure.Code, id)
+	failure.TraceID = id
+	safe := failure.Sanitized()
 	encoded, _ := json.Marshal(safe)
 	tag, err := p.pool.Exec(ctx, `UPDATE analyzer.analyses SET status='failed',stage=NULL,completed_at=$2,error=$3
   WHERE id=$1 AND status IN ('queued','running')`, id, domain.UTC(at), encoded)
