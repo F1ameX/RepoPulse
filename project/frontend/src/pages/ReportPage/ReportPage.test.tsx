@@ -103,16 +103,16 @@ it('renders saved activity on a direct report visit and reload without starting 
         score: 37.5,
         status: 'complete',
         reason: null,
-        coverage: { ...report.coverage, calculated: 1, total: 1 },
+        coverage: { ...report.coverage, calculated: 3, total: 3 },
         effective_weight: null,
         explanation: '',
         metrics: [
-          {
+          ...(['ACT_COMMIT_FREQ', 'ACT_DAYS_SINCE_LAST', 'ACT_TREND'] as const).map((id) => ({
             input: {
-              id: 'ACT_COMMIT_FREQ',
-              raw_value: 0,
+              id,
+              raw_value: id === 'ACT_COMMIT_FREQ' ? 0 : 1,
               unit: 'commits_per_week',
-              status: 'complete',
+              status: 'complete' as const,
               reason: null,
               window: report.window,
               sample: {
@@ -130,12 +130,12 @@ it('renders saved activity on a direct report visit and reload without starting 
               observed_at: null,
               exclusions: [],
             },
-            normalized_score: 37.5,
+            normalized_score: id === 'ACT_COMMIT_FREQ' ? 37.5 : 40,
             rule: 'Сохранённое правило',
             rule_version: 'v1',
             threshold: 50,
             explanation: '',
-          },
+          })),
         ],
       },
     ],
@@ -143,15 +143,17 @@ it('renders saved activity on a direct report visit and reload without starting 
   const createAnalysis = vi.spyOn(repositoryService, 'createAnalysis');
   const path = `/report/${R1}`;
   const first = renderAt(path);
-  await screen.findByRole('heading', { name: 'Активность репозитория' });
+  await screen.findByRole('heading', { name: 'Активность и регулярность' });
   first.unmount();
   renderAt(path);
-  const activity = within(await screen.findByRole('region', { name: 'Показатели активности' }));
+  const activity = within(
+    await screen.findByRole('region', { name: 'Категория: Активность и регулярность' }),
+  );
   expect(activity.getByText('0.00')).toBeTruthy();
-  expect(activity.getByText(/37\.5/)).toBeTruthy();
+  expect(activity.getAllByText('37.5')).toHaveLength(2);
   expect(activity.getByText(/коммитов: 0, недель: 20/)).toBeTruthy();
-  expect(activity.getByText('Порог:').parentElement?.textContent).toContain('50');
-  expect(activity.getByText('Версия методики:').parentElement?.textContent).toContain('v1');
+  expect(activity.getAllByText('Порог:')[0]?.parentElement?.textContent).toContain('50');
+  expect(activity.getAllByText('Версия методики:')[0]?.parentElement?.textContent).toContain('v1');
   expect(activity.queryByText('Сохранённое правило')).toBeNull();
   expect(getReport).toHaveBeenCalledTimes(2);
   expect(createAnalysis).not.toHaveBeenCalled();

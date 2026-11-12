@@ -65,7 +65,6 @@
 }
 
 .notice {
-  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 20px;
   color: var(--color-muted);
@@ -103,11 +102,6 @@
   overflow-wrap: anywhere;
 }
 
-.metadata {
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-
 .fields a:hover {
   color: var(--color-text-secondary);
 }
@@ -137,13 +131,6 @@
   grid-template-columns: 200px minmax(0, 1fr);
   gap: 8px 24px;
   padding: 16px 0;
-}
-
-.metricId {
-  display: block;
-  color: var(--color-muted);
-  font: 13px/20px var(--font-mono);
-  overflow-wrap: anywhere;
 }
 
 .metricDetails {
@@ -182,9 +169,8 @@
   color: var(--color-warning);
 }
 
-.mono {
-  font-family: var(--font-mono);
-  font-size: 13px;
+.evidenceBlock {
+  margin-top: 8px;
 }
 
 .evidenceBlock ul {
@@ -210,10 +196,11 @@
 }
 
 .categoryCard {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 16px;
+  padding: 16px 0;
+}
+
+.categoryCard + .categoryCard {
+  border-top: 1px solid var(--color-border);
 }
 
 .categoryHeader {
@@ -227,7 +214,7 @@
 .categoryTitle {
   margin: 0;
   font-size: 20px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .categoryScore {
@@ -249,4 +236,12 @@
   font-weight: 500;
   margin-bottom: 8px;
   outline-offset: 4px;
+}
+
+.limitations {
+  padding-inline-start: 20px;
+}
+
+.limitations > li + li {
+  margin-top: 16px;
 }

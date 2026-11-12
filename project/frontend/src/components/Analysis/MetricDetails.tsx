@@ -15,22 +15,30 @@ export function MetricDetails({
   metric,
   sha,
   label,
+  anchor,
+  sharedExplanationId,
 }: {
   metric: Metric;
   sha?: string | null;
   label?: string;
+  anchor?: string;
+  sharedExplanationId?: string;
 }) {
   const { input } = metric;
   const title = label ?? METRIC_LABELS[input.id] ?? input.id;
-  const unit = input.unit;
+  const unit =
+    input.unit === 'commits_per_week'
+      ? 'коммитов в неделю'
+      : input.unit === 'days'
+        ? 'дн.'
+        : ['bool', 'ratio'].includes(input.unit)
+          ? ''
+          : input.unit;
 
   if (!isKnownStatus(input.status)) {
     return (
       <div className={styles.metricRow}>
-        <dt>
-          {title}
-          <span className={styles.metricId}>{input.id}</span>
-        </dt>
+        <dt>{title}</dt>
         <dd className={styles.metricDetails}>
           <div className={styles.naReason} role="alert">
             Не удалось отобразить метрику: отсутствует состояние полноты данных.
@@ -56,11 +64,13 @@ export function MetricDetails({
   const evidenceLimit = input.id === 'TEST_PRESENCE' ? 10 : undefined;
 
   return (
-    <div className={styles.metricRow}>
-      <dt>
-        {title}
-        <span className={styles.metricId}>{input.id}</span>
-      </dt>
+    <div
+      className={styles.metricRow}
+      id={anchor}
+      tabIndex={anchor ? -1 : undefined}
+      aria-describedby={sharedExplanationId}
+    >
+      <dt>{title}</dt>
       <dd className={styles.metricDetails}>
         <div className={styles.metricValueLine}>
           <div>
@@ -72,7 +82,11 @@ export function MetricDetails({
             <span className={styles.metricCaption}>Балл</span>
             <span className={styles.metricValue}>
               {metric.normalized_score === null
-                ? 'Не рассчитан'
+                ? input.status === 'complete' &&
+                  input.raw_value === null &&
+                  input.sample.denominator === 0
+                  ? 'Не рассчитан: нет объектов для расчёта'
+                  : 'Не рассчитан'
                 : roundHalfUp(metric.normalized_score, 1)}
             </span>
           </div>
@@ -83,8 +97,7 @@ export function MetricDetails({
           </div>
         )}
         <div>
-          <strong>Состояние:</strong>{' '}
-          <span className={styles.mono}>{STATUS_LABELS[input.status]}</span>
+          <strong>Состояние:</strong> <span>{STATUS_LABELS[input.status]}</span>
         </div>
         <div>
           <strong>Окно:</strong>{' '}
@@ -113,18 +126,16 @@ export function MetricDetails({
         )}
         {input.series && input.series.length > 0 && (
           <div>
-            <strong>Коммиты по периодам:</strong>{' '}
-            <span className={styles.mono}>{input.series.join(', ')}</span>
+            <strong>Коммиты по периодам:</strong> <span>{input.series.join(', ')}</span>
           </div>
         )}
         {/* По обновлённому FR-10: порог и версия методики. metric.rule не выводится. */}
         <div>
           <strong>Порог:</strong> {metric.threshold ?? 'Не задан'}
         </div>
-        {metric.explanation && <div>{metric.explanation}</div>}
+        {!sharedExplanationId && metric.explanation && <div>{metric.explanation}</div>}
         <div>
-          <strong>Версия методики:</strong>{' '}
-          <span className={styles.mono}>{metric.rule_version}</span>
+          <strong>Версия методики:</strong> <span>{metric.rule_version}</span>
         </div>
         <EvidenceList
           evidence={input.evidence}

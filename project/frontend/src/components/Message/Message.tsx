@@ -91,9 +91,11 @@ export function Message({
       role={isUrgent ? 'alert' : 'status'}
       className={cn(styles.message, styles[variant], className)}
     >
-      {renderedIcon}
-      <span className={styles.text}>{children}</span>
-      {actions && <span className={styles.actions}>{actions}</span>}
+      <div className={styles.body}>
+        {renderedIcon}
+        <span className={styles.text}>{children}</span>
+      </div>
+      {actions && <div className={styles.actions}>{actions}</div>}
       {onDismiss && (
         <button
           type="button"
