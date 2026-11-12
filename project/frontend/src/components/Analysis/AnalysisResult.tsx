@@ -3,7 +3,7 @@ import { ButtonLink } from '@/components/Button/ButtonLink';
 import { reportFeedback } from '@/components/FeedbackMessage/mappers';
 import { useReport } from '@/hooks/useReport';
 import type { Repository } from '@/types';
-import { ActivityMetrics } from './ActivityMetrics';
+import { CategoryList } from './CategoryList';
 import { AnalysisTitle } from './AnalysisTitle';
 import { ReportHeader } from './ReportHeader';
 import styles from './Analysis.module.css';
@@ -55,7 +55,7 @@ export function AnalysisResult({
       {report && (
         <>
           <ReportHeader report={report} repositoryInTitle />
-          <ActivityMetrics report={report} />
+          <CategoryList report={report} onReload={reload} />
         </>
       )}
     </>

@@ -1,10 +1,11 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { FeedbackMessage, Button, Input, Message } from '@/components';
 import { submissionFeedback } from '@/components/FeedbackMessage/mappers';
 import { useAnalysisSubmission } from '@/hooks/useAnalysisSubmission';
 import { useRepositoryValidation } from '@/hooks/useRepositoryValidation';
 import { PageLayout } from '@/components/Page/PageLayout';
 import { GuestAction } from '@/components/Auth/GuestAction';
+import { ButtonLink } from '@/components/Button/ButtonLink';
 import { cn } from '@/lib/utils';
 import pageStyles from '@/components/Page/Page.module.css';
 import styles from './RepositoryInputPage.module.css';
@@ -154,9 +155,9 @@ export default function RepositoryInputPage() {
                 variant="error"
                 actions={
                   <>
-                    <Link to="/login" className={pageStyles.actionLink}>
+                    <ButtonLink to="/login" variant="secondary">
                       Войти
-                    </Link>
+                    </ButtonLink>
                     <GuestAction />
                   </>
                 }

@@ -1,11 +1,27 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
 import type { Category, Evidence, Metric, Report } from '@/types';
 import { MetricDetails } from './MetricDetails';
 import { CategoryCard } from './CategoryCard';
 import { CategoryList } from './CategoryList';
 
 afterEach(cleanup);
+
+it('shows a shared testing explanation once and associates it with the metric', () => {
+  const explanation = 'Файловый признак тестов. Тесты не запускались.';
+  const metric = makeMetric({ id: 'TEST_PRESENCE' }, { explanation });
+  render(
+    <CategoryCard
+      category={makeCategory({ id: 'testing', explanation, metrics: [metric] })}
+      defaultOpen
+      reportDetails
+    />,
+  );
+  expect(screen.getAllByText(explanation)).toHaveLength(1);
+  expect(document.getElementById('metric-TEST_PRESENCE')?.getAttribute('aria-describedby')).toBe(
+    screen.getByText(explanation).id,
+  );
+});
 
 function makeMetric(
   overrides: Partial<Metric['input']> = {},
@@ -201,18 +217,61 @@ it('FR-09: пустая категория без раскрытия', () => {
   expect(screen.getByText('Показатели отсутствуют')).toBeTruthy();
 });
 
-it('CategoryList рендерит все категории', () => {
+it('показывает категории в порядке FR-09 и ведёт от ограничения только к нужной метрике', () => {
+  const reason = {
+    code: 'GIT_TREE_UNAVAILABLE',
+    message: 'Дерево получено частично',
+    cannot_conclude: 'Полный вывод недоступен',
+  };
+  const test = makeMetric(
+    {
+      id: 'TEST_PRESENCE',
+      status: 'partial',
+      reason,
+      raw_value: null,
+      sample: { ...makeMetric().input.sample, collected: 20, total: null },
+    },
+    { normalized_score: null },
+  );
+  const reload = vi.fn();
   const report = {
     categories: [
-      makeCategory({ id: 'activity' }),
-      makeCategory({ id: 'security', reason: null, status: 'complete', score: 100 }),
+      makeCategory({
+        id: 'testing',
+        status: 'partial',
+        metrics: [test],
+        coverage: { ...makeCategory().coverage, total: 1 },
+      }),
+      makeCategory({
+        id: 'documentation',
+        status: 'complete',
+        score: 0,
+        metrics: [
+          makeMetric({ id: 'DOC_SUPPORT_SHARE' }),
+          makeMetric({ id: 'DOC_README', raw_value: false }),
+        ],
+        coverage: { ...makeCategory().coverage, calculated: 2, total: 2 },
+      }),
     ],
     repository: { commit_sha: null },
+    sources: [],
   } as unknown as Report;
-  render(<CategoryList report={report} />);
-  expect(screen.getByRole('region', { name: 'Категории отчёта' })).toBeTruthy();
-  expect(screen.getByRole('region', { name: 'Категория: Активность' })).toBeTruthy();
-  expect(screen.getByRole('region', { name: 'Категория: Безопасность' })).toBeTruthy();
+  render(<CategoryList report={report} onReload={reload} />);
+  const categories = within(screen.getByRole('region', { name: 'Категории отчёта' }));
+  expect(
+    categories.getAllByRole('heading', { level: 3 }).map(({ textContent }) => textContent),
+  ).toEqual(['Активность и регулярность', 'Документация', 'Тестирование', 'Безопасность', 'CI/CD']);
+  const missing = within(categories.getByRole('region', { name: 'Категория: Безопасность' }));
+  fireEvent.click(missing.getByRole('button', { name: 'Повторить загрузку' }));
+  expect(reload).toHaveBeenCalledOnce();
+  const limitations = within(screen.getByRole('region', { name: 'Ограничения анализа' }));
+  expect(limitations.getByText('Получено 20; полный объём неизвестен')).toBeTruthy();
+  expect(limitations.queryByText(/20%/)).toBeNull();
+  fireEvent.click(limitations.getByRole('link', { name: 'Тестирование · Наличие тестов' }));
+  const target = document.getElementById('metric-TEST_PRESENCE');
+  expect(target?.closest('details')?.open).toBe(true);
+  expect(document.activeElement).toBe(target);
+  expect(document.getElementById('metric-DOC_README')?.closest('details')?.open).toBe(false);
 });
 
 it('FR-13: partial с причиной → причина показана рядом с баллом', () => {
@@ -503,22 +562,22 @@ it('FR-10: TEST_PRESENCE показывает не более 10 путей', ()
   expect(screen.getByText(/Показано 10 из 15/)).toBeTruthy();
 });
 
-it('FR-10: DOC_README показывает название и ID', () => {
+it('FR-10: DOC_README показывает только название метрики', () => {
   render(<MetricDetails metric={makeMetric({ id: 'DOC_README', raw_value: true })} />);
   expect(screen.getByText('README')).toBeTruthy();
-  expect(screen.getByText('DOC_README')).toBeTruthy();
+  expect(screen.queryByText('DOC_README')).toBeNull();
 });
 
-it('FR-10: TEST_PRESENCE показывает название и ID', () => {
+it('FR-10: TEST_PRESENCE показывает только название метрики', () => {
   render(<MetricDetails metric={makeMetric({ id: 'TEST_PRESENCE', raw_value: false })} />);
   expect(screen.getByText('Наличие тестов')).toBeTruthy();
-  expect(screen.getByText('TEST_PRESENCE')).toBeTruthy();
+  expect(screen.queryByText('TEST_PRESENCE')).toBeNull();
 });
 
-it('FR-10: DOC_SUPPORT_SHARE показывает название и ID', () => {
+it('FR-10: DOC_SUPPORT_SHARE показывает только название метрики', () => {
   render(<MetricDetails metric={makeMetric({ id: 'DOC_SUPPORT_SHARE', raw_value: 0.5 })} />);
   expect(screen.getByText('Доля поддерживающих файлов')).toBeTruthy();
-  expect(screen.getByText('DOC_SUPPORT_SHARE')).toBeTruthy();
+  expect(screen.queryByText('DOC_SUPPORT_SHARE')).toBeNull();
 });
 
 it('FR-10: SEC_SAST, CI_PRESENT и CI_REQUIRED_CHECKS тоже подписаны', () => {
@@ -526,15 +585,15 @@ it('FR-10: SEC_SAST, CI_PRESENT и CI_REQUIRED_CHECKS тоже подписан�
     <MetricDetails metric={makeMetric({ id: 'SEC_SAST', raw_value: false })} />,
   );
   expect(screen.getByText('SAST')).toBeTruthy();
-  expect(screen.getByText('SEC_SAST')).toBeTruthy();
+  expect(screen.queryByText('SEC_SAST')).toBeNull();
 
   rerender(<MetricDetails metric={makeMetric({ id: 'CI_PRESENT', raw_value: true })} />);
   expect(screen.getByText('Наличие CI')).toBeTruthy();
-  expect(screen.getByText('CI_PRESENT')).toBeTruthy();
+  expect(screen.queryByText('CI_PRESENT')).toBeNull();
 
   rerender(<MetricDetails metric={makeMetric({ id: 'CI_REQUIRED_CHECKS', raw_value: false })} />);
   expect(screen.getByText('Обязательные проверки CI')).toBeTruthy();
-  expect(screen.getByText('CI_REQUIRED_CHECKS')).toBeTruthy();
+  expect(screen.queryByText('CI_REQUIRED_CHECKS')).toBeNull();
 });
 
 it('FR-13: отсутствующий input.status → ошибка в блоке, без значения и N/A', () => {

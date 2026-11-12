@@ -19,7 +19,7 @@ export function EvidenceList({
     return (
       <div className={styles.evidenceBlock}>
         <strong>Основания:</strong>{' '}
-        <span className={styles.mono}>
+        <span>
           Основания недоступны
           {reason ? ` (${reason.message})` : ' (причина не указана)'}
         </span>
@@ -40,22 +40,18 @@ export function EvidenceList({
           return (
             <li key={ev.id}>
               <span>{ev.secret_match_type ?? ev.description}</span>
-              {!secret && <span className={styles.mono}>{` (источник: ${ev.source})`}</span>}
-              {ev.path && <span className={styles.mono}>{` [${ev.path}]`}</span>}
-              {ev.revision && <span className={styles.mono}>{` rev: ${ev.revision}`}</span>}
+              {!secret && <span>{` (источник: ${ev.source})`}</span>}
+              {ev.path && <span>{` [${ev.path}]`}</span>}
+              {ev.revision && <span>{` rev: ${ev.revision}`}</span>}
               {!secret && ev.run_id && (
-                <span className={styles.mono}>
-                  {` run: ${ev.run_id}${ev.attempt !== null ? `/${ev.attempt}` : ''}`}
-                </span>
+                <span>{` run: ${ev.run_id}${ev.attempt !== null ? `/${ev.attempt}` : ''}`}</span>
               )}
               {!secret && ev.dependency && (
-                <span className={styles.mono}>
+                <span>
                   {` ${ev.dependency.ecosystem}/${ev.dependency.package}@${ev.dependency.version}`}
                 </span>
               )}
-              {!secret && ev.vulnerability_id && (
-                <span className={styles.mono}>{` vuln: ${ev.vulnerability_id}`}</span>
-              )}
+              {!secret && ev.vulnerability_id && <span>{` vuln: ${ev.vulnerability_id}`}</span>}
               {secret ? null : isSafeUrl(ev.url) ? (
                 <>
                   {' '}
@@ -64,7 +60,7 @@ export function EvidenceList({
                   </a>
                 </>
               ) : (
-                <span className={styles.mono}>
+                <span>
                   {' '}
                   (Ссылка на источник недоступна)
                   {ev.url && ` ${ev.url}`}
