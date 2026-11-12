@@ -215,6 +215,40 @@ func TestPinnedTreeSurvivesFullHistoryTransferLimit(t *testing.T) {
 	}
 	t.Fatal("missing README evidence from the pinned tree")
 }
+
+func TestExperimentalHistoryReadsPinnedAncestorsOnly(t *testing.T) {
+	metadata, server, oldest := fixture(t)
+	reader := readerFor(t, server, ExperimentalMainHistoryLimits(), false)
+	session, err := reader.Open(t.Context(), metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+
+	data := session.Data()
+	if len(data.Refs) != 3 || len(data.Files) != 4 || !data.MainWalkComplete ||
+		len(data.MainCommits) != 2 || len(data.Commits) != 2 {
+		t.Fatalf("expected complete pinned ancestry and tree, got %+v", data)
+	}
+	for _, commit := range data.Commits {
+		if commit.Main == nil || !*commit.Main || (commit.SHA != oldest && commit.SHA != *metadata.CommitSHA) {
+			t.Fatalf("unexpected commit in the experimental history: %+v", commit)
+		}
+	}
+	scopes := make(map[string]domain.SourceState, len(data.Sources))
+	for _, scope := range data.Sources {
+		scopes[scope.Scope] = scope
+	}
+	if scopes[domain.GitTreeScope].Status != "complete" || scopes[domain.ActivityHistoryScope].Status != "complete" {
+		t.Fatalf("expected complete tree and main history: %+v", data.Sources)
+	}
+	history := scopes["history"]
+	if history.Status != "partial" || history.Sample.Total != nil ||
+		history.Reason == nil || history.Reason.Code != "GIT_HISTORY_MAIN_ONLY" {
+		t.Fatalf("history of all refs was not marked partial: %+v", history)
+	}
+}
+
 func TestRealGitIsReadWithoutCheckout(t *testing.T) {
 	metadata, server, old := fixture(t)
 	reader := readerFor(t, server, DefaultLimits(), false)
