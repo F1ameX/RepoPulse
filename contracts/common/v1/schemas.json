@@ -560,6 +560,17 @@
           ],
           "description": "Отпечаток сохранённых входов. Сам по себе не доказывает актуальность внешнего источника.",
           "x-storage": "analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → fingerprint"
+        },
+        "metric_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/MetricInput/properties/id"
+          },
+          "description": "Метрики, использующие эту область источника, в порядке категорий и метрик отчёта. Для ограничения источника это список затронутых метрик. Поле отсутствует, если связь не сохранена.",
+          "x-storage": "analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → metric_ids"
         }
       },
       "allOf": [

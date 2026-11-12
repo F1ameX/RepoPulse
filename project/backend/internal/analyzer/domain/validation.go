@@ -185,6 +185,13 @@ func (s SnapshotData) Validate() error {
 		if err := validateSample(source.Sample); err != nil {
 			return err
 		}
+		seen := map[string]bool{}
+		for _, id := range source.MetricIDs {
+			if metricCategories[id] == "" || seen[id] {
+				return invalid("source metric IDs")
+			}
+			seen[id] = true
+		}
 	}
 	inputs := map[string]bool{}
 	evidence := map[string]bool{}

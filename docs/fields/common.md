@@ -123,6 +123,7 @@ partial/unavailable/not_applicable требуют reason; complete не озна
 | `SourceState.sample` | `Sample` | `Sample` #5 | да / нет | Фактический объём и границы выборки, числитель, знаменатель и исключения. | analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → sample |
 | `SourceState.obtained_at` | `string (date-time) / null` | `google.protobuf.Timestamp` #6 | да / да | Время получения этих данных от источника в UTC. | analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → obtained_at |
 | `SourceState.fingerprint` | `string / null` | `optional string` #7 | да / да | Отпечаток сохранённых входов. Сам по себе не доказывает актуальность внешнего источника. | analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → fingerprint |
+| `SourceState.metric_ids` | `array<MetricInput.id>` | `repeated string` #8 | нет / нет | Уникальные ID метрик, использующих этот scope, в порядке отчёта. При ограничении указывают затронутые метрики. Если связь не сохранена, поле отсутствует. | analyzer.snapshots.payload.sources[] / report.reports.payload.sources[] → metric_ids |
 
 ## GitRef
 

@@ -537,6 +537,31 @@
   "sources": [
     {
       "source": "git",
+      "scope": "activity_history",
+      "status": "unavailable",
+      "reason": {
+        "code": "timeout",
+        "message": "Источник не ответил вовремя",
+        "cannot_conclude": "Полная оценка этой проверки недоступна"
+      },
+      "sample": {
+        "collected": null,
+        "total": null,
+        "numerator": null,
+        "denominator": null,
+        "excluded": null,
+        "excluded_reason": null
+      },
+      "obtained_at": null,
+      "fingerprint": null,
+      "metric_ids": [
+        "ACT_COMMIT_FREQ",
+        "ACT_DAYS_SINCE_LAST",
+        "ACT_TREND"
+      ]
+    },
+    {
+      "source": "git",
       "scope": "tree",
       "status": "complete",
       "reason": null,
