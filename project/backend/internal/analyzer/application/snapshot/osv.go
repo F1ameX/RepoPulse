@@ -27,7 +27,7 @@ func collectOSV(ctx context.Context, client OSVQuerier, collections []Collection
 		// No dependency collector has been installed for this processor.
 		return Collection{}, nil
 	}
-	deps, err := dependencies(items)
+	deps, err := NormalizeDependencies(items)
 	if err != nil || len(deps) > 20 {
 		return Collection{}, domain.ErrInvalidData
 	}
