@@ -139,11 +139,26 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 			}
 			data := domain.GitData{Repository: a.Repository, Sources: []domain.SourceState{source}}
 			withTree := strings.HasPrefix(filepath.Base(path), "ACT-01")
+			withEmptyTree := strings.HasPrefix(filepath.Base(path), "ACT-03")
+			withPartialTree := strings.HasPrefix(filepath.Base(path), "ACT-06")
 			if withTree {
 				data.Sources = append(data.Sources, domain.SourceState{Source: "git", Scope: "tree", Status: "complete", ObtainedAt: &vector.Input.At})
 				for _, name := range []string{"README.md", "LICENSE", ".github/LICENSE", "src/main.go", "src/main_test.go"} {
 					data.Files = append(data.Files, domain.GitFile{Path: name, Mode: "100644"})
 				}
+			}
+			if withEmptyTree {
+				zero := 0
+				data.Sources = append(data.Sources, domain.SourceState{Source: "git", Scope: "tree", Status: "complete",
+					Sample: domain.Sample{Collected: &zero, Total: &zero}})
+			}
+			if withPartialTree {
+				one := 1
+				data.Sources = append(data.Sources, domain.SourceState{Source: "git", Scope: "tree", Status: "partial",
+					Sample: domain.Sample{Collected: &one}, Reason: &domain.Reason{
+						Code: "GIT_PATH_LIMIT", Message: "Превышен лимит путей", CannotConclude: "Полное дерево неизвестно",
+					}})
+				data.Files = []domain.GitFile{{Path: "README.md", Mode: "100644"}}
 			}
 			// ACT-06's expected last-commit score assumes independent proof of
 			// the pinned walk, as documented by the scoring golden-vector tests.
@@ -195,9 +210,15 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 			if report.Coverage.Percentage != math.Round(stored.Report.Coverage.Percentage*10)/10 || report.Coverage.Calculated != stored.Report.Coverage.Calculated {
 				t.Fatal("public coverage is not rounded or its count changed")
 			}
+			if !reflect.DeepEqual(report.Sources, stored.Snapshot.Sources) {
+				t.Fatal("source states, samples or metric links changed between storage and HTTP")
+			}
 			for i, category := range report.Categories {
 				if category.Coverage.Percentage != math.Round(stored.Report.Categories[i].Coverage.Percentage*10)/10 {
 					t.Fatal("public category coverage is not rounded")
+				}
+				if category.Explanation == "" {
+					t.Fatalf("missing explanation for %s", category.ID)
 				}
 			}
 			if strings.HasPrefix(filepath.Base(path), "ACT-06") && (report.Coverage.Percentage != 8.3 || report.Categories[0].Coverage.Percentage != 33.3 || stored.Report.Coverage.Percentage == 8.3) {
@@ -236,6 +257,9 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 					t.Fatalf("tree evidence or scores changed at HTTP boundary: docs=%+v tests=%+v", docs, tests)
 				}
 			}
+			if withEmptyTree || withPartialTree {
+				checkTreeDetails(t, report, withPartialTree)
+			}
 			if strings.Contains(response.Body.String(), owner) || !git.session.closed {
 				t.Fatal("owner leaked or raw Git survived publication")
 			}
@@ -262,6 +286,53 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 	var snapshots int
 	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM analyzer.snapshots").Scan(&snapshots); err != nil || snapshots != 7 {
 		t.Fatalf("published %d snapshots: %v", snapshots, err)
+	}
+}
+
+func checkTreeDetails(t *testing.T, report domain.Report, partial bool) {
+	t.Helper()
+	var tree *domain.SourceState
+	for _, source := range report.Sources {
+		if source.Source == "git" && source.Scope == "tree" {
+			if tree != nil {
+				t.Fatal("tree scope was duplicated")
+			}
+			tree = &source
+		}
+		if partial && source.Source == "git" && source.Scope == domain.ActivityHistoryScope &&
+			!reflect.DeepEqual(source.MetricIDs, []string{"ACT_COMMIT_FREQ", "ACT_TREND"}) {
+			t.Fatalf("independent last-commit proof was associated with the incomplete history: %v", source.MetricIDs)
+		}
+	}
+	if tree == nil || !reflect.DeepEqual(tree.MetricIDs, []string{"DOC_README", "DOC_SUPPORT_SHARE", "TEST_PRESENCE"}) {
+		t.Fatalf("missing links for the tree scope: %+v", tree)
+	}
+	if partial {
+		if tree.Status != "partial" || tree.Reason == nil || tree.Reason.Code != "GIT_PATH_LIMIT" ||
+			tree.Sample.Collected == nil || *tree.Sample.Collected != 1 || tree.Sample.Total != nil {
+			t.Fatalf("incomplete tree lost its reason or known sample: %+v", tree)
+		}
+		for _, category := range report.Categories[1:3] {
+			for _, metric := range category.Metrics {
+				raw, _ := metric.Input.RawValue.MarshalJSON()
+				if metric.Input.Status != "partial" || !reflect.DeepEqual(metric.Input.Reason, tree.Reason) ||
+					metric.NormalizedScore != nil || string(raw) != "null" {
+					t.Fatalf("incorrect details for partial metric %s", metric.Input.ID)
+				}
+			}
+		}
+		return
+	}
+	if tree.Status != "complete" || tree.Reason != nil || tree.Sample.Collected == nil || *tree.Sample.Collected != 0 ||
+		tree.Sample.Total == nil || *tree.Sample.Total != 0 {
+		t.Fatalf("complete empty tree became unknown: %+v", tree)
+	}
+	for _, metric := range report.Categories[1].Metrics {
+		want := map[string]string{"DOC_README": "false", "DOC_SUPPORT_SHARE": "0"}[metric.Input.ID]
+		raw, _ := metric.Input.RawValue.MarshalJSON()
+		if string(raw) != want || metric.Input.Status != "complete" || metric.NormalizedScore == nil || *metric.NormalizedScore != 0 {
+			t.Fatalf("confirmed %s value was lost: %s", metric.Input.ID, raw)
+		}
 	}
 }
 

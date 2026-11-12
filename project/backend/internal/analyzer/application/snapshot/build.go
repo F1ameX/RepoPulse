@@ -31,7 +31,7 @@ func Build(a domain.Analysis, git domain.GitData, collections ...Collection) (do
 		}
 	}
 	data := domain.SnapshotData{Refs: git.Refs}
-	sources := map[Source]domain.SourceState{}
+	sources := map[Source]int{}
 	addSources := func(items []domain.SourceState) error {
 		for _, item := range items {
 			key := Source{item.Source, item.Scope}
@@ -41,7 +41,9 @@ func Build(a domain.Analysis, git domain.GitData, collections ...Collection) (do
 			if item.ObtainedAt != nil && item.ObtainedAt.IsZero() {
 				return domain.ErrInvalidData
 			}
-			sources[key] = item
+			// Derive the links from the accepted inputs, not from collector metadata.
+			item.MetricIDs = nil
+			sources[key] = len(data.Sources)
 			data.Sources = append(data.Sources, item)
 		}
 		return nil
@@ -75,15 +77,21 @@ func Build(a domain.Analysis, git domain.GitData, collections ...Collection) (do
 				return domain.SnapshotData{}, domain.ErrInvalidData
 			}
 			for _, key := range collected.Sources {
-				source, exists := sources[key]
+				index, exists := sources[key]
 				if !exists {
 					return domain.SnapshotData{}, domain.ErrInvalidData
 				}
+				source := &data.Sources[index]
 				if (source.Status == "unavailable" || source.Status == "not_applicable") && collected.Value.Status == "complete" {
 					return domain.SnapshotData{}, domain.ErrInvalidData
 				}
 				if source.Status != "complete" && input.Status == "complete" {
 					input.Status, input.Reason = "partial", source.Reason
+				}
+				// Inputs are visited in report order. Repeated references from the
+				// same input therefore add its ID only once for a given source.
+				if n := len(source.MetricIDs); n == 0 || source.MetricIDs[n-1] != metric.id {
+					source.MetricIDs = append(source.MetricIDs, metric.id)
 				}
 			}
 			delete(inputs, metric.id)
@@ -108,7 +116,7 @@ func Build(a domain.Analysis, git domain.GitData, collections ...Collection) (do
 	if err != nil {
 		return domain.SnapshotData{}, err
 	}
-	data.Dependencies, err = dependencies(data.Dependencies)
+	data.Dependencies, err = NormalizeDependencies(data.Dependencies)
 	if err != nil {
 		return domain.SnapshotData{}, err
 	}

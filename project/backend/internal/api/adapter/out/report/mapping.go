@@ -240,6 +240,7 @@ func fromSourceState(v *common.SourceState) models.SourceState {
 	r.Sample = fromSample(v.Sample)
 	r.ObtainedAt = fromTime(v.ObtainedAt)
 	r.Fingerprint = v.Fingerprint
+	r.MetricIDs = v.MetricIds
 	return r
 }
 

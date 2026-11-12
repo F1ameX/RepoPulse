@@ -137,6 +137,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     } finally {
       if (active.current === request) {
         active.current = null;
+        if (passwordInput.current) passwordInput.current.value = '';
         setPassword('');
         setPending(false);
       }

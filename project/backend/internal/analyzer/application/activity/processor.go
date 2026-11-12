@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/dependencies"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/scoring"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/snapshot"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/worker"
@@ -19,6 +20,11 @@ func NewProcessor(engine *scoring.Engine) *Processor { return &Processor{engine:
 
 func (p *Processor) Process(ctx context.Context, a domain.Analysis, session worker.GitSession, advance func(string) error) (worker.Output, error) {
 	if err := ctx.Err(); err != nil {
+		return worker.Output{}, err
+	}
+	collector := dependencies.Collector{}
+	dependencyCollection, err := collector.Collect(ctx, a, session)
+	if err != nil {
 		return worker.Output{}, err
 	}
 	if err := advance("calculating"); err != nil {
@@ -75,7 +81,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	for _, input := range p.engine.TreeInputs(git, tree) {
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
 	}
-	data, err := snapshot.Build(a, git, collection)
+	data, err := snapshot.Build(a, git, collection, dependencyCollection)
 	if err != nil {
 		return worker.Output{}, err
 	}
@@ -90,24 +96,36 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	if err != nil {
 		return worker.Output{}, err
 	}
-	overallReason := &domain.Reason{Code: "INCOMPLETE_CATEGORIES", Message: "Общая оценка недоступна",
-		CannotConclude: "Общая оценка по пяти категориям ещё не рассчитана"}
+	overallReason := &domain.Reason{
+		Code: "INCOMPLETE_CATEGORIES", Message: "Общая оценка недоступна",
+		CannotConclude: "Общая оценка по пяти категориям ещё не рассчитана",
+	}
 	fallback := "no_findings"
-	report := domain.ReportData{OverallReason: overallReason, Summary: "Сохранён анализ активности, документации и файловых признаков тестов основной ветки",
+	report := domain.ReportData{
+		OverallReason: overallReason, Summary: "Сохранён анализ активности, документации и файловых признаков тестов основной ветки",
 		Categories: append([]domain.Category{category}, treeCategories...), Findings: []domain.Finding{}, Recommendations: []domain.Recommendation{},
-		Explanation: domain.Explanation{Mode: "deterministic_fallback", FallbackReason: &fallback,
-			CatalogVersion: a.Versions.RecommendationCatalog, SchemaVersion: a.Versions.ExplanationSchema, PromptVersion: a.Versions.Prompt}}
-	pending := &domain.Reason{Code: "INPUT_NOT_COLLECTED", Message: "Входные данные проверки не получены",
-		CannotConclude: "Оценка категории недоступна"}
+		Explanation: domain.Explanation{
+			Mode: "deterministic_fallback", FallbackReason: &fallback,
+			CatalogVersion: a.Versions.RecommendationCatalog, SchemaVersion: a.Versions.ExplanationSchema, PromptVersion: a.Versions.Prompt,
+		},
+	}
+	pending := &domain.Reason{
+		Code: "INPUT_NOT_COLLECTED", Message: "Входные данные проверки не получены",
+		CannotConclude: "Оценка категории недоступна",
+	}
 	for _, spec := range []struct {
 		id          string
 		from, until int
 	}{{"security", 6, 9}, {"ci_cd", 9, 12}} {
-		unknown := domain.Category{ID: spec.id, Status: "unavailable", Reason: pending,
-			Coverage: domain.Coverage{Total: spec.until - spec.from, Unavailable: spec.until - spec.from}, Metrics: []domain.Metric{}}
+		unknown := domain.Category{
+			ID: spec.id, Status: "unavailable", Reason: pending, Explanation: pending.Message,
+			Coverage: domain.Coverage{Total: spec.until - spec.from, Unavailable: spec.until - spec.from}, Metrics: []domain.Metric{},
+		}
 		for _, input := range data.Inputs[spec.from:spec.until] {
-			unknown.Metrics = append(unknown.Metrics, domain.Metric{Input: input, RuleVersion: a.Versions.Methodology,
-				Explanation: "Входные данные проверки не получены"})
+			unknown.Metrics = append(unknown.Metrics, domain.Metric{
+				Input: input, RuleVersion: a.Versions.Methodology,
+				Explanation: "Входные данные проверки не получены",
+			})
 		}
 		report.Categories = append(report.Categories, unknown)
 	}
@@ -130,8 +148,10 @@ func addEvidence(input *domain.MetricInput, repository domain.RepositoryMetadata
 	for _, commit := range commits[:min(len(commits), 10)] {
 		sha := commit.SHA
 		url := repository.CanonicalURL + "/commit/" + sha
-		input.Evidence = append(input.Evidence, domain.Evidence{ID: fmt.Sprintf("%s:%s", input.ID, sha), Source: "git", Kind: "commit",
-			Description: "Коммит основной ветки с подтверждённой датой committer", Revision: &sha, URL: &url})
+		input.Evidence = append(input.Evidence, domain.Evidence{
+			ID: fmt.Sprintf("%s:%s", input.ID, sha), Source: "git", Kind: "commit",
+			Description: "Коммит основной ветки с подтверждённой датой committer", Revision: &sha, URL: &url,
+		})
 	}
 	input.EvidenceLimited = len(commits) > len(input.Evidence)
 	if input.Status == "complete" || input.Status == "not_applicable" {
