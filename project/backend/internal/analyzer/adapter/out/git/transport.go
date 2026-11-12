@@ -15,14 +15,15 @@ import (
 // upstream is fetched by Go, so the received-byte limit is enforced in-stream,
 // rather than by periodically checking an already oversized pack on disk.
 type transport struct {
-	client    *http.Client
-	upstream  string
-	maximum   int64
-	mu        sync.Mutex
-	requestMu sync.Mutex
-	received  int64
-	attempts  int
-	reason    string
+	client         *http.Client
+	upstream       string
+	maximum        int64
+	attemptTimeout time.Duration
+	mu             sync.Mutex
+	requestMu      sync.Mutex
+	received       int64
+	attempts       int
+	reason         string
 }
 
 func (t *transport) failed(code string) {
@@ -53,6 +54,10 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 	if err != nil {
 		return "", nil, err
 	}
+	attemptTimeout := t.attemptTimeout
+	if attemptTimeout == 0 {
+		attemptTimeout = 15 * time.Second
+	}
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.requestMu.Lock()
 		defer t.requestMu.Unlock()
@@ -82,7 +87,7 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 		if r.URL.RawQuery != "" {
 			url += "?" + r.URL.RawQuery
 		}
-		attempt, cancel := context.WithTimeout(ctx, 15*time.Second)
+		attempt, cancel := context.WithTimeout(ctx, attemptTimeout)
 		defer cancel()
 		request, err := http.NewRequestWithContext(attempt, r.Method, url, body)
 		if err != nil {

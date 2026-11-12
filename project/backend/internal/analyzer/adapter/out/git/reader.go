@@ -26,13 +26,23 @@ import (
 )
 
 type Limits struct {
-	Timeout        time.Duration
-	Bytes          int64
-	Paths, Commits int
+	Timeout         time.Duration
+	Bytes           int64
+	Paths, Commits  int
+	MainHistoryOnly bool
 }
 
 func DefaultLimits() Limits {
 	return Limits{Timeout: 60 * time.Second, Bytes: 100 << 20, Paths: 50000, Commits: 10000}
+}
+
+// ExperimentalMainHistoryLimits is for local measurements of the pinned history.
+func ExperimentalMainHistoryLimits() Limits {
+	limits := DefaultLimits()
+	limits.Timeout = 120 * time.Second
+	limits.Commits = 250000
+	limits.MainHistoryOnly = true
+	return limits
 }
 
 type Reader struct {
@@ -43,6 +53,9 @@ type Reader struct {
 
 func NewReader(tempRoot string, limits Limits) (*Reader, error) {
 	max := DefaultLimits()
+	if limits.MainHistoryOnly {
+		max = ExperimentalMainHistoryLimits()
+	}
 	if limits.Timeout <= 0 || limits.Timeout > max.Timeout || limits.Bytes <= 0 || limits.Bytes > max.Bytes || limits.Paths <= 0 || limits.Paths > max.Paths || limits.Commits <= 0 || limits.Commits > max.Commits {
 		return nil, errors.New("invalid Git limits")
 	}
@@ -199,6 +212,9 @@ func (r *Reader) Open(ctx context.Context, metadata domain.RepositoryMetadata) (
 		return nil, err
 	}
 	transport := &transport{client: r.client, upstream: metadata.CanonicalURL + ".git", maximum: r.limits.Bytes}
+	if r.limits.MainHistoryOnly {
+		transport.attemptTimeout = 60 * time.Second
+	}
 	local, closeProxy, err := transport.serve(acquire)
 	if err != nil {
 		return nil, err
@@ -256,16 +272,21 @@ func (r *Reader) Open(ctx context.Context, metadata domain.RepositoryMetadata) (
 		transport.clearReason()
 	}
 	fetchCode := refCode
-	if len(refs) > 0 || s.data.Repository.CommitSHA != nil {
+	if s.data.Repository.CommitSHA != nil || !s.reader.limits.MainHistoryOnly && len(refs) > 0 {
 		var input strings.Builder
-		for _, ref := range refs {
-			fmt.Fprintf(&input, "+%s:%s\n", ref.ObjectSHA, ref.Name)
+		args := []string{"fetch", "--stdin", "--no-tags", "--no-recurse-submodules", "--no-auto-maintenance", "--no-write-fetch-head"}
+		if s.reader.limits.MainHistoryOnly {
+			// Fetch the entire ancestry of the pinned commit, omitting trees and blobs.
+			args = append(args, "--filter=tree:0")
+		} else {
+			for _, ref := range refs {
+				fmt.Fprintf(&input, "+%s:%s\n", ref.ObjectSHA, ref.Name)
+			}
 		}
 		if sha := s.data.Repository.CommitSHA; sha != nil {
 			fmt.Fprintf(&input, "+%s:refs/repopulse/pinned\n", *sha)
 		}
-		// No depth/filter option: every announced head/tag is fetched in full.
-		_, fetchErr := s.command(acquire, input.String(), 1<<20, "fetch", "--stdin", "--no-tags", "--no-recurse-submodules", "--no-auto-maintenance", "--no-write-fetch-head", local)
+		_, fetchErr := s.command(acquire, input.String(), 1<<20, append(args, local)...)
 		if fetchErr != nil {
 			fetchCode = "GIT_FETCH_FAILED"
 		}
