@@ -1,10 +1,11 @@
-// Package activity connects collected Git history, versioned scoring and the
-// immutable snapshot/report publication performed by the worker.
+// Package activity connects collected Git history and tree, versioned scoring
+// and the immutable snapshot/report publication performed by the worker.
 package activity
 
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/dependencies"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/scoring"
@@ -36,6 +37,11 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	}
 	facts := git.Activity(a.Window)
 	collection := snapshot.Collection{}
+	if !slices.ContainsFunc(git.Sources, func(source domain.SourceState) bool {
+		return source.Source == "git" && source.Scope == domain.ActivityHistoryScope
+	}) {
+		collection.Sources = append(collection.Sources, facts.Source)
+	}
 	for i := range category.Metrics {
 		input := category.Metrics[i].Input
 		key := snapshot.Source{Name: "git", Scope: domain.ActivityHistoryScope}
@@ -59,6 +65,22 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 		addEvidence(&input, a.Repository, commits)
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{key}})
 	}
+	treeKey := snapshot.Source{Name: "git", Scope: "tree"}
+	treeIndex := slices.IndexFunc(git.Sources, func(source domain.SourceState) bool {
+		return source.Source == treeKey.Name && source.Scope == treeKey.Scope
+	})
+	tree := domain.SourceState{Source: treeKey.Name, Scope: treeKey.Scope, Status: "unavailable", Reason: &domain.Reason{
+		Code: "GIT_TREE_UNAVAILABLE", Message: "Дерево основной ветки не получено",
+		CannotConclude: "Нельзя проверить наличие документации и признаков тестов",
+	}}
+	if treeIndex >= 0 {
+		tree = git.Sources[treeIndex]
+	} else {
+		collection.Sources = append(collection.Sources, tree)
+	}
+	for _, input := range p.engine.TreeInputs(git, tree) {
+		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
+	}
 	data, err := snapshot.Build(a, git, collection, dependencyCollection)
 	if err != nil {
 		return worker.Output{}, err
@@ -70,28 +92,51 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	if err != nil {
 		return worker.Output{}, err
 	}
-	reason := &domain.Reason{Code: "ACTIVITY_ONLY", Message: "Доступен отчёт активности",
-		CannotConclude: "Общая оценка по пяти категориям ещё не рассчитана"}
+	treeCategories, err := p.engine.TreeCategories(a.Versions, data.Inputs)
+	if err != nil {
+		return worker.Output{}, err
+	}
+	overallReason := &domain.Reason{
+		Code: "INCOMPLETE_CATEGORIES", Message: "Общая оценка недоступна",
+		CannotConclude: "Общая оценка по пяти категориям ещё не рассчитана",
+	}
 	fallback := "no_findings"
-	report := domain.ReportData{OverallReason: reason, Summary: "Сохранён анализ активности основной ветки",
-		Coverage: category.Coverage, Categories: []domain.Category{category}, Findings: []domain.Finding{}, Recommendations: []domain.Recommendation{},
-		Explanation: domain.Explanation{Mode: "deterministic_fallback", FallbackReason: &fallback,
-			CatalogVersion: a.Versions.RecommendationCatalog, SchemaVersion: a.Versions.ExplanationSchema, PromptVersion: a.Versions.Prompt}}
-	report.Coverage.Total = 12
-	report.Coverage.Unavailable += 9
-	report.Coverage.Percentage = float64(report.Coverage.Calculated) * 100 / 12
+	report := domain.ReportData{
+		OverallReason: overallReason, Summary: "Сохранён анализ активности, документации и файловых признаков тестов основной ветки",
+		Categories: append([]domain.Category{category}, treeCategories...), Findings: []domain.Finding{}, Recommendations: []domain.Recommendation{},
+		Explanation: domain.Explanation{
+			Mode: "deterministic_fallback", FallbackReason: &fallback,
+			CatalogVersion: a.Versions.RecommendationCatalog, SchemaVersion: a.Versions.ExplanationSchema, PromptVersion: a.Versions.Prompt,
+		},
+	}
+	pending := &domain.Reason{
+		Code: "INPUT_NOT_COLLECTED", Message: "Входные данные проверки не получены",
+		CannotConclude: "Оценка категории недоступна",
+	}
 	for _, spec := range []struct {
 		id          string
 		from, until int
-	}{{"documentation", 3, 5}, {"testing", 5, 6}, {"security", 6, 9}, {"ci_cd", 9, 12}} {
-		unknown := domain.Category{ID: spec.id, Status: "unavailable", Reason: reason,
-			Coverage: domain.Coverage{Total: spec.until - spec.from, Unavailable: spec.until - spec.from}, Metrics: []domain.Metric{}}
+	}{{"security", 6, 9}, {"ci_cd", 9, 12}} {
+		unknown := domain.Category{
+			ID: spec.id, Status: "unavailable", Reason: pending,
+			Coverage: domain.Coverage{Total: spec.until - spec.from, Unavailable: spec.until - spec.from}, Metrics: []domain.Metric{},
+		}
 		for _, input := range data.Inputs[spec.from:spec.until] {
-			unknown.Metrics = append(unknown.Metrics, domain.Metric{Input: input, RuleVersion: a.Versions.Methodology,
-				Explanation: "Входные данные проверки не получены"})
+			unknown.Metrics = append(unknown.Metrics, domain.Metric{
+				Input: input, RuleVersion: a.Versions.Methodology,
+				Explanation: "Входные данные проверки не получены",
+			})
 		}
 		report.Categories = append(report.Categories, unknown)
 	}
+	for _, item := range report.Categories {
+		report.Coverage.Total += item.Coverage.Total
+		report.Coverage.Calculated += item.Coverage.Calculated
+		report.Coverage.Partial += item.Coverage.Partial
+		report.Coverage.Unavailable += item.Coverage.Unavailable
+		report.Coverage.NotApplicable += item.Coverage.NotApplicable
+	}
+	report.Coverage.Percentage = float64(report.Coverage.Calculated) * 100 / float64(report.Coverage.Total)
 	if err := ctx.Err(); err != nil {
 		return worker.Output{}, err
 	}
@@ -103,8 +148,10 @@ func addEvidence(input *domain.MetricInput, repository domain.RepositoryMetadata
 	for _, commit := range commits[:min(len(commits), 10)] {
 		sha := commit.SHA
 		url := repository.CanonicalURL + "/commit/" + sha
-		input.Evidence = append(input.Evidence, domain.Evidence{ID: fmt.Sprintf("%s:%s", input.ID, sha), Source: "git", Kind: "commit",
-			Description: "Коммит основной ветки с подтверждённой датой committer", Revision: &sha, URL: &url})
+		input.Evidence = append(input.Evidence, domain.Evidence{
+			ID: fmt.Sprintf("%s:%s", input.ID, sha), Source: "git", Kind: "commit",
+			Description: "Коммит основной ветки с подтверждённой датой committer", Revision: &sha, URL: &url,
+		})
 	}
 	input.EvidenceLimited = len(commits) > len(input.Evidence)
 	if input.Status == "complete" || input.Status == "not_applicable" {

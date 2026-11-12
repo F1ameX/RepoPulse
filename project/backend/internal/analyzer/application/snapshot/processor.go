@@ -42,10 +42,17 @@ type Calculator interface {
 type Processor struct {
 	collectors []Collector
 	calculator Calculator
+	osv        OSVQuerier
 }
 
 func NewProcessor(collectors []Collector, calculator Calculator) *Processor {
 	return &Processor{collectors: append([]Collector{}, collectors...), calculator: calculator}
+}
+
+func NewProcessorWithOSV(collectors []Collector, calculator Calculator, osv OSVQuerier) *Processor {
+	p := NewProcessor(collectors, calculator)
+	p.osv = osv
+	return p
 }
 
 func (p *Processor) Process(ctx context.Context, a domain.Analysis, git worker.GitSession, advance func(string) error) (worker.Output, error) {
@@ -83,6 +90,13 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, git worker.G
 			return worker.Output{}, err
 		}
 		collected, err = clone(collected)
+		if err != nil {
+			return worker.Output{}, err
+		}
+		collections = append(collections, collected)
+	}
+	if p.osv != nil {
+		collected, err := collectOSV(ctx, p.osv, collections)
 		if err != nil {
 			return worker.Output{}, err
 		}
