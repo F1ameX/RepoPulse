@@ -43,14 +43,23 @@ func TestPinnedTreeDistinguishesExactLimitFromTruncation(t *testing.T) {
 }
 
 func TestTreeKeepsNestedPathsButNotAnInterruptedRecord(t *testing.T) {
-	header := "100644 blob " + strings.Repeat("a", 40) + " 17\t"
-	out := treeOutput{remaining: 1000, pathLimit: 5}
-	for _, chunk := range []string{header + "docs/SEC", "URITY.md\x00" + header + "src/check_test.go\x00", header + "src/fake_test.go"} {
-		if _, err := out.Write([]byte(chunk)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if len(out.files) != 2 || out.files[0].Path != "docs/SECURITY.md" || out.files[1].Path != "src/check_test.go" || len(out.pending) == 0 {
-		t.Fatalf("lost a complete path or accepted an unfinished one: %+v", out.files)
+	for _, tc := range []struct {
+		name, suffix string
+		withSizes    bool
+		size         int64
+	}{{"with sizes", " 17", true, 17}, {"paths only", "", false, -1}} {
+		t.Run(tc.name, func(t *testing.T) {
+			header := "100644 blob " + strings.Repeat("a", 40) + tc.suffix + "\t"
+			out := treeOutput{remaining: 1000, pathLimit: 5, withSizes: tc.withSizes}
+			for _, chunk := range []string{header + "docs/SEC", "URITY.md\x00" + header + "src/check_test.go\x00", header + "src/fake_test.go"} {
+				if _, err := out.Write([]byte(chunk)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if len(out.files) != 2 || out.files[0].Path != "docs/SECURITY.md" || out.files[1].Path != "src/check_test.go" ||
+				out.files[0].Size != tc.size || len(out.pending) == 0 {
+				t.Fatalf("incorrect complete paths: %+v", out.files)
+			}
+		})
 	}
 }

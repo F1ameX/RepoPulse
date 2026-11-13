@@ -80,10 +80,13 @@ func fixture(t *testing.T) (domain.RepositoryMetadata, *httptest.Server, string)
 			t.Fatal(err)
 		}
 	}
-	if err := os.Symlink("/must-not-be-followed", filepath.Join(work, "external-link")); err != nil {
+	linkTarget := filepath.Join(root, "link-target")
+	if err := os.WriteFile(linkTarget, []byte("/must-not-be-followed"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	command(t, work, "add", ".")
+	linkSHA := command(t, work, "hash-object", "-w", "--no-filters", linkTarget)
+	command(t, work, "update-index", "--add", "--cacheinfo", "120000,"+linkSHA+",external-link")
 	command(t, work, "commit", "-m", "first")
 	first := command(t, work, "rev-parse", "HEAD")
 	command(t, work, "branch", "other")
@@ -111,6 +114,7 @@ func fixture(t *testing.T) (domain.RepositoryMetadata, *httptest.Server, string)
 		t.Fatal(err)
 	}
 	command(t, root, "clone", "--bare", work, filepath.Join(root, "owner", "repo.git"))
+	command(t, filepath.Join(root, "owner", "repo.git"), "config", "uploadpack.allowFilter", "true")
 	binary, err := exec.LookPath("git")
 	if err != nil {
 		t.Fatal(err)
@@ -140,6 +144,111 @@ func hasReason(data domain.GitData, reason string) bool {
 	}
 	return false
 }
+
+type blockFullFetch struct {
+	base http.RoundTripper
+}
+
+func (t blockFullFetch) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/git-upload-pack") {
+		payload, err := io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+		r = r.Clone(r.Context())
+		r.Body = io.NopCloser(bytes.NewReader(payload))
+		request := payload
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			gzipBody, err := gzip.NewReader(bytes.NewReader(payload))
+			if err != nil {
+				return nil, err
+			}
+			request, err = io.ReadAll(gzipBody)
+			_ = gzipBody.Close()
+			if err != nil {
+				return nil, err
+			}
+		}
+		if bytes.Contains(request, []byte("want ")) && !bytes.Contains(request, []byte("filter blob:none")) {
+			return &http.Response{
+				StatusCode: http.StatusOK, ContentLength: DefaultLimits().Bytes + 1,
+				Body: io.NopCloser(strings.NewReader("")),
+			}, nil
+		}
+	}
+	return t.base.RoundTrip(r)
+}
+
+func TestPinnedTreeSurvivesFullHistoryTransferLimit(t *testing.T) {
+	metadata, server, _ := fixture(t)
+	reader := readerFor(t, server, DefaultLimits(), false)
+	rewriter := reader.client.Transport.(rewriteTransport)
+	rewriter.base = blockFullFetch{base: rewriter.base}
+	reader.client.Transport = rewriter
+
+	session, err := reader.Open(t.Context(), metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	data := session.Data()
+	for _, scope := range data.Sources {
+		switch scope.Scope {
+		case domain.GitTreeScope:
+			if scope.Status != "complete" || scope.Reason != nil || scope.Sample.Total == nil || *scope.Sample.Total != 4 {
+				t.Fatalf("pinned tree not preserved: %+v", scope)
+			}
+		case domain.ActivityHistoryScope, "history":
+			if scope.Status == "complete" || scope.Reason == nil || scope.Reason.Code != "GIT_SIZE_LIMIT" {
+				t.Fatalf("history falsely marked complete: %+v", scope)
+			}
+		}
+	}
+	if len(data.Files) != 4 {
+		t.Fatalf("unexpected pinned paths: %v", data.Files)
+	}
+	for _, file := range data.Files {
+		if file.Path == "README.md" && file.Mode == "100644" && file.Size == -1 {
+			return
+		}
+	}
+	t.Fatal("missing README evidence from the pinned tree")
+}
+
+func TestExperimentalHistoryReadsPinnedAncestorsOnly(t *testing.T) {
+	metadata, server, oldest := fixture(t)
+	reader := readerFor(t, server, ExperimentalMainHistoryLimits(), false)
+	session, err := reader.Open(t.Context(), metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+
+	data := session.Data()
+	if len(data.Refs) != 3 || len(data.Files) != 4 || !data.MainWalkComplete ||
+		len(data.MainCommits) != 2 || len(data.Commits) != 2 {
+		t.Fatalf("expected complete pinned ancestry and tree, got %+v", data)
+	}
+	for _, commit := range data.Commits {
+		if commit.Main == nil || !*commit.Main || (commit.SHA != oldest && commit.SHA != *metadata.CommitSHA) {
+			t.Fatalf("unexpected commit in the experimental history: %+v", commit)
+		}
+	}
+	scopes := make(map[string]domain.SourceState, len(data.Sources))
+	for _, scope := range data.Sources {
+		scopes[scope.Scope] = scope
+	}
+	if scopes[domain.GitTreeScope].Status != "complete" || scopes[domain.ActivityHistoryScope].Status != "complete" {
+		t.Fatalf("expected complete tree and main history: %+v", data.Sources)
+	}
+	history := scopes["history"]
+	if history.Status != "partial" || history.Sample.Total != nil ||
+		history.Reason == nil || history.Reason.Code != "GIT_HISTORY_MAIN_ONLY" {
+		t.Fatalf("history of all refs was not marked partial: %+v", history)
+	}
+}
+
 func TestRealGitIsReadWithoutCheckout(t *testing.T) {
 	metadata, server, old := fixture(t)
 	reader := readerFor(t, server, DefaultLimits(), false)

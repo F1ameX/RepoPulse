@@ -21,7 +21,7 @@ type GitData struct {
 }
 type GitFile struct {
 	Path, Mode, ObjectSHA string
-	Size                  int64 // -1 for a submodule reference, which has no blob size.
+	Size                  int64 // -1 when blob size is unknown or the entry is a submodule.
 }
 type GitCommit struct {
 	SHA         string
