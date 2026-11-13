@@ -115,18 +115,23 @@ func TestAnalysisReadFailureAndAuthUnavailableAreTransportErrors(t *testing.T) {
 }
 
 func TestAnalysisHTTPUsesWorkerErrorModelAndSanitizesStoredDetails(t *testing.T) {
-	for _, tc := range []struct{ storedCode, publicCode string }{
-		{"BUDGET_EXCEEDED", "BUDGET_EXCEEDED"},
-		{"GIT_TIME_LIMIT", "GIT_TIME_LIMIT"},
-		{"GIT_SIZE_LIMIT", "GIT_SIZE_LIMIT"},
-		{"REPORT_SAVE_FAILED", "REPORT_SAVE_FAILED"},
-		{"UNKNOWN_PROVIDER_ERROR", "ANALYSIS_FAILED"},
+	const private = "private provider detail"
+	const sizeLimit = "Репозиторий превышает ограничения анализа"
+	const noData = "Не удалось получить данные для анализа"
+	for _, tc := range []struct{ name, storedCode, storedMessage, publicCode, publicMessage string }{
+		{"budget", "BUDGET_EXCEEDED", private, "BUDGET_EXCEEDED", "Превышено время анализа"},
+		{"legacy Git time", "GIT_TIME_LIMIT", private, "BUDGET_EXCEEDED", "Превышено время анализа"},
+		{"legacy Git size", "GIT_SIZE_LIMIT", private, "ANALYSIS_FAILED", sizeLimit},
+		{"normalized Git size", "ANALYSIS_FAILED", sizeLimit, "ANALYSIS_FAILED", sizeLimit},
+		{"no source data", "ANALYSIS_FAILED", noData, "ANALYSIS_FAILED", noData},
+		{"save failure", "REPORT_SAVE_FAILED", private, "REPORT_SAVE_FAILED", "Не удалось сохранить результат анализа"},
+		{"unknown reason", "UNKNOWN_PROVIDER_ERROR", private, "ANALYSIS_FAILED", "Не удалось завершить анализ"},
+		{"untrusted message", "ANALYSIS_FAILED", private, "ANALYSIS_FAILED", "Не удалось завершить анализ"},
 	} {
-		t.Run(tc.storedCode, func(t *testing.T) {
-			var failure domain.AnalysisFailure
-			stored := `{"code":"` + tc.storedCode + `","message":"private provider detail","trace_id":"worker-trace","field_errors":[{"field":"repository_url","code":"DEBUG","message":"token-must-not-leak"}]}`
-			if err := json.Unmarshal([]byte(stored), &failure); err != nil {
-				t.Fatal(err)
+		t.Run(tc.name, func(t *testing.T) {
+			failure := domain.AnalysisFailure{
+				Code: tc.storedCode, Message: tc.storedMessage, TraceID: "worker-trace",
+				FieldErrors: []domain.FailureField{{Field: "repository_url", Code: "DEBUG", Message: "token-must-not-leak"}},
 			}
 			id := domain.NewID()
 			service := analysisScenarios{get: func(context.Context, analysis.GetAnalysisQuery) (domain.Analysis, error) {
@@ -150,13 +155,39 @@ func TestAnalysisHTTPUsesWorkerErrorModelAndSanitizesStoredDetails(t *testing.T)
 				t.Fatal(err)
 			}
 			if recorder.Code != http.StatusOK || response.Status != "failed" || response.Error.Code != tc.publicCode ||
-				response.Error.TraceID != "worker-trace" || response.Error.Message == "" || response.Error.FieldErrors == nil || len(response.Error.FieldErrors) != 0 {
+				response.Error.TraceID != "worker-trace" || response.Error.Message != tc.publicMessage ||
+				response.Error.FieldErrors == nil || len(response.Error.FieldErrors) != 0 {
 				t.Fatalf("worker failure was not mapped safely: status=%d body=%s", recorder.Code, recorder.Body.String())
 			}
 			if strings.Contains(recorder.Body.String(), "private") || strings.Contains(recorder.Body.String(), "must-not-leak") {
 				t.Fatal("stored provider details leaked into the HTTP response")
 			}
 		})
+	}
+}
+
+type unavailableReportService struct{}
+
+func (unavailableReportService) GetReport(context.Context, domain.VerifiedContext, string) (domain.Report, error) {
+	return domain.Report{}, apidomain.ErrReportUnavailable
+}
+
+func TestReportReadUnavailableUsesExistingPublicCode(t *testing.T) {
+	resolver := contextResolverFunc(func(context.Context, SessionTokens) (domain.VerifiedContext, error) {
+		return activeGuestContext(), nil
+	})
+	handler := NewHandler(nil, resolver, Options{Reports: unavailableReportService{}})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/reports/"+domain.NewID(), nil)
+	request.AddCookie(&http.Cookie{Name: "repopulse_guest", Value: "opaque"})
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	var response errorResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if recorder.Code != http.StatusServiceUnavailable || response.Error.Code != "INTERNAL_ERROR" ||
+		response.Error.Message != "Не удалось загрузить отчёт" {
+		t.Fatalf("unexpected report read failure: status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 

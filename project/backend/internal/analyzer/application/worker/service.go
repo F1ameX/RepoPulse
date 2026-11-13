@@ -28,7 +28,7 @@ type GitSource interface {
 }
 
 // A source can expose a structured reason even if opening a session failed.
-// The worker only publishes explicitly recognized terminal limit codes.
+// The worker only maps recognized limit reasons to terminal failures.
 type sourceError interface {
 	ReasonCode() string
 }
@@ -140,11 +140,8 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 	git, err := s.git.Open(ctx, a.Repository)
 	if err != nil {
 		var failure sourceError
-		if errors.As(err, &failure) {
-			switch failure.ReasonCode() {
-			case "GIT_TIME_LIMIT", "GIT_SIZE_LIMIT":
-				return &jobError{failure.ReasonCode()}
-			}
+		if errors.As(err, &failure) && domain.IsGitLimit(failure.ReasonCode()) {
+			return &jobError{failure.ReasonCode()}
 		}
 		return err
 	}
@@ -219,12 +216,11 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 			if source.Source != "git" || source.Status == "complete" || source.Reason == nil {
 				continue
 			}
-			switch source.Reason.Code {
-			case "GIT_TIME_LIMIT", "GIT_SIZE_LIMIT":
+			if domain.IsGitLimit(source.Reason.Code) {
 				return &jobError{source.Reason.Code}
 			}
 		}
-		return &jobError{"ANALYSIS_FAILED"}
+		return &jobError{domain.FailureNoUsefulData}
 	}
 	// Collector completeness cannot be replaced with a claim of full coverage.
 	data = git.Data()

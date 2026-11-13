@@ -349,17 +349,20 @@ func TestActivityGitLimitsPersistFailureOrUsefulPartialReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, code := range []string{"GIT_TIME_LIMIT", "GIT_SIZE_LIMIT"} {
+	for _, tc := range []struct{ reason, code, message string }{
+		{"GIT_TIME_LIMIT", "BUDGET_EXCEEDED", "Превышено время анализа"},
+		{"GIT_SIZE_LIMIT", "ANALYSIS_FAILED", "Репозиторий превышает ограничения анализа"},
+	} {
 		for _, partial := range []bool{false, true} {
-			name := code + "/empty"
+			name := tc.reason + "/empty"
 			if partial {
-				name = code + "/observed"
+				name = tc.reason + "/observed"
 			}
 			t.Run(name, func(t *testing.T) {
 				a := domain.Analysis{ID: domain.NewID(), SubmissionID: domain.NewID(), RequestID: domain.NewID(), Owner: domain.Owner{Kind: "guest", ID: owner},
 					Repository: fixture.Repository, Versions: fixture.Versions, AssessmentAt: fixture.AssessmentAt, CreatedAt: fixture.AssessmentAt, Window: fixture.Window, Status: "queued"}
 				data := domain.GitData{Repository: a.Repository, Sources: []domain.SourceState{{Source: "git", Scope: domain.ActivityHistoryScope, Status: "unavailable",
-					Reason: &domain.Reason{Code: code, Message: "Прерван сбор Git", CannotConclude: "Полнота истории неизвестна"}}}}
+					Reason: &domain.Reason{Code: tc.reason, Message: "Прерван сбор Git", CannotConclude: "Полнота истории неизвестна"}}}}
 				if partial {
 					data.Sources[0].Status = "partial"
 					data.MainCommits = []domain.ActivityCommit{{SHA: *a.Repository.CommitSHA, CommittedAt: a.AssessmentAt.Add(-time.Hour)}}
@@ -377,7 +380,8 @@ func TestActivityGitLimitsPersistFailureOrUsefulPartialReport(t *testing.T) {
 					t.Fatalf("state/cleanup: %v", err)
 				}
 				if !partial {
-					if state.Status != "failed" || state.Error == nil || state.Error.Code != code || state.ReportID != nil {
+					if state.Status != "failed" || state.Error == nil || state.Error.Code != tc.code ||
+						state.Error.Message != tc.message || state.ReportID != nil {
 						t.Fatalf("limit reason was lost: %+v", state)
 					}
 					return
@@ -386,7 +390,7 @@ func TestActivityGitLimitsPersistFailureOrUsefulPartialReport(t *testing.T) {
 				if state.Status != "completed" || err != nil {
 					t.Fatalf("useful partial result was lost: state=%+v err=%v", state, err)
 				}
-				if result.Report.Categories[0].Metrics[0].Input.Reason.Code != code || result.Report.Categories[0].Metrics[0].NormalizedScore != nil {
+				if result.Report.Categories[0].Metrics[0].Input.Reason.Code != tc.reason || result.Report.Categories[0].Metrics[0].NormalizedScore != nil {
 					t.Fatal("partial report lost the reason or invented a score")
 				}
 			})
