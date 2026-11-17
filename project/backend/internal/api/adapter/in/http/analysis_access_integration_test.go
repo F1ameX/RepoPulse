@@ -302,3 +302,170 @@ func TestAnalysisStatusRequiresOwnership(t *testing.T) {
 		asB.Code, asB.Body)
 	}
 }
+
+func TestAnalysisStatusAccessRestoredAfterRelogin(t *testing.T) {
+	store := newMemoryAuthStore()
+	var clockMu sync.Mutex
+	offset := time.Duration(0)
+	now := func() time.Time {
+		clockMu.Lock()
+		defer clockMu.Unlock()
+		return time.Now().UTC().Add(offset)
+	}
+	hasher, err := authpassword.NewArgon2id(authpassword.Params{HashMem: authpassword.MinMemoryKiB, HashTime: 1, HashThreads: 1, KeyLen: 32, SaltLen: 16})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := authapp.NewService(store, store, store, authtoken.NewGenerator(), now,
+		authdomain.Options{GuestSessionTTL: 24 * time.Hour, AccountSessionTTL: 168 * time.Hour}, hasher)
+
+	listener := bufconn.Listen(1 << 20)
+	rpc := grpc.NewServer(grpc.UnaryInterceptor(grpcerr.UnaryServerInterceptor()))
+	authv1.RegisterAuthServiceServer(rpc, authgrpc.NewServer(service))
+	go func() { _ = rpc.Serve(listener) }()
+	defer rpc.Stop()
+	conn, err := grpc.NewClient("passthrough:///auth",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }),
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	sessions := session.NewService(authclient.NewClient(conn, 5*time.Second))
+	validator := &recordingValidator{inner: repository.NewValidator(&staticSource{}, time.Second)}
+
+	// Version is used for versioning of scoring 
+	// for test analyze it is not neseccary to be correct
+	versions := domain.Versions{
+	Schema:                "schema",
+	Methodology:           "method",
+	ScoringConfig:         "score",
+	CollectorProfile:      "profile",
+	SecretRules:           "secrets",
+	RecommendationCatalog: "catalog",
+	ExplanationSchema:     "explanation",
+	Prompt:                "prompt",
+}
+
+	analysisStore := newAnalysisStore()
+	
+	// creating real analyses service, to create analyze_id 
+	// for A and check it for B
+	analyses := analysis.NewService(
+	analysisStore,
+	staticAnalysisSource{},
+	versions,
+	time.Second,
+	)
+
+
+	handler := NewHandler(validator, sessions, Options{Sessions: sessions, CookieSecure: true, PublicOrigin: testOrigin, Analyses: analyses})
+
+	request := func(method, path, body, origin string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		if origin != "" {
+			r.Header.Set("Origin", origin)
+		}
+		for _, cookie := range cookies {
+			r.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+		
+	credentialsA := `{"login":" FlameX ","password":"correct horse battery"}`
+
+	registeredA := request("POST", "/api/v1/auth/register", credentialsA, testOrigin)
+	if registeredA.Code != 201 || strings.TrimSpace(registeredA.Body.String()) != `{"login":"flamex","message":"Аккаунт создан. Войдите в систему"}` {
+		t.Fatalf("register: %d %s", registeredA.Code, registeredA.Body)
+	}
+	if len(registeredA.Result().Cookies()) != 0 {
+		t.Fatal("registration must not sign in")
+	}
+	
+
+	loggedInA := request("POST", "/api/v1/auth/login", `{"login":"flamex","password":"correct horse battery"}`, testOrigin)
+	if loggedInA.Code != 200 || !strings.Contains(loggedInA.Body.String(), `"kind":"account","login":"flamex"`) {
+		t.Fatalf("login: %d %s", loggedInA.Code, loggedInA.Body)
+	}
+	cookiesA := loggedInA.Result().Cookies()
+	if len(cookiesA) != 1 || cookiesA[0].Name != "repopulse_session" {
+		t.Fatalf("login cookies = %+v; only the account cookie may be set", cookiesA)
+	}
+	accountA := cookiesA[0]
+	weekSeconds := int((168 * time.Hour).Seconds())
+	if !accountA.HttpOnly || !accountA.Secure || accountA.SameSite != http.SameSiteLaxMode || accountA.Path != "/api/v1" ||
+		accountA.MaxAge < weekSeconds-60 || accountA.MaxAge > weekSeconds {
+		t.Fatalf("bad account cookie: %+v", accountA)
+	}
+	if strings.Contains(loggedInA.Body.String(), accountA.Value) {
+		t.Fatal("token exposed in JSON")
+	}
+
+
+	body := fmt.Sprintf(
+	`{"request_id":%q,"repository_url":"https://github.com/owner/repo"}`,
+	uuid.NewString(),
+	)
+	created := request("POST", "/api/v1/analyses", body, testOrigin, accountA)
+
+	if created.Code != http.StatusAccepted {
+		t.Fatalf("create analysis: got HTTP %d, body=%s", created.Code, created.Body)
+	}
+
+	var result struct {
+		AnalysisID string `json:"analysis_id"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if result.AnalysisID == "" {
+		t.Fatal("create response has no analysis_id")
+	}
+
+	path := "/api/v1/analyses/" + result.AnalysisID
+
+	asA := request(http.MethodGet, path, "", "", accountA)
+	if asA.Code != http.StatusOK {
+		t.Fatalf("owner reads analysis: got %d, want 200, body=%s", asA.Code, asA.Body)
+	}
+
+	out := request("POST", "/api/v1/auth/logout", "", testOrigin, accountA)
+
+	if out.Code != 204 || out.Body.Len() != 0 {
+		t.Fatalf("logout: %d %s", out.Code, out.Body)
+	}
+	deleted := out.Result().Cookies()
+
+	if len(deleted) != 1 || deleted[0].Name != "repopulse_session" || deleted[0].MaxAge >= 0 || deleted[0].Path != "/api/v1" ||
+		!deleted[0].HttpOnly || !deleted[0].Secure || deleted[0].SameSite != http.SameSiteLaxMode {
+		t.Fatalf("logout cookies = %+v; only the account cookie may be deleted", deleted)
+	}
+	
+	loggedInA = request("POST", "/api/v1/auth/login", `{"login":"flamex","password":"correct horse battery"}`, testOrigin)
+	if loggedInA.Code != 200 || !strings.Contains(loggedInA.Body.String(), `"kind":"account","login":"flamex"`) {
+		t.Fatalf("login: %d %s", loggedInA.Code, loggedInA.Body)
+	}
+	cookiesA = loggedInA.Result().Cookies()
+	if len(cookiesA) != 1 || cookiesA[0].Name != "repopulse_session" {
+		t.Fatalf("login cookies = %+v; only the account cookie may be set", cookiesA)
+	}
+	accountA = cookiesA[0]	
+	if !accountA.HttpOnly || !accountA.Secure || accountA.SameSite != http.SameSiteLaxMode || accountA.Path != "/api/v1" ||
+		accountA.MaxAge < weekSeconds-60 || accountA.MaxAge > weekSeconds {
+		t.Fatalf("bad account cookie: %+v", accountA)
+	}
+	if strings.Contains(loggedInA.Body.String(), accountA.Value) {
+		t.Fatal("token exposed in JSON")
+	}
+	
+	
+	asA = request(http.MethodGet, path, "", "", accountA)
+	if asA.Code != http.StatusOK {
+		t.Fatalf("owner reads analysis: got %d, want 200, body=%s", asA.Code, asA.Body)
+	}	
+}
