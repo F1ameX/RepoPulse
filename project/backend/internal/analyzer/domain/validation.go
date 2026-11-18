@@ -192,11 +192,14 @@ func (s SnapshotData) Validate() error {
 			}
 			seen[id] = true
 		}
+<<<<<<< HEAD
 	}
 	if s.GitHubCI != nil {
 		if err := s.GitHubCI.validate(s.Sources); err != nil {
 			return err
 		}
+=======
+>>>>>>> origin/main
 	}
 	inputs := map[string]bool{}
 	evidence := map[string]bool{}

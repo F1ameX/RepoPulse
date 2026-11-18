@@ -123,7 +123,10 @@ func Build(a domain.Analysis, git domain.GitData, collections ...Collection) (do
 	if err != nil {
 		return domain.SnapshotData{}, err
 	}
+<<<<<<< HEAD
 	data.GitHubCI = ci
+=======
+>>>>>>> origin/main
 	data.Dependencies, err = NormalizeDependencies(data.Dependencies)
 	if err != nil {
 		return domain.SnapshotData{}, err

@@ -80,20 +80,32 @@ func TestQuerySharesFortyAttemptsAcrossProfilesPagesAndRetries(t *testing.T) {
 		{Ecosystem: "npm", Name: "pkg", Version: "1.0.0"},
 		{Ecosystem: "Maven", Name: "example:lib", Version: "2.0.0"},
 		{Ecosystem: "Go", Name: "example.org/mod", Version: "v1.0.0"},
+<<<<<<< HEAD
 		{Ecosystem: "npm", Name: "other", Version: "1.0.0"},
 		{Ecosystem: "Go", Name: "example.org/other", Version: "v1.0.0"},
+=======
+>>>>>>> origin/main
 	}
 	calls := 0
 	client := NewClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		calls++
 		defer r.Body.Close()
 		switch calls {
+<<<<<<< HEAD
 		case 10, 19, 28, 37:
+=======
+		case 1:
+>>>>>>> origin/main
 			return response(200, "{}"), nil
 		case 2:
 			res := response(429, "")
 			res.Header.Set("Retry-After", "0")
 			return res, nil
+<<<<<<< HEAD
+=======
+		case 3:
+			return response(200, "{}"), nil
+>>>>>>> origin/main
 		case 40:
 			// The last attempt fails. It must not trigger another retry.
 			res := response(429, "")
@@ -106,9 +118,14 @@ func TestQuerySharesFortyAttemptsAcrossProfilesPagesAndRetries(t *testing.T) {
 		return response(200, fmt.Sprintf(`{"next_page_token":"page-%d"}`, calls)), nil
 	})})
 	results := client.Query(t.Context(), queries)
+<<<<<<< HEAD
 	if calls != 40 || len(results) != 5 || results[0].ReasonCode != "" || results[1].ReasonCode != "" ||
 		results[2].ReasonCode != "" || results[3].ReasonCode != "" ||
 		results[4].ReasonCode != "OSV_ATTEMPT_LIMIT" || len(results[4].Pages) != 2 {
+=======
+	if calls != 40 || results[0].ReasonCode != "" || results[1].ReasonCode != "" ||
+		results[2].ReasonCode != "OSV_ATTEMPT_LIMIT" || len(results[2].Pages) != 36 {
+>>>>>>> origin/main
 		t.Fatalf("budget was not shared: calls=%d results=%+v", calls, results)
 	}
 }
