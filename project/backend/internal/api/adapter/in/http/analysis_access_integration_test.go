@@ -456,6 +456,7 @@ func TestAnalysisStatusAccessRestoredAfterRelogin(t *testing.T) {
 		t.Fatalf("logout cookies = %+v; only the account cookie may be deleted", deleted)
 	}
 
+	// after logout analysis_id is not available with old cookies
 	sessionExpiredasA := request(http.MethodGet, path, "", "", accountA)
 	if sessionExpiredasA.Code != 401 || errorCode(sessionExpiredasA) != "SESSION_EXPIRED" {
 		t.Fatalf("logout owner reads analysis: got %d with errorCode=%s, want 401 with errorCode=SESSION_EXPIRED", sessionExpiredasA.Code, errorCode(sessionExpiredasA))
@@ -661,4 +662,7 @@ func TestAnalysisStatusRejectsExpiredAccountSession(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGuestAnalysisAccessWithAccountSession(t *testing.T) {
 }
