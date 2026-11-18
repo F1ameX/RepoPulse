@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"regexp"
@@ -18,10 +17,9 @@ import (
 )
 
 const (
-	queryURL         = "https://api.osv.dev/v1/query"
-	maxAttempts      = 40
-	maxResponseBytes = 5 << 20
-	attemptTimeout   = 15 * time.Second
+	queryURL       = "https://api.osv.dev/v1/query"
+	maxAttempts    = 40
+	attemptTimeout = 15 * time.Second
 )
 
 var advisoryID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$`)
@@ -53,6 +51,7 @@ type queryBody struct {
 // Query uses one budget for the entire dependency set, including all pages
 // and retries. A failure keeps previously received pages and results.
 func (c *Client) Query(ctx context.Context, queries []domain.OSVQuery) []domain.OSVResult {
+	ctx = domain.WithHTTPInputBudget(ctx)
 	ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
 	defer cancel()
 	results := make([]domain.OSVResult, 0, len(queries))
@@ -63,7 +62,7 @@ func (c *Client) Query(ctx context.Context, queries []domain.OSVQuery) []domain.
 		if blocked == "" {
 			result = c.query(ctx, query, &remaining)
 			switch result.ReasonCode {
-			case "OSV_RATE_LIMITED", "OSV_RETRY_DEFERRED":
+			case "OSV_RATE_LIMITED", "OSV_RETRY_DEFERRED", "OSV_INPUT_LIMIT":
 				// A service-wide backoff also applies to the remaining packages.
 				blocked = result.ReasonCode
 			}
@@ -95,6 +94,10 @@ func (c *Client) query(ctx context.Context, query domain.OSVQuery, remaining *in
 			return result
 		}
 		result.Pages = append(result.Pages, page)
+		if len(result.Pages) == domain.HTTPPageLimit {
+			result.ReasonCode = "OSV_PAGE_LIMIT"
+			return result
+		}
 		if next == "" {
 			return result
 		}
@@ -124,6 +127,9 @@ func (c *Client) fetchPage(ctx context.Context, request queryBody, remaining *in
 		}
 		if *remaining == 0 {
 			return domain.OSVPage{}, "", "OSV_ATTEMPT_LIMIT"
+		}
+		if domain.HTTPInputExhausted(ctx) {
+			return domain.OSVPage{}, "", "OSV_INPUT_LIMIT"
 		}
 		(*remaining)--
 		raw, failed := c.attempt(ctx, body)
@@ -169,6 +175,15 @@ func (c *Client) attempt(ctx context.Context, body []byte) ([]byte, failure) {
 		return nil, requestFailure(ctx, err)
 	}
 	defer response.Body.Close()
+	raw, err := domain.ReadHTTPInput(ctx, response.Body)
+	switch {
+	case errors.Is(err, domain.ErrHTTPInputLimit):
+		return nil, failure{code: "OSV_INPUT_LIMIT"}
+	case errors.Is(err, domain.ErrHTTPResponseLimit):
+		return nil, failure{code: "OSV_RESPONSE_LIMIT"}
+	case err != nil:
+		return nil, requestFailure(ctx, err)
+	}
 	switch {
 	case response.StatusCode == http.StatusTooManyRequests:
 		delay, ok := retryAfter(response.Header)
@@ -184,13 +199,6 @@ func (c *Client) attempt(ctx context.Context, body []byte) ([]byte, failure) {
 		return nil, failure{"OSV_UPSTREAM_FAILED", true, time.Second}
 	case response.StatusCode != http.StatusOK:
 		return nil, failure{code: "OSV_HTTP_ERROR"}
-	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil {
-		return nil, requestFailure(ctx, err)
-	}
-	if len(raw) > maxResponseBytes {
-		return nil, failure{code: "OSV_RESPONSE_LIMIT"}
 	}
 	return raw, failure{}
 }

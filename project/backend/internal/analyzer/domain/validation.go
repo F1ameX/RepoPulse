@@ -193,6 +193,11 @@ func (s SnapshotData) Validate() error {
 			seen[id] = true
 		}
 	}
+	if s.GitHubCI != nil {
+		if err := s.GitHubCI.validate(s.Sources); err != nil {
+			return err
+		}
+	}
 	inputs := map[string]bool{}
 	evidence := map[string]bool{}
 	for _, input := range s.Inputs {
@@ -281,6 +286,9 @@ func PrepareSnapshotData(data SnapshotData) (SnapshotData, error) {
 	if err := json.Unmarshal(encoded, &copied); err != nil {
 		return SnapshotData{}, invalid("snapshot JSON")
 	}
+	if data.GitHubCI != nil {
+		copied.GitHubCI = data.GitHubCI.Clone()
+	}
 	normalizeSnapshotData(&copied)
 	if err := copied.Validate(); err != nil {
 		return SnapshotData{}, err
@@ -328,6 +336,9 @@ func NewResult(a Analysis, snapshotID, reportID string, at time.Time, data Snaps
 	}
 	if err := json.Unmarshal(encoded, &copied); err != nil {
 		return Result{}, invalid("result JSON")
+	}
+	if data.GitHubCI != nil {
+		copied.Data.GitHubCI = data.GitHubCI.Clone()
 	}
 	data, report = copied.Data, copied.Report
 	normalizeSnapshotData(&data)

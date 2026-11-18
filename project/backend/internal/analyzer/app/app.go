@@ -4,7 +4,6 @@ package app
 import (
 	"context"
 
-	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/activity"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/scoring"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/snapshot"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/worker"
@@ -20,7 +19,7 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return RunWithProcessor(ctx, activity.NewProcessor(engine))
+	return RunWithProcessor(ctx, newActivityProcessor(engine))
 }
 
 // RunWithInputs assembles collected inputs before invoking a real calculator.

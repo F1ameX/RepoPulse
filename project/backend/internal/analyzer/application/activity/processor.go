@@ -14,9 +14,16 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
 )
 
-type Processor struct{ engine *scoring.Engine }
+type Processor struct {
+	engine *scoring.Engine
+	ci     snapshot.Collector
+}
 
 func NewProcessor(engine *scoring.Engine) *Processor { return &Processor{engine: engine} }
+
+func NewProcessorWithCI(engine *scoring.Engine, ci snapshot.Collector) *Processor {
+	return &Processor{engine: engine, ci: ci}
+}
 
 func (p *Processor) Process(ctx context.Context, a domain.Analysis, session worker.GitSession, advance func(string) error) (worker.Output, error) {
 	if err := ctx.Err(); err != nil {
@@ -26,6 +33,17 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	dependencyCollection, err := collector.Collect(ctx, a, session)
 	if err != nil {
 		return worker.Output{}, err
+	}
+	collections := []snapshot.Collection{dependencyCollection}
+	if p.ci != nil {
+		if err := advance("collecting_external"); err != nil {
+			return worker.Output{}, err
+		}
+		ci, err := p.ci.Collect(ctx, a, session)
+		if err != nil {
+			return worker.Output{}, err
+		}
+		collections = append(collections, ci)
 	}
 	if err := advance("calculating"); err != nil {
 		return worker.Output{}, err
@@ -81,7 +99,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	for _, input := range p.engine.TreeInputs(git, tree) {
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
 	}
-	data, err := snapshot.Build(a, git, collection, dependencyCollection)
+	data, err := snapshot.Build(a, git, append(collections, collection)...)
 	if err != nil {
 		return worker.Output{}, err
 	}

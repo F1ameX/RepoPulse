@@ -23,6 +23,7 @@ type Input struct {
 // Source failures are represented by completeness/reason, not an error containing
 // an upstream response. An error aborts the job (invalid data or cancellation).
 type Collection struct {
+	GitHubCI        *domain.GitHubCI
 	Inputs          []Input
 	Sources         []domain.SourceState
 	Dependencies    []domain.Dependency
@@ -56,6 +57,7 @@ func NewProcessorWithOSV(collectors []Collector, calculator Calculator, osv OSVQ
 }
 
 func (p *Processor) Process(ctx context.Context, a domain.Analysis, git worker.GitSession, advance func(string) error) (worker.Output, error) {
+	ctx = domain.WithHTTPInputBudget(ctx)
 	if p.calculator == nil || git == nil || advance == nil {
 		return worker.Output{}, domain.ErrInvalidData
 	}
@@ -113,7 +115,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, git worker.G
 		return worker.Output{}, err
 	}
 	// Preserve the snapshot even if calculation modifies its own input view.
-	calculationData, err := clone(data)
+	calculationData, err := domain.PrepareSnapshotData(data)
 	if err != nil {
 		return worker.Output{}, err
 	}
