@@ -259,7 +259,7 @@ func TestAnalysisStatusRequiresOwnership(t *testing.T) {
 		t.Fatalf("login cookies = %+v; only the account cookie may be set", cookiesB)
 	}
 	accountB := cookiesB[0]
-	if !accountA.HttpOnly || !accountB.Secure || accountB.SameSite != http.SameSiteLaxMode || accountB.Path != "/api/v1" ||
+	if !accountB.HttpOnly || !accountB.Secure || accountB.SameSite != http.SameSiteLaxMode || accountB.Path != "/api/v1" ||
 		accountB.MaxAge < weekSeconds-60 || accountB.MaxAge > weekSeconds {
 		t.Fatalf("bad account cookie: %+v", accountB)
 	}
@@ -293,10 +293,20 @@ func TestAnalysisStatusRequiresOwnership(t *testing.T) {
 		t.Fatalf("owner reads analysis: got %d, want 200, body=%s", asA.Code, asA.Body)
 	}
 
-	asB := request(http.MethodGet, path, "", "", accountB)
-	if asB.Code != http.StatusNotFound || errorCode(asB) != "ANALYSIS_NOT_FOUND" {
-		t.Fatalf("other account reads analysis: got %d, want 404 ANALYSIS_NOT_FOUND, body=%s",
-			asB.Code, asB.Body)
+	for _, ts := range []struct {
+		name string
+		path string
+	}{
+		{"foreign account with correct analysis_id", path},
+		{"foreign account with incorrect analysis_id", "/api/v1/analyses/" + uuid.NewString()},
+	} {
+		t.Run(ts.name, func(t *testing.T) {
+			incorrectRequest := request(http.MethodGet, ts.path, "", "", accountB)
+			if incorrectRequest.Code != http.StatusNotFound || errorCode(incorrectRequest) != "ANALYSIS_NOT_FOUND" {
+				t.Fatalf("other account reads analysis: got %d, want 404 ANALYSIS_NOT_FOUND, body=%s",
+					incorrectRequest.Code, incorrectRequest.Body)
+			}
+		})
 	}
 }
 
