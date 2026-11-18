@@ -34,7 +34,6 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	if err != nil {
 		return worker.Output{}, err
 	}
-<<<<<<< HEAD
 	collections := []snapshot.Collection{dependencyCollection}
 	if p.ci != nil {
 		if err := advance("collecting_external"); err != nil {
@@ -46,8 +45,6 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 		}
 		collections = append(collections, ci)
 	}
-=======
->>>>>>> origin/main
 	if err := advance("calculating"); err != nil {
 		return worker.Output{}, err
 	}
@@ -102,11 +99,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	for _, input := range p.engine.TreeInputs(git, tree) {
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
 	}
-<<<<<<< HEAD
 	data, err := snapshot.Build(a, git, append(collections, collection)...)
-=======
-	data, err := snapshot.Build(a, git, collection, dependencyCollection)
->>>>>>> origin/main
 	if err != nil {
 		return worker.Output{}, err
 	}
