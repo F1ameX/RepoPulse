@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/repository"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/activity"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/scoring"
@@ -57,6 +59,31 @@ func (v reportResolver) ResolveContext(_ context.Context, tokens apidomain.Sessi
 	return result, nil
 }
 
+func reportHTTPReader(t *testing.T, pool *pgxpool.Pool, owner string) func(string, string) *httptest.ResponseRecorder {
+	t.Helper()
+	rpc := grpc.NewServer(grpc.UnaryInterceptor(grpcerr.UnaryServerInterceptor()))
+	reportpb.RegisterReportServiceServer(rpc, reportgrpc.NewServer(reportapp.NewService(reportrepo.NewPostgres(pool))))
+	listener := bufconn.Listen(1 << 20)
+	go func() { _ = rpc.Serve(listener) }()
+	t.Cleanup(rpc.Stop)
+	conn, err := grpc.NewClient("passthrough:///report", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	reader := reportclient.NewClient(conn, time.Second)
+	handler := httpapi.NewHandler(nil, reportResolver{owner: owner, foreign: domain.NewID()}, httpapi.Options{Reports: reader})
+	return func(id, cookie string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "/api/v1/reports/"+id, nil)
+		if cookie != "" {
+			r.AddCookie(&http.Cookie{Name: "repopulse_guest", Value: cookie})
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+}
+
 func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testing.T) {
 	pool := testDatabase(t)
 	pg := repository.NewPostgres(pool)
@@ -70,27 +97,7 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := grpc.NewServer(grpc.UnaryInterceptor(grpcerr.UnaryServerInterceptor()))
-	reportpb.RegisterReportServiceServer(rpc, reportgrpc.NewServer(reportapp.NewService(reportrepo.NewPostgres(pool))))
-	listener := bufconn.Listen(1 << 20)
-	go func() { _ = rpc.Serve(listener) }()
-	defer rpc.Stop()
-	conn, err := grpc.NewClient("passthrough:///report", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	reader := reportclient.NewClient(conn, time.Second)
-	handler := httpapi.NewHandler(nil, reportResolver{owner: owner, foreign: domain.NewID()}, httpapi.Options{Reports: reader})
-	read := func(id, cookie string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("GET", "/api/v1/reports/"+id, nil)
-		if cookie != "" {
-			r.AddCookie(&http.Cookie{Name: "repopulse_guest", Value: cookie})
-		}
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, r)
-		return w
-	}
+	read := reportHTTPReader(t, pool, owner)
 	paths, err := filepath.Glob(filepath.Join(backendRoot, "internal/analyzer/application/scoring/testdata/ACT-*.json"))
 	if err != nil || len(paths) != 7 {
 		t.Fatalf("golden fixtures: %v", err)
