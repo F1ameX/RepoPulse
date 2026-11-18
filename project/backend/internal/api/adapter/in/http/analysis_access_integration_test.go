@@ -383,6 +383,12 @@ func TestAnalysisStatusAccessRestoredAfterRelogin(t *testing.T) {
 		return w
 	}
 
+	errorCode := func(w *httptest.ResponseRecorder) string {
+		var body errorResponse
+		_ = json.Unmarshal(w.Body.Bytes(), &body)
+		return body.Error.Code
+	}
+
 	credentialsA := `{"login":" FlameX ","password":"correct horse battery"}`
 
 	registeredA := request("POST", "/api/v1/auth/register", credentialsA, testOrigin)
@@ -448,6 +454,11 @@ func TestAnalysisStatusAccessRestoredAfterRelogin(t *testing.T) {
 	if len(deleted) != 1 || deleted[0].Name != "repopulse_session" || deleted[0].MaxAge >= 0 || deleted[0].Path != "/api/v1" ||
 		!deleted[0].HttpOnly || !deleted[0].Secure || deleted[0].SameSite != http.SameSiteLaxMode {
 		t.Fatalf("logout cookies = %+v; only the account cookie may be deleted", deleted)
+	}
+
+	sessionExpiredasA := request(http.MethodGet, path, "", "", accountA)
+	if sessionExpiredasA.Code != 401 || errorCode(sessionExpiredasA) != "SESSION_EXPIRED" {
+		t.Fatalf("logout owner reads analysis: got %d with errorCode=%s, want 401 with errorCode=SESSION_EXPIRED", sessionExpiredasA.Code, errorCode(sessionExpiredasA))
 	}
 
 	loggedInA = request("POST", "/api/v1/auth/login", `{"login":"flamex","password":"correct horse battery"}`, testOrigin)
