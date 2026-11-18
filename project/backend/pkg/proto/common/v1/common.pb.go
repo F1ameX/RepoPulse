@@ -748,6 +748,7 @@ type SourceState struct {
 	Sample        *Sample                `protobuf:"bytes,5,opt,name=sample,proto3" json:"sample,omitempty"`
 	ObtainedAt    *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=obtained_at,json=obtainedAt,proto3" json:"obtained_at,omitempty"`
 	Fingerprint   *string                `protobuf:"bytes,7,opt,name=fingerprint,proto3,oneof" json:"fingerprint,omitempty"`
+	MetricIds     []string               `protobuf:"bytes,8,rep,name=metric_ids,json=metricIds,proto3" json:"metric_ids,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -829,6 +830,13 @@ func (x *SourceState) GetFingerprint() string {
 		return *x.Fingerprint
 	}
 	return ""
+}
+
+func (x *SourceState) GetMetricIds() []string {
+	if x != nil {
+		return x.MetricIds
+	}
+	return nil
 }
 
 type GitRef struct {
@@ -1614,7 +1622,7 @@ const file_common_v1_common_proto_rawDesc = "" +
 	"_numeratorB\x0e\n" +
 	"\f_denominatorB\v\n" +
 	"\t_excludedB\x12\n" +
-	"\x10_excluded_reason\"\xb1\x02\n" +
+	"\x10_excluded_reason\"\xd0\x02\n" +
 	"\vSourceState\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x14\n" +
 	"\x05scope\x18\x02 \x01(\tR\x05scope\x12\x16\n" +
@@ -1623,7 +1631,9 @@ const file_common_v1_common_proto_rawDesc = "" +
 	"\x06sample\x18\x05 \x01(\v2\x1b.repopulse.common.v1.SampleR\x06sample\x12;\n" +
 	"\vobtained_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"obtainedAt\x12%\n" +
-	"\vfingerprint\x18\a \x01(\tH\x00R\vfingerprint\x88\x01\x01B\x0e\n" +
+	"\vfingerprint\x18\a \x01(\tH\x00R\vfingerprint\x88\x01\x01\x12\x1d\n" +
+	"\n" +
+	"metric_ids\x18\b \x03(\tR\tmetricIdsB\x0e\n" +
 	"\f_fingerprint\";\n" +
 	"\x06GitRef\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +

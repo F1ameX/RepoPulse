@@ -110,7 +110,11 @@ export function AnalysisAccess({ children }: { children: ReactNode }) {
           variant="error"
           actions={
             <>
-              <ButtonLink to="/login" state={{ returnTo: reportReturnTo(pathname) }}>
+              <ButtonLink
+                to="/login"
+                variant="secondary"
+                state={{ returnTo: reportReturnTo(pathname) }}
+              >
                 Войти
               </ButtonLink>
               <GuestAction />

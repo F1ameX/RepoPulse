@@ -106,13 +106,22 @@ func TestBuildKeepsUnknownTimeAndPartialSource(t *testing.T) {
 	git.Sources[0].Status, git.Sources[0].ObtainedAt = "partial", nil
 	git.Sources[0].Reason = &domain.Reason{Code: "GIT_PATH_LIMIT", Message: "Лимит путей", CannotConclude: "Полное дерево неизвестно"}
 	git.Sources[0].Sample.Total = nil
-	data, err := Build(a, git, Collection{Inputs: []Input{metric(t, "DOC_README", "bool", "true", Source{"git", "tree"})}})
+	git.Sources[0].MetricIDs = []string{"ACT_TREND"}
+	tree := Source{"git", "tree"}
+	readme := metric(t, "DOC_README", "bool", "true", tree)
+	readme.Sources = append(readme.Sources, tree)
+	data, err := Build(a, git, Collection{Inputs: []Input{
+		metric(t, "DOC_SUPPORT_SHARE", "ratio", "0", tree), readme,
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	input := find(t, data, "DOC_README")
 	if input.Status != "partial" || input.Reason.Code != "GIT_PATH_LIMIT" || data.Sources[0].ObtainedAt != nil || data.Sources[0].Sample.Total != nil {
 		t.Fatal("partial/unknown source was advertised as complete")
+	}
+	if want := []string{"DOC_README", "DOC_SUPPORT_SHARE"}; !reflect.DeepEqual(data.Sources[0].MetricIDs, want) {
+		t.Fatalf("source links = %v, want %v", data.Sources[0].MetricIDs, want)
 	}
 }
 

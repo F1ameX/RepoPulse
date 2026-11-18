@@ -124,6 +124,7 @@ export interface SourceState {
   sample: Sample;
   obtained_at: string | null;
   fingerprint: string | null;
+  metric_ids?: MetricId[];
 }
 
 export interface DependencyOrigin {

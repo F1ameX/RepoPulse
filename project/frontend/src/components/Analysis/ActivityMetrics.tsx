@@ -94,7 +94,7 @@ function EvidenceList({
     return (
       <div className={styles.evidenceBlock}>
         <strong>Основания:</strong>{' '}
-        <span className={styles.mono}>
+        <span>
           Основания недоступны
           {reason ? ` (${reason.message})` : ''}
         </span>
@@ -109,11 +109,9 @@ function EvidenceList({
         {evidence.map((ev) => (
           <li key={ev.id}>
             <span>{ev.secret_match_type ?? ev.description}</span>
-            {!ev.secret_match_type && (
-              <span className={styles.mono}>{` (источник: ${ev.source})`}</span>
-            )}
-            {ev.path && <span className={styles.mono}>{` [${ev.path}]`}</span>}
-            {ev.revision && <span className={styles.mono}>{` rev: ${ev.revision}`}</span>}
+            {!ev.secret_match_type && <span>{` (источник: ${ev.source})`}</span>}
+            {ev.path && <span>{` [${ev.path}]`}</span>}
+            {ev.revision && <span>{` rev: ${ev.revision}`}</span>}
             {ev.secret_match_type ? null : isSafeUrl(ev.url) ? (
               <>
                 {' '}
@@ -122,7 +120,7 @@ function EvidenceList({
                 </a>
               </>
             ) : (
-              <span className={styles.mono}>
+              <span>
                 {' '}
                 (Ссылка на источник недоступна)
                 {ev.url && ` ${ev.url}`}
@@ -163,10 +161,7 @@ function MetricRow({ metric, sha }: { metric: Metric; sha: string | null }) {
 
   return (
     <div className={styles.metricRow}>
-      <dt>
-        {label}
-        <span className={styles.metricId}>{input.id}</span>
-      </dt>
+      <dt>{label}</dt>
       <dd className={styles.metricDetails}>
         <div className={styles.metricValueLine}>
           <div>
@@ -191,8 +186,7 @@ function MetricRow({ metric, sha }: { metric: Metric; sha: string | null }) {
           </div>
         )}
         <div>
-          <strong>Состояние:</strong>{' '}
-          <span className={styles.mono}>{STATUS_LABELS[input.status] ?? input.status}</span>
+          <strong>Состояние:</strong> <span>{STATUS_LABELS[input.status] ?? input.status}</span>
         </div>
         <div>
           <strong>Окно:</strong>{' '}
@@ -221,8 +215,7 @@ function MetricRow({ metric, sha }: { metric: Metric; sha: string | null }) {
         )}
         {input.series && input.series.length > 0 && (
           <div>
-            <strong>Коммиты по периодам:</strong>{' '}
-            <span className={styles.mono}>{input.series.join(', ')}</span>
+            <strong>Коммиты по периодам:</strong> <span>{input.series.join(', ')}</span>
           </div>
         )}
         <div>
@@ -230,8 +223,7 @@ function MetricRow({ metric, sha }: { metric: Metric; sha: string | null }) {
         </div>
         {metric.explanation && <div>{metric.explanation}</div>}
         <div>
-          <strong>Версия методики:</strong>{' '}
-          <span className={styles.mono}>{metric.rule_version}</span>
+          <strong>Версия методики:</strong> <span>{metric.rule_version}</span>
         </div>
         <EvidenceList
           evidence={input.evidence}

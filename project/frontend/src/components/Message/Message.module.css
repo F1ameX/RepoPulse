@@ -1,10 +1,18 @@
 .message {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   font-size: 14px;
   line-height: 20px;
+}
+
+.body {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 200px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .icon {
@@ -15,7 +23,7 @@
 }
 
 .text {
-  flex: 1 1 200px;
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }

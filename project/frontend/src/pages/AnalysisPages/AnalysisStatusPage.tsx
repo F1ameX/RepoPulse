@@ -30,7 +30,11 @@ function AnalysisLifecycle({ id }: { id: string }) {
         <FeedbackMessage view={statusFeedback(state, { onRefresh: () => void refresh() })} />
         {isSessionError(state.code) ? (
           <>
-            <ButtonLink to="/login" state={{ expired: state.code === 'SESSION_EXPIRED' }}>
+            <ButtonLink
+              to="/login"
+              variant="secondary"
+              state={{ expired: state.code === 'SESSION_EXPIRED' }}
+            >
               Войти
             </ButtonLink>
             <GuestAction />
@@ -87,7 +91,7 @@ function AnalysisLifecycle({ id }: { id: string }) {
               }}
             />
             <div className={styles.statusActions}>
-              <Button variant="primary" disabled={submission.isPending} onClick={retry}>
+              <Button variant="secondary" disabled={submission.isPending} onClick={retry}>
                 Повторить анализ
               </Button>
               <Button variant="secondary" disabled={submission.isPending} onClick={changeUrl}>

@@ -56,6 +56,7 @@ type SourceState struct {
 	Sample      Sample     `json:"sample"`
 	ObtainedAt  *time.Time `json:"obtained_at"`
 	Fingerprint *string    `json:"fingerprint"`
+	MetricIDs   []string   `json:"metric_ids,omitempty"`
 }
 
 type GitRef struct {

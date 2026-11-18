@@ -28,7 +28,7 @@ type GitSource interface {
 }
 
 // A source can expose a structured reason even if opening a session failed.
-// The worker only publishes explicitly recognized terminal limit codes.
+// The worker only maps recognized limit reasons to terminal failures.
 type sourceError interface {
 	ReasonCode() string
 }
@@ -140,11 +140,8 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 	git, err := s.git.Open(ctx, a.Repository)
 	if err != nil {
 		var failure sourceError
-		if errors.As(err, &failure) {
-			switch failure.ReasonCode() {
-			case "GIT_TIME_LIMIT", "GIT_SIZE_LIMIT":
-				return &jobError{failure.ReasonCode()}
-			}
+		if errors.As(err, &failure) && domain.IsGitLimit(failure.ReasonCode()) {
+			return &jobError{failure.ReasonCode()}
 		}
 		return err
 	}
@@ -219,16 +216,19 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 			if source.Source != "git" || source.Status == "complete" || source.Reason == nil {
 				continue
 			}
-			switch source.Reason.Code {
-			case "GIT_TIME_LIMIT", "GIT_SIZE_LIMIT":
+			if domain.IsGitLimit(source.Reason.Code) {
 				return &jobError{source.Reason.Code}
 			}
 		}
-		return &jobError{"ANALYSIS_FAILED"}
+		return &jobError{domain.FailureNoUsefulData}
 	}
 	// Collector completeness cannot be replaced with a claim of full coverage.
 	data = git.Data()
 	result.Snapshot.Refs = data.Refs
+	metricIDsBySource := make(map[string][]string, len(result.Snapshot.Sources))
+	for _, source := range result.Snapshot.Sources {
+		metricIDsBySource[source.Source+"/"+source.Scope] = source.MetricIDs
+	}
 	sources := make([]domain.SourceState, 0, len(data.Sources))
 	collected := map[string]bool{}
 	for _, source := range data.Sources {
@@ -236,8 +236,10 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 			// Date validation depends on the accepted assessment time.
 			source = data.Activity(a.Window).Source
 		}
+		key := source.Source + "/" + source.Scope
+		source.MetricIDs = metricIDsBySource[key]
 		sources = append(sources, source)
-		collected[source.Source+"/"+source.Scope] = true
+		collected[key] = true
 	}
 	for _, source := range result.Snapshot.Sources {
 		if !collected[source.Source+"/"+source.Scope] {

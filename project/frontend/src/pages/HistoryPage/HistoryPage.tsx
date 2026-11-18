@@ -94,7 +94,7 @@ function HistorySignIn({ expired }: { expired?: boolean }) {
         {expired ? 'Сессия истекла. Войдите снова' : 'Войдите, чтобы открыть историю отчётов'}
       </Message>
       <div className={styles.actions}>
-        <ButtonLink to="/login" state={{ expired }}>
+        <ButtonLink to="/login" variant="secondary" state={{ expired }}>
           Войти
         </ButtonLink>
         <ButtonLink to="/register" variant="secondary">

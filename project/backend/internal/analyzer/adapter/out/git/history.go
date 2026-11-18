@@ -18,7 +18,8 @@ type historyWalk struct {
 func (s *Session) walkHistory(ctx context.Context, revisionArgs ...string) historyWalk {
 	limit := s.reader.limits.Commits
 	args := append([]string{"rev-list", "--timestamp", "--max-count=" + strconv.Itoa(limit+1)}, revisionArgs...)
-	output, err := s.command(ctx, "", 2<<20, args...)
+	// Each record has a timestamp, a space, a SHA-1 and a newline.
+	output, err := s.command(ctx, "", max(2<<20, int64(limit+1)*64), args...)
 	walk := parseHistory(ctx, output, limit)
 	if err != nil {
 		walk.code = "GIT_HISTORY_INTERRUPTED"
@@ -101,7 +102,10 @@ func (s *Session) readHistory(ctx context.Context, fetchCode string, empty bool)
 	s.data.MainWalkComplete = s.data.Repository.CommitSHA != nil && main.code == "" && ctx.Err() == nil
 	s.data.Sources = append(s.data.Sources, historySource(domain.ActivityHistoryScope, len(main.commits), mainCode))
 
-	all := s.walkHistory(ctx, "--topo-order", "--all")
+	all := main
+	if !s.reader.limits.MainHistoryOnly {
+		all = s.walkHistory(ctx, "--topo-order", "--all")
+	}
 	for _, commit := range all.commits {
 		item := domain.GitCommit{SHA: commit.SHA, CommittedAt: commit.CommittedAt}
 		_, inMain := main.ids[commit.SHA]
@@ -116,6 +120,9 @@ func (s *Session) readHistory(ctx context.Context, fetchCode string, empty bool)
 	}
 	if allCode == "" {
 		allCode = mainCode
+	}
+	if allCode == "" && s.reader.limits.MainHistoryOnly {
+		allCode = "GIT_HISTORY_MAIN_ONLY"
 	}
 	if ctx.Err() != nil {
 		allCode = "GIT_TIME_LIMIT"

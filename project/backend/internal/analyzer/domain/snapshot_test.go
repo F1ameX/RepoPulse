@@ -92,6 +92,8 @@ func TestSnapshotRejectsUnsafeAndInconsistentData(t *testing.T) {
 		change func(*Snapshot)
 	}{
 		{"duplicate metric", func(s *Snapshot) { s.Inputs[1] = s.Inputs[0] }},
+		{"duplicate linked metric", func(s *Snapshot) { s.Sources[0].MetricIDs = []string{"DOC_README", "DOC_README"} }},
+		{"unknown linked metric", func(s *Snapshot) { s.Sources[0].MetricIDs = []string{"UNKNOWN"} }},
 		{"missing reason", func(s *Snapshot) { s.Inputs[0].Reason = nil }},
 		{"credential URL", func(s *Snapshot) {
 			s.Repository.CanonicalURL = "https://user:password@github.com/example/repopulse-fixture"

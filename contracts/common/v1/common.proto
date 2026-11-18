@@ -85,6 +85,7 @@ message SourceState {
   Sample sample = 5;
   google.protobuf.Timestamp obtained_at = 6;
   optional string fingerprint = 7;
+  repeated string metric_ids = 8;
 }
 
 message GitRef {

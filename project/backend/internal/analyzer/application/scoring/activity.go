@@ -168,8 +168,7 @@ func (e *Engine) ActivityFromInputs(at time.Time, window domain.Window, versions
 			break
 		}
 	}
-	category := domain.Category{ID: "activity", Metrics: []domain.Metric{}, Coverage: domain.Coverage{Total: len(cfg.Metrics)}, Explanation: "Оценка наблюдаемой активности основной ветки; не гарантирует качество кода."}
-	var weighted, weights float64
+	metrics := make([]domain.Metric, 0, len(cfg.Metrics))
 	for _, spec := range cfg.Metrics {
 		input, ok := byID[spec.ID]
 		if !ok {
@@ -180,43 +179,16 @@ func (e *Engine) ActivityFromInputs(at time.Time, window domain.Window, versions
 			return domain.Category{}, err
 		}
 		threshold := e.config.FindingThresholds[spec.ID]
-		metric := domain.Metric{Input: input, NormalizedScore: score, RuleVersion: e.config.MethodologyVersion, Rule: e.formula(spec), Threshold: &threshold, Explanation: "Баллы рассчитаны по методике №909 без промежуточного округления."}
+		metric := domain.Metric{
+			Input: input, NormalizedScore: score, RuleVersion: e.config.MethodologyVersion,
+			Rule: e.formula(spec), Threshold: &threshold, Explanation: unscoredExplanation,
+		}
 		if score != nil {
-			category.Coverage.Calculated++
-			nextWeight := weights + spec.Weight
-			weighted += (*score - weighted) * (spec.Weight / nextWeight)
-			weights = nextWeight
-		} else {
-			metric.Explanation = "Численная оценка отсутствует: см. полноту и причину входа."
+			metric.Explanation = activityExplanation(input, spec)
 		}
-		switch input.Status {
-		case "partial":
-			category.Coverage.Partial++
-		case "unavailable":
-			category.Coverage.Unavailable++
-		case "not_applicable":
-			category.Coverage.NotApplicable++
-		}
-		category.Metrics = append(category.Metrics, metric)
+		metrics = append(metrics, metric)
 	}
-	category.Coverage.Percentage = float64(category.Coverage.Calculated) * 100 / float64(category.Coverage.Total)
-	switch {
-	case category.Coverage.Calculated == category.Coverage.Total:
-		category.Status = "complete"
-	case category.Coverage.Calculated > 0:
-		category.Status = "partial"
-		category.Reason = reason("INCOMPLETE_METRICS", "Доступны не все метрики активности")
-	case category.Coverage.NotApplicable == category.Coverage.Total:
-		category.Status = "not_applicable"
-		category.Reason = reason("NO_APPLICABLE_METRICS", "Нет применимых метрик активности")
-	default:
-		category.Status = "unavailable"
-		category.Reason = reason("NO_DATA", "Нет достаточных данных для оценки активности")
-	}
-	if weights > 0 {
-		category.Score = pointer(weighted)
-	}
-	return category, nil
+	return summarizeCategory(cfg, metrics, "активности", "Оценка наблюдаемой активности основной ветки; не гарантирует качество кода."), nil
 }
 
 func (e *Engine) checkContext(at time.Time, window domain.Window, versions domain.Versions) error {
@@ -293,6 +265,24 @@ func (e *Engine) normalizeActivity(at time.Time, window domain.Window, input dom
 		}
 	}
 	return &result, nil
+}
+
+const unscoredExplanation = "В оценку категории входят только метрики с рассчитанным баллом."
+
+func activityExplanation(input domain.MetricInput, spec metricConfig) string {
+	switch input.ID {
+	case "ACT_COMMIT_FREQ":
+		return fmt.Sprintf("Частота рассчитана по числу коммитов в окне (%d) и его длине (%d недель). Чем выше частота, тем выше балл. Частота от %g коммитов в неделю даёт 100 баллов.",
+			*input.Sample.Numerator, *input.Sample.Denominator, *spec.Parameters.Max)
+	case "ACT_DAYS_SINCE_LAST":
+		days, _ := input.RawValue.MarshalJSON()
+		return fmt.Sprintf("Полных суток с последнего коммита — %s. Чем длиннее пауза, тем ниже балл. После %g суток он составляет около 37 из 100.",
+			days, *spec.Parameters.K)
+	case "ACT_TREND":
+		return fmt.Sprintf("Взвешенные суммы коммитов в более свежих и предыдущих неделях равны %d и %d. Чем выше их отношение, тем выше балл. При равных суммах метрика даёт %g из 100.",
+			*input.Sample.Numerator, *input.Sample.Denominator, *spec.Parameters.M0)
+	}
+	return ""
 }
 
 // The public contract stores the applied formula and actual configuration parameters.
