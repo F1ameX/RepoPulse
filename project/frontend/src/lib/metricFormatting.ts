@@ -18,7 +18,7 @@ export const METRIC_LABELS: Record<MetricId, string> = {
   SEC_VULN_RISK: 'Риск уязвимостей',
   SEC_SAST: 'SAST',
   CI_PRESENT: 'Наличие CI',
-  CI_SUCCESS_RATE: 'Успешность CI',
+  CI_SUCCESS_RATE: 'Успешность CI (runs)',
   CI_REQUIRED_CHECKS: 'Обязательные проверки CI',
 };
 
@@ -33,20 +33,16 @@ export function isKnownStatus(value: unknown): value is DataStatus {
 
 export function roundHalfUp(value: number, decimals: number): string {
   if (value === 0) return (0).toFixed(decimals);
-
   const sign = Math.sign(value);
   const absValue = Math.abs(value);
   const str = absValue.toString();
-
   let shifted: number;
   if (str.includes('e')) {
     shifted = absValue * 10 ** decimals;
   } else {
     shifted = Number(`${str}e${decimals}`);
   }
-
   const rounded = Math.round(shifted);
-
   if (str.includes('e')) {
     return (sign * (rounded / 10 ** decimals)).toFixed(decimals);
   }
@@ -56,12 +52,10 @@ export function roundHalfUp(value: number, decimals: number): string {
 function formatPercentHalfUp(raw: number, decimals: number): string {
   if (!Number.isFinite(raw)) return 'N/A';
   if (raw === 0) return `${(0).toFixed(decimals)}%`;
-
   const sign = Math.sign(raw);
   const absValue = Math.abs(raw);
   const str = absValue.toString();
   const shift = decimals + 2;
-
   let shifted: number;
   if (str.includes('e')) {
     shifted = absValue * 10 ** shift;
