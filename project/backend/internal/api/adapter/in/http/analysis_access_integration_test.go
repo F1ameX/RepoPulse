@@ -23,6 +23,7 @@ import (
 	authapp "github.com/F1ameX/RepoPulse/project/backend/internal/auth/application/auth"
 	authdomain "github.com/F1ameX/RepoPulse/project/backend/internal/auth/domain"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/pkg/grpcerr"
+	reportapp "github.com/F1ameX/RepoPulse/project/backend/internal/report/application/report"
 	authv1 "github.com/F1ameX/RepoPulse/project/backend/pkg/proto/auth/v1"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -30,21 +31,21 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
-type analysisStore struct {
+type analysisAccessStore struct {
 	submissions map[string]domain.Submission
 	analyses    map[string]domain.Analysis
 }
 
-func newAnalysisStore() *analysisStore {
-	return &analysisStore{
+func newAnalysisAccessStore() *analysisAccessStore {
+	return &analysisAccessStore{
 		submissions: make(map[string]domain.Submission),
 		analyses:    make(map[string]domain.Analysis),
 	}
 }
 
-var _ analysis.Store = (*analysisStore)(nil)
+var _ analysis.Store = (*analysisAccessStore)(nil)
 
-func (s *analysisStore) ReserveSubmission(
+func (s *analysisAccessStore) ReserveSubmission(
 	_ context.Context,
 	submission domain.Submission,
 ) (domain.Submission, bool, error) {
@@ -57,29 +58,29 @@ func (s *analysisStore) ReserveSubmission(
 	return submission, true, nil
 }
 
-func (s *analysisStore) AcceptSubmission(
+func (s *analysisAccessStore) AcceptSubmission(
 	ctx context.Context,
-	a domain.Analysis,
+	record domain.Analysis,
 ) (domain.Analysis, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.Analysis{}, err
 	}
 
-	key := a.Owner.ID + "/" + a.RequestID
+	key := record.Owner.ID + "/" + record.RequestID
 	submission, ok := s.submissions[key]
-	if !ok || submission.ID != a.SubmissionID {
+	if !ok || submission.ID != record.SubmissionID {
 		return domain.Analysis{}, domain.ErrNotFound
 	}
 
-	submission.AnalysisID = &a.ID
+	submission.AnalysisID = &record.ID
 	submission.State = "accepted"
 	s.submissions[key] = submission
-	s.analyses[a.ID] = a
+	s.analyses[record.ID] = record
 
-	return a, nil
+	return record, nil
 }
 
-func (s *analysisStore) RejectSubmission(
+func (s *analysisAccessStore) RejectSubmission(
 	_ context.Context,
 	submissionID string,
 	failure domain.SubmissionFailure,
@@ -96,573 +97,373 @@ func (s *analysisStore) RejectSubmission(
 	return domain.ErrNotFound
 }
 
-func (s *analysisStore) Get(
+func (s *analysisAccessStore) Get(
 	_ context.Context,
 	analysisID string,
 ) (domain.Analysis, error) {
-	a, ok := s.analyses[analysisID]
+	record, ok := s.analyses[analysisID]
 	if !ok {
 		return domain.Analysis{}, domain.ErrNotFound
 	}
 
-	return a, nil
+	return record, nil
 }
 
 type staticAnalysisSource struct{}
 
 func (staticAnalysisSource) LookupForAnalysis(
 	_ context.Context,
-	addr domain.RepositoryURL,
+	address domain.RepositoryURL,
 ) (domain.RepositoryMetadata, error) {
 	return domain.RepositoryMetadata{
 		Platform:     "github",
 		GitHubID:     "42",
-		CanonicalURL: addr.CanonicalURL(),
-		Owner:        addr.Owner,
-		Name:         addr.Name,
+		CanonicalURL: address.CanonicalURL(),
+		Owner:        address.Owner,
+		Name:         address.Name,
 	}, nil
 }
 
-func TestAnalysisStatusRequiresOwnership(t *testing.T) {
-	store := newMemoryAuthStore()
-	var clockMu sync.Mutex
-	offset := time.Duration(0)
-	now := func() time.Time {
-		clockMu.Lock()
-		defer clockMu.Unlock()
-		return time.Now().UTC().Add(offset)
+// analysisAccessFixture runs real Auth/Analyzer/Report scenarios with in-memory
+// repositories and an in-process Auth gRPC server.
+type analysisAccessFixture struct {
+	handler       http.Handler
+	authStore     *memoryAuthStore
+	analysisStore *analysisAccessStore
+	reports       *guestAccessReportStore
+	clockMu       sync.Mutex
+	currentTime   time.Time
+}
+
+func newAnalysisAccessFixture(t *testing.T) *analysisAccessFixture {
+	t.Helper()
+	fixture := &analysisAccessFixture{
+		authStore:     newMemoryAuthStore(),
+		analysisStore: newAnalysisAccessStore(),
+		reports:       &guestAccessReportStore{},
+		currentTime:   time.Now().UTC().Truncate(time.Microsecond),
 	}
-	hasher, err := authpassword.NewArgon2id(authpassword.Params{HashMem: authpassword.MinMemoryKiB, HashTime: 1, HashThreads: 1, KeyLen: 32, SaltLen: 16})
+	hasher, err := authpassword.NewArgon2id(authpassword.Params{
+		HashMem: authpassword.MinMemoryKiB, HashTime: 1, HashThreads: 1, KeyLen: 32, SaltLen: 16,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := authapp.NewService(store, store, store, authtoken.NewGenerator(), now,
+	authService := authapp.NewService(fixture.authStore, fixture.authStore, fixture.authStore,
+		authtoken.NewGenerator(), fixture.now,
 		authdomain.Options{GuestSessionTTL: 24 * time.Hour, AccountSessionTTL: 168 * time.Hour}, hasher)
 
 	listener := bufconn.Listen(1 << 20)
-	rpc := grpc.NewServer(grpc.UnaryInterceptor(grpcerr.UnaryServerInterceptor()))
-	authv1.RegisterAuthServiceServer(rpc, authgrpc.NewServer(service))
-	go func() { _ = rpc.Serve(listener) }()
-	defer rpc.Stop()
-	conn, err := grpc.NewClient("passthrough:///auth",
+	t.Cleanup(func() { _ = listener.Close() })
+	authServer := grpc.NewServer(grpc.UnaryInterceptor(grpcerr.UnaryServerInterceptor()))
+	authv1.RegisterAuthServiceServer(authServer, authgrpc.NewServer(authService))
+	go func() { _ = authServer.Serve(listener) }()
+	t.Cleanup(authServer.Stop)
+
+	authConnection, err := grpc.NewClient("passthrough:///auth",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	t.Cleanup(func() { _ = authConnection.Close() })
 
-	sessions := session.NewService(authclient.NewClient(conn, 5*time.Second))
+	sessions := session.NewService(authclient.NewClient(authConnection, 5*time.Second))
 	validator := &recordingValidator{inner: repository.NewValidator(&staticSource{}, time.Second)}
-
-	// Version is used for versioning of scoring
-	// for test analyze it is not neseccary to be correct
+	// Access checks need version identifiers, but do not calculate scores.
 	versions := domain.Versions{
-		Schema:                "schema",
-		Methodology:           "method",
-		ScoringConfig:         "score",
-		CollectorProfile:      "profile",
-		SecretRules:           "secrets",
-		RecommendationCatalog: "catalog",
-		ExplanationSchema:     "explanation",
-		Prompt:                "prompt",
+		Schema: "schema", Methodology: "method", ScoringConfig: "score", CollectorProfile: "profile",
+		SecretRules: "secrets", RecommendationCatalog: "catalog", ExplanationSchema: "explanation", Prompt: "prompt",
 	}
+	analyses := analysis.NewService(fixture.analysisStore, staticAnalysisSource{}, versions, time.Second)
+	fixture.handler = NewHandler(validator, sessions, Options{
+		Sessions: sessions, CookieSecure: true, PublicOrigin: testOrigin, Analyses: analyses,
+		Reports: reportapp.NewService(fixture.reports),
+	})
+	return fixture
+}
 
-	analysisStore := newAnalysisStore()
+func (f *analysisAccessFixture) now() time.Time {
+	f.clockMu.Lock()
+	defer f.clockMu.Unlock()
+	return f.currentTime
+}
 
-	// creating real analyses service, to create analyze_id
-	// for A and check it for B
-	analyses := analysis.NewService(
-		analysisStore,
-		staticAnalysisSource{},
-		versions,
-		time.Second,
-	)
+func (f *analysisAccessFixture) setNow(at time.Time) {
+	f.clockMu.Lock()
+	defer f.clockMu.Unlock()
+	f.currentTime = at
+}
 
-	handler := NewHandler(validator, sessions, Options{Sessions: sessions, CookieSecure: true, PublicOrigin: testOrigin, Analyses: analyses})
-
-	request := func(method, path, body, origin string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
-		t.Helper()
-		r := httptest.NewRequest(method, path, strings.NewReader(body))
-		r.Header.Set("Content-Type", "application/json")
-		if origin != "" {
-			r.Header.Set("Origin", origin)
-		}
-		for _, cookie := range cookies {
-			r.AddCookie(cookie)
-		}
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, r)
-		return w
+func (f *analysisAccessFixture) request(t *testing.T, method, path, body, origin string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	if origin != "" {
+		request.Header.Set("Origin", origin)
 	}
-	errorCode := func(w *httptest.ResponseRecorder) string {
-		var body errorResponse
-		_ = json.Unmarshal(w.Body.Bytes(), &body)
-		return body.Error.Code
+	for _, cookie := range cookies {
+		request.AddCookie(cookie)
 	}
+	response := httptest.NewRecorder()
+	f.handler.ServeHTTP(response, request)
+	return response
+}
 
-	credentialsA := `{"login":" FlameX ","password":"correct horse battery"}`
+func requireAccessResponse(t *testing.T, response *httptest.ResponseRecorder, status int, errorCode string) {
+	t.Helper()
+	if response.Code != status {
+		t.Fatalf("HTTP status: got %d, want %d, body=%s", response.Code, status, response.Body)
+	}
+	if errorCode == "" {
+		return
+	}
+	var failure errorResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &failure); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if failure.Error.Code != errorCode {
+		t.Fatalf("error code: got %q, want %q, body=%s", failure.Error.Code, errorCode, response.Body)
+	}
+}
 
-	credentialsB := `{"login":" FlameX1 ", "password":"correct horse battery1"}`
-	// CSRF: state-changing auth requests need the exact configured Origin.
-	for _, path := range []string{"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/logout"} {
-		if w := request("POST", path, credentialsA, "https://evil.example"); w.Code != 403 || errorCode(w) != "CSRF_REJECTED" {
-			t.Fatalf("%s from a foreign origin: %d %s", path, w.Code, w.Body)
-		}
+func accessCredentials(login, password string) string {
+	return fmt.Sprintf(`{"login":%q,"password":%q}`, login, password)
+}
+
+func (f *analysisAccessFixture) registerAccount(t *testing.T, login, password string) {
+	t.Helper()
+	response := f.request(t, http.MethodPost, "/api/v1/auth/register", accessCredentials(login, password), testOrigin)
+	requireAccessResponse(t, response, http.StatusCreated, "")
+	normalizedLogin := strings.ToLower(strings.Trim(login, " "))
+	expected := fmt.Sprintf(`{"login":%q,"message":"Аккаунт создан. Войдите в систему"}`, normalizedLogin)
+	if strings.TrimSpace(response.Body.String()) != expected {
+		t.Fatalf("register response: %s", response.Body)
 	}
-	if len(store.principals) != 0 {
-		t.Fatal("rejected request changed state")
-	}
-	// register two accounts A and B
-	registeredA := request("POST", "/api/v1/auth/register", credentialsA, testOrigin)
-	if registeredA.Code != 201 || strings.TrimSpace(registeredA.Body.String()) != `{"login":"flamex","message":"Аккаунт создан. Войдите в систему"}` {
-		t.Fatalf("register: %d %s", registeredA.Code, registeredA.Body)
-	}
-	if len(registeredA.Result().Cookies()) != 0 {
+	if len(response.Result().Cookies()) != 0 {
 		t.Fatal("registration must not sign in")
 	}
+}
 
-	registeredB := request("POST", "/api/v1/auth/register", credentialsB, testOrigin)
-	if registeredB.Code != 201 || strings.TrimSpace(registeredB.Body.String()) != `{"login":"flamex1","message":"Аккаунт создан. Войдите в систему"}` {
-		t.Fatalf("register: %d %s", registeredB.Code, registeredB.Body)
-	}
-	if len(registeredB.Result().Cookies()) != 0 {
-		t.Fatal("registration must not sign in")
-	}
+type accessAccountSession struct {
+	cookie    *http.Cookie
+	expiresAt time.Time
+}
 
-	// login two accounts A and B
-	// and save their cookies
-	loggedInA := request("POST", "/api/v1/auth/login", `{"login":"flamex","password":"correct horse battery"}`, testOrigin)
-	if loggedInA.Code != 200 || !strings.Contains(loggedInA.Body.String(), `"kind":"account","login":"flamex"`) {
-		t.Fatalf("login: %d %s", loggedInA.Code, loggedInA.Body)
+func (f *analysisAccessFixture) login(t *testing.T, login, password string) accessAccountSession {
+	t.Helper()
+	response := f.request(t, http.MethodPost, "/api/v1/auth/login", accessCredentials(login, password), testOrigin)
+	requireAccessResponse(t, response, http.StatusOK, "")
+	if !strings.Contains(response.Body.String(), fmt.Sprintf(`"kind":"account","login":%q`, login)) {
+		t.Fatalf("login response: %s", response.Body)
 	}
-	cookiesA := loggedInA.Result().Cookies()
-	if len(cookiesA) != 1 || cookiesA[0].Name != "repopulse_session" {
-		t.Fatalf("login cookies = %+v; only the account cookie may be set", cookiesA)
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != "repopulse_session" {
+		t.Fatalf("expected one account cookie, got %+v", cookies)
 	}
-	accountA := cookiesA[0]
+	cookie := cookies[0]
 	weekSeconds := int((168 * time.Hour).Seconds())
-	if !accountA.HttpOnly || !accountA.Secure || accountA.SameSite != http.SameSiteLaxMode || accountA.Path != "/api/v1" ||
-		accountA.MaxAge < weekSeconds-60 || accountA.MaxAge > weekSeconds {
-		t.Fatalf("bad account cookie: %+v", accountA)
+	if !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/api/v1" ||
+		cookie.MaxAge < weekSeconds-60 || cookie.MaxAge > weekSeconds {
+		t.Fatalf("bad account cookie: %+v", cookie)
 	}
-	if strings.Contains(loggedInA.Body.String(), accountA.Value) {
+	if strings.Contains(response.Body.String(), cookie.Value) {
 		t.Fatal("token exposed in JSON")
 	}
 
-	loggedInB := request("POST", "/api/v1/auth/login", `{"login":"flamex1","password":"correct horse battery1"}`, testOrigin)
-	if loggedInB.Code != 200 || !strings.Contains(loggedInB.Body.String(), `"kind":"account","login":"flamex1"`) {
-		t.Fatalf("login: %d %s", loggedInB.Code, loggedInB.Body)
+	var sessionInfo struct {
+		ExpiresAt time.Time `json:"expires_at"`
 	}
-	cookiesB := loggedInB.Result().Cookies()
-	if len(cookiesB) != 1 || cookiesB[0].Name != "repopulse_session" {
-		t.Fatalf("login cookies = %+v; only the account cookie may be set", cookiesB)
+	if err := json.Unmarshal(response.Body.Bytes(), &sessionInfo); err != nil {
+		t.Fatalf("decode login response: %v", err)
 	}
-	accountB := cookiesB[0]
-	if !accountB.HttpOnly || !accountB.Secure || accountB.SameSite != http.SameSiteLaxMode || accountB.Path != "/api/v1" ||
-		accountB.MaxAge < weekSeconds-60 || accountB.MaxAge > weekSeconds {
-		t.Fatalf("bad account cookie: %+v", accountB)
+	if sessionInfo.ExpiresAt.IsZero() {
+		t.Fatal("login response has no expires_at")
 	}
-	if strings.Contains(loggedInB.Body.String(), accountB.Value) {
-		t.Fatal("token exposed in JSON")
-	}
-	body := fmt.Sprintf(
-		`{"request_id":%q,"repository_url":"https://github.com/owner/repo"}`,
-		uuid.NewString(),
-	)
-	created := request("POST", "/api/v1/analyses", body, testOrigin, accountA)
+	return accessAccountSession{cookie: cookie, expiresAt: sessionInfo.ExpiresAt}
+}
 
-	if created.Code != http.StatusAccepted {
-		t.Fatalf("create analysis: got HTTP %d, body=%s", created.Code, created.Body)
+func (f *analysisAccessFixture) createGuestSession(t *testing.T) *http.Cookie {
+	t.Helper()
+	response := f.request(t, http.MethodPost, "/api/v1/auth/guest-session", "", testOrigin)
+	requireAccessResponse(t, response, http.StatusCreated, "")
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != "repopulse_guest" {
+		t.Fatal("expected one repopulse_guest cookie")
 	}
+	var sessionInfo struct {
+		ExpiresAt time.Time `json:"expires_at"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &sessionInfo); err != nil {
+		t.Fatalf("decode guest session: %v", err)
+	}
+	if sessionInfo.ExpiresAt.IsZero() {
+		t.Fatal("guest response has no expires_at")
+	}
+	return cookies[0]
+}
 
-	var result struct {
+func accessAnalysisID(t *testing.T, response *httptest.ResponseRecorder) string {
+	t.Helper()
+	var status struct {
 		AnalysisID string `json:"analysis_id"`
 	}
-	if err := json.Unmarshal(created.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decode create response: %v", err)
+	if err := json.Unmarshal(response.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode analysis response: %v", err)
 	}
-	if result.AnalysisID == "" {
-		t.Fatal("create response has no analysis_id")
+	if status.AnalysisID == "" {
+		t.Fatal("response has no analysis_id")
+	}
+	return status.AnalysisID
+}
+
+func (f *analysisAccessFixture) createAnalysis(t *testing.T, cookies ...*http.Cookie) string {
+	t.Helper()
+	body := fmt.Sprintf(`{"request_id":%q,"repository_url":"https://github.com/owner/repo"}`, uuid.NewString())
+	response := f.request(t, http.MethodPost, "/api/v1/analyses", body, testOrigin, cookies...)
+	requireAccessResponse(t, response, http.StatusAccepted, "")
+	return accessAnalysisID(t, response)
+}
+
+const accessTestPassword = "correct horse battery"
+
+func TestAnalysisStatusRequiresOwnership(t *testing.T) {
+	fixture := newAnalysisAccessFixture(t)
+	for _, path := range []string{"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/logout"} {
+		response := fixture.request(t, http.MethodPost, path, accessCredentials(" FlameX ", accessTestPassword), "https://evil.example")
+		requireAccessResponse(t, response, http.StatusForbidden, "CSRF_REJECTED")
+	}
+	if len(fixture.authStore.principals) != 0 {
+		t.Fatal("rejected request changed state")
 	}
 
-	path := "/api/v1/analyses/" + result.AnalysisID
+	fixture.registerAccount(t, " FlameX ", accessTestPassword)
+	fixture.registerAccount(t, " FlameX1 ", accessTestPassword+"1")
+	ownerSession := fixture.login(t, "flamex", accessTestPassword)
+	otherSession := fixture.login(t, "flamex1", accessTestPassword+"1")
+	analysisID := fixture.createAnalysis(t, ownerSession.cookie)
+	analysisPath := "/api/v1/analyses/" + analysisID
 
-	asA := request(http.MethodGet, path, "", "", accountA)
-	if asA.Code != http.StatusOK {
-		t.Fatalf("owner reads analysis: got %d, want 200, body=%s", asA.Code, asA.Body)
-	}
-
-	for _, ts := range []struct {
-		name string
-		path string
-	}{
-		{"foreign account with correct analysis_id", path},
+	ownerResponse := fixture.request(t, http.MethodGet, analysisPath, "", "", ownerSession.cookie)
+	requireAccessResponse(t, ownerResponse, http.StatusOK, "")
+	for _, testCase := range []struct{ name, path string }{
+		{"foreign account with correct analysis_id", analysisPath},
 		{"foreign account with incorrect analysis_id", "/api/v1/analyses/" + uuid.NewString()},
 	} {
-		t.Run(ts.name, func(t *testing.T) {
-			incorrectRequest := request(http.MethodGet, ts.path, "", "", accountB)
-			if incorrectRequest.Code != http.StatusNotFound || errorCode(incorrectRequest) != "ANALYSIS_NOT_FOUND" {
-				t.Fatalf("other account reads analysis: got %d, want 404 ANALYSIS_NOT_FOUND, body=%s",
-					incorrectRequest.Code, incorrectRequest.Body)
-			}
+		t.Run(testCase.name, func(t *testing.T) {
+			response := fixture.request(t, http.MethodGet, testCase.path, "", "", otherSession.cookie)
+			requireAccessResponse(t, response, http.StatusNotFound, "ANALYSIS_NOT_FOUND")
 		})
 	}
 }
 
 func TestAnalysisStatusAccessRestoredAfterRelogin(t *testing.T) {
-	store := newMemoryAuthStore()
-	var clockMu sync.Mutex
-	offset := time.Duration(0)
-	now := func() time.Time {
-		clockMu.Lock()
-		defer clockMu.Unlock()
-		return time.Now().UTC().Add(offset)
-	}
-	hasher, err := authpassword.NewArgon2id(authpassword.Params{HashMem: authpassword.MinMemoryKiB, HashTime: 1, HashThreads: 1, KeyLen: 32, SaltLen: 16})
-	if err != nil {
-		t.Fatal(err)
-	}
-	service := authapp.NewService(store, store, store, authtoken.NewGenerator(), now,
-		authdomain.Options{GuestSessionTTL: 24 * time.Hour, AccountSessionTTL: 168 * time.Hour}, hasher)
+	fixture := newAnalysisAccessFixture(t)
+	fixture.registerAccount(t, " FlameX ", accessTestPassword)
+	originalSession := fixture.login(t, "flamex", accessTestPassword)
+	analysisID := fixture.createAnalysis(t, originalSession.cookie)
+	analysisPath := "/api/v1/analyses/" + analysisID
 
-	listener := bufconn.Listen(1 << 20)
-	rpc := grpc.NewServer(grpc.UnaryInterceptor(grpcerr.UnaryServerInterceptor()))
-	authv1.RegisterAuthServiceServer(rpc, authgrpc.NewServer(service))
-	go func() { _ = rpc.Serve(listener) }()
-	defer rpc.Stop()
-	conn, err := grpc.NewClient("passthrough:///auth",
-		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatal(err)
+	ownerResponse := fixture.request(t, http.MethodGet, analysisPath, "", "", originalSession.cookie)
+	requireAccessResponse(t, ownerResponse, http.StatusOK, "")
+
+	logoutResponse := fixture.request(t, http.MethodPost, "/api/v1/auth/logout", "", testOrigin, originalSession.cookie)
+	requireAccessResponse(t, logoutResponse, http.StatusNoContent, "")
+	if logoutResponse.Body.Len() != 0 {
+		t.Fatalf("logout body: %s", logoutResponse.Body)
 	}
-	defer conn.Close()
-
-	sessions := session.NewService(authclient.NewClient(conn, 5*time.Second))
-	validator := &recordingValidator{inner: repository.NewValidator(&staticSource{}, time.Second)}
-
-	// Version is used for versioning of scoring
-	// for test analyze it is not neseccary to be correct
-	versions := domain.Versions{
-		Schema:                "schema",
-		Methodology:           "method",
-		ScoringConfig:         "score",
-		CollectorProfile:      "profile",
-		SecretRules:           "secrets",
-		RecommendationCatalog: "catalog",
-		ExplanationSchema:     "explanation",
-		Prompt:                "prompt",
+	deletedCookies := logoutResponse.Result().Cookies()
+	if len(deletedCookies) != 1 || deletedCookies[0].Name != "repopulse_session" || deletedCookies[0].MaxAge >= 0 || deletedCookies[0].Path != "/api/v1" ||
+		!deletedCookies[0].HttpOnly || !deletedCookies[0].Secure || deletedCookies[0].SameSite != http.SameSiteLaxMode {
+		t.Fatalf("logout cookies = %+v; only the account cookie may be deleted", deletedCookies)
 	}
 
-	analysisStore := newAnalysisStore()
-
-	// creating real analyses service, to create analyze_id
-	// for A and check it for B
-	analyses := analysis.NewService(
-		analysisStore,
-		staticAnalysisSource{},
-		versions,
-		time.Second,
-	)
-
-	handler := NewHandler(validator, sessions, Options{Sessions: sessions, CookieSecure: true, PublicOrigin: testOrigin, Analyses: analyses})
-
-	request := func(method, path, body, origin string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
-		t.Helper()
-		r := httptest.NewRequest(method, path, strings.NewReader(body))
-		r.Header.Set("Content-Type", "application/json")
-		if origin != "" {
-			r.Header.Set("Origin", origin)
-		}
-		for _, cookie := range cookies {
-			r.AddCookie(cookie)
-		}
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, r)
-		return w
-	}
-
-	errorCode := func(w *httptest.ResponseRecorder) string {
-		var body errorResponse
-		_ = json.Unmarshal(w.Body.Bytes(), &body)
-		return body.Error.Code
-	}
-
-	credentialsA := `{"login":" FlameX ","password":"correct horse battery"}`
-
-	registeredA := request("POST", "/api/v1/auth/register", credentialsA, testOrigin)
-	if registeredA.Code != 201 || strings.TrimSpace(registeredA.Body.String()) != `{"login":"flamex","message":"Аккаунт создан. Войдите в систему"}` {
-		t.Fatalf("register: %d %s", registeredA.Code, registeredA.Body)
-	}
-	if len(registeredA.Result().Cookies()) != 0 {
-		t.Fatal("registration must not sign in")
-	}
-
-	loggedInA := request("POST", "/api/v1/auth/login", `{"login":"flamex","password":"correct horse battery"}`, testOrigin)
-	if loggedInA.Code != 200 || !strings.Contains(loggedInA.Body.String(), `"kind":"account","login":"flamex"`) {
-		t.Fatalf("login: %d %s", loggedInA.Code, loggedInA.Body)
-	}
-	cookiesA := loggedInA.Result().Cookies()
-	if len(cookiesA) != 1 || cookiesA[0].Name != "repopulse_session" {
-		t.Fatalf("login cookies = %+v; only the account cookie may be set", cookiesA)
-	}
-	accountA := cookiesA[0]
-	weekSeconds := int((168 * time.Hour).Seconds())
-	if !accountA.HttpOnly || !accountA.Secure || accountA.SameSite != http.SameSiteLaxMode || accountA.Path != "/api/v1" ||
-		accountA.MaxAge < weekSeconds-60 || accountA.MaxAge > weekSeconds {
-		t.Fatalf("bad account cookie: %+v", accountA)
-	}
-	if strings.Contains(loggedInA.Body.String(), accountA.Value) {
-		t.Fatal("token exposed in JSON")
-	}
-
-	body := fmt.Sprintf(
-		`{"request_id":%q,"repository_url":"https://github.com/owner/repo"}`,
-		uuid.NewString(),
-	)
-	created := request("POST", "/api/v1/analyses", body, testOrigin, accountA)
-
-	if created.Code != http.StatusAccepted {
-		t.Fatalf("create analysis: got HTTP %d, body=%s", created.Code, created.Body)
-	}
-
-	var result struct {
-		AnalysisID string `json:"analysis_id"`
-	}
-	if err := json.Unmarshal(created.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decode create response: %v", err)
-	}
-	if result.AnalysisID == "" {
-		t.Fatal("create response has no analysis_id")
-	}
-
-	path := "/api/v1/analyses/" + result.AnalysisID
-
-	asA := request(http.MethodGet, path, "", "", accountA)
-	if asA.Code != http.StatusOK {
-		t.Fatalf("owner reads analysis: got %d, want 200, body=%s", asA.Code, asA.Body)
-	}
-
-	out := request("POST", "/api/v1/auth/logout", "", testOrigin, accountA)
-
-	if out.Code != 204 || out.Body.Len() != 0 {
-		t.Fatalf("logout: %d %s", out.Code, out.Body)
-	}
-	deleted := out.Result().Cookies()
-
-	if len(deleted) != 1 || deleted[0].Name != "repopulse_session" || deleted[0].MaxAge >= 0 || deleted[0].Path != "/api/v1" ||
-		!deleted[0].HttpOnly || !deleted[0].Secure || deleted[0].SameSite != http.SameSiteLaxMode {
-		t.Fatalf("logout cookies = %+v; only the account cookie may be deleted", deleted)
-	}
-
-	// after logout analysis_id is not available with old cookies
-	sessionExpiredasA := request(http.MethodGet, path, "", "", accountA)
-	if sessionExpiredasA.Code != 401 || errorCode(sessionExpiredasA) != "SESSION_EXPIRED" {
-		t.Fatalf("logout owner reads analysis: got %d with errorCode=%s, want 401 with errorCode=SESSION_EXPIRED", sessionExpiredasA.Code, errorCode(sessionExpiredasA))
-	}
-
-	loggedInA = request("POST", "/api/v1/auth/login", `{"login":"flamex","password":"correct horse battery"}`, testOrigin)
-	if loggedInA.Code != 200 || !strings.Contains(loggedInA.Body.String(), `"kind":"account","login":"flamex"`) {
-		t.Fatalf("login: %d %s", loggedInA.Code, loggedInA.Body)
-	}
-	cookiesA = loggedInA.Result().Cookies()
-	if len(cookiesA) != 1 || cookiesA[0].Name != "repopulse_session" {
-		t.Fatalf("login cookies = %+v; only the account cookie may be set", cookiesA)
-	}
-	accountA = cookiesA[0]
-	if !accountA.HttpOnly || !accountA.Secure || accountA.SameSite != http.SameSiteLaxMode || accountA.Path != "/api/v1" ||
-		accountA.MaxAge < weekSeconds-60 || accountA.MaxAge > weekSeconds {
-		t.Fatalf("bad account cookie: %+v", accountA)
-	}
-	if strings.Contains(loggedInA.Body.String(), accountA.Value) {
-		t.Fatal("token exposed in JSON")
-	}
-
-	asA = request(http.MethodGet, path, "", "", accountA)
-	if asA.Code != http.StatusOK {
-		t.Fatalf("owner reads analysis: got %d, want 200, body=%s", asA.Code, asA.Body)
-	}
+	revokedResponse := fixture.request(t, http.MethodGet, analysisPath, "", "", originalSession.cookie)
+	requireAccessResponse(t, revokedResponse, http.StatusUnauthorized, "SESSION_EXPIRED")
+	renewedSession := fixture.login(t, "flamex", accessTestPassword)
+	restoredResponse := fixture.request(t, http.MethodGet, analysisPath, "", "", renewedSession.cookie)
+	requireAccessResponse(t, restoredResponse, http.StatusOK, "")
 }
 
 func TestAnalysisStatusRejectsExpiredAccountSession(t *testing.T) {
-	store := newMemoryAuthStore()
-	var clockMu sync.Mutex
+	fixture := newAnalysisAccessFixture(t)
+	fixture.registerAccount(t, " FlameX ", accessTestPassword)
+	accountSession := fixture.login(t, "flamex", accessTestPassword)
+	analysisID := fixture.createAnalysis(t, accountSession.cookie)
+	analysisPath := "/api/v1/analyses/" + analysisID
 
-	currentTime := time.Now().UTC().Truncate(time.Microsecond)
-
-	now := func() time.Time {
-		clockMu.Lock()
-		defer clockMu.Unlock()
-		return currentTime
-	}
-
-	// func to change time in memoryAuthStore
-	setNow := func(at time.Time) {
-		clockMu.Lock()
-		defer clockMu.Unlock()
-		currentTime = at
-	}
-
-	errorCode := func(w *httptest.ResponseRecorder) string {
-		var body errorResponse
-		_ = json.Unmarshal(w.Body.Bytes(), &body)
-		return body.Error.Code
-	}
-
-	hasher, err := authpassword.NewArgon2id(authpassword.Params{HashMem: authpassword.MinMemoryKiB, HashTime: 1, HashThreads: 1, KeyLen: 32, SaltLen: 16})
-	if err != nil {
-		t.Fatal(err)
-	}
-	service := authapp.NewService(store, store, store, authtoken.NewGenerator(), now,
-		authdomain.Options{GuestSessionTTL: 24 * time.Hour, AccountSessionTTL: 168 * time.Hour}, hasher)
-
-	listener := bufconn.Listen(1 << 20)
-	rpc := grpc.NewServer(grpc.UnaryInterceptor(grpcerr.UnaryServerInterceptor()))
-	authv1.RegisterAuthServiceServer(rpc, authgrpc.NewServer(service))
-	go func() { _ = rpc.Serve(listener) }()
-	defer rpc.Stop()
-	conn, err := grpc.NewClient("passthrough:///auth",
-		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-
-	sessions := session.NewService(authclient.NewClient(conn, 5*time.Second))
-	validator := &recordingValidator{inner: repository.NewValidator(&staticSource{}, time.Second)}
-
-	// Version is used for versioning of scoring
-	// for test analyze it is not neseccary to be correct
-	versions := domain.Versions{
-		Schema:                "schema",
-		Methodology:           "method",
-		ScoringConfig:         "score",
-		CollectorProfile:      "profile",
-		SecretRules:           "secrets",
-		RecommendationCatalog: "catalog",
-		ExplanationSchema:     "explanation",
-		Prompt:                "prompt",
-	}
-
-	analysisStore := newAnalysisStore()
-
-	// creating real analyses service, to create analyze_id
-	// for A and check expires_at
-	analyses := analysis.NewService(
-		analysisStore,
-		staticAnalysisSource{},
-		versions,
-		time.Second,
-	)
-
-	handler := NewHandler(validator, sessions, Options{Sessions: sessions, CookieSecure: true, PublicOrigin: testOrigin, Analyses: analyses})
-
-	request := func(method, path, body, origin string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
-		t.Helper()
-		r := httptest.NewRequest(method, path, strings.NewReader(body))
-		r.Header.Set("Content-Type", "application/json")
-		if origin != "" {
-			r.Header.Set("Origin", origin)
-		}
-		for _, cookie := range cookies {
-			r.AddCookie(cookie)
-		}
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, r)
-		return w
-	}
-
-	credentialsA := `{"login":" FlameX ","password":"correct horse battery"}`
-
-	// register account A
-	registeredA := request("POST", "/api/v1/auth/register", credentialsA, testOrigin)
-	if registeredA.Code != 201 || strings.TrimSpace(registeredA.Body.String()) != `{"login":"flamex","message":"Аккаунт создан. Войдите в систему"}` {
-		t.Fatalf("register: %d %s", registeredA.Code, registeredA.Body)
-	}
-	if len(registeredA.Result().Cookies()) != 0 {
-		t.Fatal("registration must not sign in")
-	}
-
-	// login account A
-	loggedInA := request("POST", "/api/v1/auth/login", `{"login":"flamex","password":"correct horse battery"}`, testOrigin)
-	if loggedInA.Code != 200 || !strings.Contains(loggedInA.Body.String(), `"kind":"account","login":"flamex"`) {
-		t.Fatalf("login: %d %s", loggedInA.Code, loggedInA.Body)
-	}
-	// getting all cookies from login json response
-	cookiesA := loggedInA.Result().Cookies()
-	if len(cookiesA) != 1 || cookiesA[0].Name != "repopulse_session" {
-		t.Fatalf("login cookies = %+v; only the account cookie may be set", cookiesA)
-	}
-
-	// getting accountA cookies
-	accountA := cookiesA[0]
-	weekSeconds := int((168 * time.Hour).Seconds())
-	if !accountA.HttpOnly || !accountA.Secure || accountA.SameSite != http.SameSiteLaxMode || accountA.Path != "/api/v1" ||
-		accountA.MaxAge < weekSeconds-60 || accountA.MaxAge > weekSeconds {
-		t.Fatalf("bad account cookie: %+v", accountA)
-	}
-	if strings.Contains(loggedInA.Body.String(), accountA.Value) {
-		t.Fatal("token exposed in JSON")
-	}
-
-	body := fmt.Sprintf(
-		`{"request_id":%q,"repository_url":"https://github.com/owner/repo"}`,
-		uuid.NewString(),
-	)
-	created := request("POST", "/api/v1/analyses", body, testOrigin, accountA)
-
-	if created.Code != http.StatusAccepted {
-		t.Fatalf("create analysis: got HTTP %d, body=%s", created.Code, created.Body)
-	}
-
-	// getting analyze_id from POSY /api/v1/analyses json response
-	var result struct {
-		AnalysisID string `json:"analysis_id"`
-	}
-	if err := json.Unmarshal(created.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decode create response: %v", err)
-	}
-	if result.AnalysisID == "" {
-		t.Fatal("create response has no analysis_id")
-	}
-
-	// getting expires_at from login lson response
-	var loginResponse struct {
-		ExpiresAt time.Time `json:"expires_at"`
-	}
-	if err := json.Unmarshal(loggedInA.Body.Bytes(), &loginResponse); err != nil {
-		t.Fatalf("decode login response: %v", err)
-	}
-	if loginResponse.ExpiresAt.IsZero() {
-		t.Fatal("login response has no expires_at")
-	}
-
-	path := "/api/v1/analyses/" + result.AnalysisID
-	for _, tc := range []struct {
-		name     string
-		offset   time.Duration
-		wantHTTP int
-		wantCode string
+	for _, testCase := range []struct {
+		name       string
+		offset     time.Duration
+		wantStatus int
+		wantCode   string
 	}{
 		{"before expiry", -time.Microsecond, http.StatusOK, ""},
 		{"exactly at expiry", 0, http.StatusUnauthorized, "SESSION_EXPIRED"},
 		{"after expiry", time.Microsecond, http.StatusUnauthorized, "SESSION_EXPIRED"},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			setNow(loginResponse.ExpiresAt.Add(tc.offset))
-			got := request(http.MethodGet, path, "", "", accountA)
-
-			if got.Code != tc.wantHTTP {
-				t.Fatalf("GET status: got %d, want %d, body=%s", got.Code, tc.wantHTTP, got.Body)
-			}
-			if tc.wantCode != "" && errorCode(got) != tc.wantCode {
-				t.Fatalf("GET error: got %q, want %q", errorCode(got), tc.wantCode)
-			}
+		t.Run(testCase.name, func(t *testing.T) {
+			fixture.setNow(accountSession.expiresAt.Add(testCase.offset))
+			response := fixture.request(t, http.MethodGet, analysisPath, "", "", accountSession.cookie)
+			requireAccessResponse(t, response, testCase.wantStatus, testCase.wantCode)
 		})
 	}
 }
 
 func TestGuestAnalysisAccessWithAccountSession(t *testing.T) {
+	fixture := newAnalysisAccessFixture(t)
+	guestCookie := fixture.createGuestSession(t)
+	guestAnalysisID := fixture.createAnalysis(t, guestCookie)
+	guestAnalysisPath := "/api/v1/analyses/" + guestAnalysisID
+
+	// Seed an existing guest report to distinguish denied access from a missing report.
+	fixture.reports.report = domain.Report{ID: uuid.NewString(), AnalysisID: guestAnalysisID}
+	fixture.reports.ownerID = fixture.analysisStore.analyses[guestAnalysisID].Owner.ID
+	guestReportPath := "/api/v1/reports/" + fixture.reports.report.ID
+
+	fixture.registerAccount(t, " FlameX ", accessTestPassword)
+	accountSession := fixture.login(t, "flamex", accessTestPassword)
+
+	guestAnalysisResponse := fixture.request(t, http.MethodGet, guestAnalysisPath, "", "", accountSession.cookie, guestCookie)
+	requireAccessResponse(t, guestAnalysisResponse, http.StatusOK, "")
+	if gotID := accessAnalysisID(t, guestAnalysisResponse); gotID != guestAnalysisID {
+		t.Fatalf("guest analysis_id=%q, want %q", gotID, guestAnalysisID)
+	}
+	guestReportResponse := fixture.request(t, http.MethodGet, guestReportPath, "", "", accountSession.cookie, guestCookie)
+	requireAccessResponse(t, guestReportResponse, http.StatusOK, "")
+
+	accountOnlyAnalysisResponse := fixture.request(t, http.MethodGet, guestAnalysisPath, "", "", accountSession.cookie)
+	requireAccessResponse(t, accountOnlyAnalysisResponse, http.StatusNotFound, "ANALYSIS_NOT_FOUND")
+	accountOnlyReportResponse := fixture.request(t, http.MethodGet, guestReportPath, "", "", accountSession.cookie)
+	requireAccessResponse(t, accountOnlyReportResponse, http.StatusNotFound, "REPORT_NOT_FOUND")
+
+	accountAnalysisID := fixture.createAnalysis(t, accountSession.cookie, guestCookie)
+	if accountAnalysisID == guestAnalysisID {
+		t.Fatal("account and guest analysis IDs must differ")
+	}
+	accountAnalysisPath := "/api/v1/analyses/" + accountAnalysisID
+	accountAnalysisResponse := fixture.request(t, http.MethodGet, accountAnalysisPath, "", "", accountSession.cookie)
+	requireAccessResponse(t, accountAnalysisResponse, http.StatusOK, "")
+	if gotID := accessAnalysisID(t, accountAnalysisResponse); gotID != accountAnalysisID {
+		t.Fatalf("account analysis_id=%q, want %q", gotID, accountAnalysisID)
+	}
+	guestOnlyResponse := fixture.request(t, http.MethodGet, accountAnalysisPath, "", "", guestCookie)
+	requireAccessResponse(t, guestOnlyResponse, http.StatusNotFound, "ANALYSIS_NOT_FOUND")
+
+	if fixture.analysisStore.analyses[guestAnalysisID].Owner.ID != fixture.reports.ownerID {
+		t.Fatal("guest analysis owner changed")
+	}
+}
+
+// guestAccessReportStore supplies a report to the real Report ownership scenario.
+type guestAccessReportStore struct {
+	report  domain.Report
+	ownerID string
+}
+
+func (s *guestAccessReportStore) Get(_ context.Context, id string) (domain.Report, string, error) {
+	if s.report.ID != id {
+		return domain.Report{}, "", domain.ErrNotFound
+	}
+	return s.report, s.ownerID, nil
 }
