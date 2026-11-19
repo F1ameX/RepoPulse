@@ -140,6 +140,12 @@
   overflow-wrap: anywhere;
 }
 
+.metricRow:focus,
+.categoryList:focus {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 4px;
+}
+
 .metricValueLine {
   display: grid;
   grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
