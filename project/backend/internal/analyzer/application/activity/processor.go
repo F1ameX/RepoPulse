@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/ci"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/dependencies"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/scoring"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/snapshot"
@@ -14,9 +15,22 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
 )
 
-type Processor struct{ engine *scoring.Engine }
+// CICollector supplies normalized GitHub facts and the coverage of each scope.
+// Upstream refusals and incomplete responses are represented by SourceState.
+type CICollector interface {
+	CollectCI(context.Context, domain.Analysis) (ci.ExternalData, error)
+}
+
+type Processor struct {
+	engine      *scoring.Engine
+	ciCollector CICollector
+}
 
 func NewProcessor(engine *scoring.Engine) *Processor { return &Processor{engine: engine} }
+
+func NewProcessorWithCI(engine *scoring.Engine, collector CICollector) *Processor {
+	return &Processor{engine: engine, ciCollector: collector}
+}
 
 func (p *Processor) Process(ctx context.Context, a domain.Analysis, session worker.GitSession, advance func(string) error) (worker.Output, error) {
 	if err := ctx.Err(); err != nil {
@@ -26,6 +40,16 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	dependencyCollection, err := collector.Collect(ctx, a, session)
 	if err != nil {
 		return worker.Output{}, err
+	}
+	var ciData ci.ExternalData
+	if p.ciCollector != nil {
+		if err := advance("collecting_external"); err != nil {
+			return worker.Output{}, err
+		}
+		ciData, err = p.ciCollector.CollectCI(ctx, a)
+		if err != nil {
+			return worker.Output{}, err
+		}
 	}
 	if err := advance("calculating"); err != nil {
 		return worker.Output{}, err
@@ -65,13 +89,13 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 		addEvidence(&input, a.Repository, commits)
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{key}})
 	}
-	treeKey := snapshot.Source{Name: "git", Scope: "tree"}
+	treeKey := snapshot.Source{Name: "git", Scope: domain.GitTreeScope}
 	treeIndex := slices.IndexFunc(git.Sources, func(source domain.SourceState) bool {
 		return source.Source == treeKey.Name && source.Scope == treeKey.Scope
 	})
 	tree := domain.SourceState{Source: treeKey.Name, Scope: treeKey.Scope, Status: "unavailable", Reason: &domain.Reason{
 		Code: "GIT_TREE_UNAVAILABLE", Message: "Дерево основной ветки не получено",
-		CannotConclude: "Нельзя проверить наличие документации и признаков тестов",
+		CannotConclude: "Нельзя проверить документацию, признаки тестов и конфигурацию CI",
 	}}
 	if treeIndex >= 0 {
 		tree = git.Sources[treeIndex]
@@ -81,7 +105,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	for _, input := range p.engine.TreeInputs(git, tree) {
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
 	}
-	data, err := snapshot.Build(a, git, collection, dependencyCollection)
+	data, err := snapshot.Build(a, git, collection, dependencyCollection, ci.Inputs(a, git, tree, ciData))
 	if err != nil {
 		return worker.Output{}, err
 	}
@@ -96,13 +120,17 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	if err != nil {
 		return worker.Output{}, err
 	}
+	ciCategory, err := p.engine.CICategory(a.Versions, data.Inputs)
+	if err != nil {
+		return worker.Output{}, err
+	}
 	overallReason := &domain.Reason{
 		Code: "INCOMPLETE_CATEGORIES", Message: "Общая оценка недоступна",
 		CannotConclude: "Общая оценка по пяти категориям ещё не рассчитана",
 	}
 	fallback := "no_findings"
 	report := domain.ReportData{
-		OverallReason: overallReason, Summary: "Сохранён анализ активности, документации и файловых признаков тестов основной ветки",
+		OverallReason: overallReason, Summary: "Сохранён анализ активности, документации, файловых признаков тестов и CI/CD",
 		Categories: append([]domain.Category{category}, treeCategories...), Findings: []domain.Finding{}, Recommendations: []domain.Recommendation{},
 		Explanation: domain.Explanation{
 			Mode: "deterministic_fallback", FallbackReason: &fallback,
@@ -113,22 +141,17 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 		Code: "INPUT_NOT_COLLECTED", Message: "Входные данные проверки не получены",
 		CannotConclude: "Оценка категории недоступна",
 	}
-	for _, spec := range []struct {
-		id          string
-		from, until int
-	}{{"security", 6, 9}, {"ci_cd", 9, 12}} {
-		unknown := domain.Category{
-			ID: spec.id, Status: "unavailable", Reason: pending, Explanation: pending.Message,
-			Coverage: domain.Coverage{Total: spec.until - spec.from, Unavailable: spec.until - spec.from}, Metrics: []domain.Metric{},
-		}
-		for _, input := range data.Inputs[spec.from:spec.until] {
-			unknown.Metrics = append(unknown.Metrics, domain.Metric{
-				Input: input, RuleVersion: a.Versions.Methodology,
-				Explanation: "Входные данные проверки не получены",
-			})
-		}
-		report.Categories = append(report.Categories, unknown)
+	security := domain.Category{
+		ID: "security", Status: "unavailable", Reason: pending, Explanation: pending.Message,
+		Coverage: domain.Coverage{Total: 3, Unavailable: 3}, Metrics: []domain.Metric{},
 	}
+	for _, input := range data.Inputs[6:9] {
+		security.Metrics = append(security.Metrics, domain.Metric{
+			Input: input, RuleVersion: a.Versions.Methodology,
+			Explanation: "Входные данные проверки не получены",
+		})
+	}
+	report.Categories = append(report.Categories, security, ciCategory)
 	for _, item := range report.Categories {
 		report.Coverage.Total += item.Coverage.Total
 		report.Coverage.Calculated += item.Coverage.Calculated

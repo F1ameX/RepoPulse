@@ -132,6 +132,7 @@ type jobError struct{ code string }
 
 func (e *jobError) Error() string { return e.code }
 func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
+	ctx = domain.WithHTTPInputBudget(ctx)
 	defer func() {
 		if recover() != nil {
 			err = &jobError{"ANALYSIS_FAILED"}

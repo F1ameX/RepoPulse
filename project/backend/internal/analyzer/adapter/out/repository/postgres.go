@@ -153,7 +153,7 @@ func (p *Postgres) Complete(ctx context.Context, result domain.Result) error {
 	if err := result.Validate(a); err != nil {
 		return err
 	}
-	snapshot, err := json.Marshal(result.Snapshot)
+	snapshot, err := json.Marshal(storedSnapshot{Snapshot: result.Snapshot, GitHubCI: result.Snapshot.GitHubCI})
 	if err != nil {
 		return domain.ErrInvalidData
 	}
@@ -219,7 +219,7 @@ func (p *Postgres) GetResult(ctx context.Context, id string) (domain.Result, err
 	if err != nil {
 		return domain.Result{}, fmt.Errorf("read result: %w", err)
 	}
-	snapshot, err := domain.DecodeSnapshot(snapshotJSON)
+	snapshot, err := decodeStoredSnapshot(snapshotJSON)
 	if err != nil {
 		return domain.Result{}, err
 	}

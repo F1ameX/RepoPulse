@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 	"time"
 )
@@ -193,6 +194,11 @@ func (s SnapshotData) Validate() error {
 			seen[id] = true
 		}
 	}
+	if s.GitHubCI != nil {
+		if err := s.GitHubCI.validate(s.Sources); err != nil {
+			return err
+		}
+	}
 	inputs := map[string]bool{}
 	evidence := map[string]bool{}
 	for _, input := range s.Inputs {
@@ -281,6 +287,9 @@ func PrepareSnapshotData(data SnapshotData) (SnapshotData, error) {
 	if err := json.Unmarshal(encoded, &copied); err != nil {
 		return SnapshotData{}, invalid("snapshot JSON")
 	}
+	if data.GitHubCI != nil {
+		copied.GitHubCI = data.GitHubCI.Clone()
+	}
 	normalizeSnapshotData(&copied)
 	if err := copied.Validate(); err != nil {
 		return SnapshotData{}, err
@@ -328,6 +337,9 @@ func NewResult(a Analysis, snapshotID, reportID string, at time.Time, data Snaps
 	}
 	if err := json.Unmarshal(encoded, &copied); err != nil {
 		return Result{}, invalid("result JSON")
+	}
+	if data.GitHubCI != nil {
+		copied.Data.GitHubCI = data.GitHubCI.Clone()
 	}
 	data, report = copied.Data, copied.Report
 	normalizeSnapshotData(&data)
@@ -418,29 +430,50 @@ func (r Result) Validate(a Analysis) error {
 		return invalid("report categories/metrics")
 	}
 	findings := map[string]bool{}
+	rules := map[string]bool{}
 	for _, f := range report.Findings {
-		if f.ID == "" || findings[f.ID] || metricCategories[f.RuleID] != f.Category {
+		category, known := metricCategories[f.RuleID]
+		if f.ID == "" || findings[f.ID] || !known || category != f.Category || rules[f.RuleID] ||
+			!slices.Contains([]string{"critical", "high", "medium", "low", "informational"}, f.Severity) {
 			return invalid("finding")
 		}
 		findings[f.ID] = true
+		rules[f.RuleID] = true
+		linked := map[string]bool{}
 		for _, id := range f.EvidenceIDs {
-			if !evidence[id] {
+			if !evidence[id] || linked[id] {
 				return invalid("finding evidence")
 			}
+			linked[id] = true
 		}
 	}
 	recommendations := map[string]bool{}
 	for _, item := range report.Recommendations {
-		if item.ID == "" || recommendations[item.ID] || !findings[item.FindingID] {
+		if item.ID == "" || recommendations[item.ID] || !findings[item.FindingID] ||
+			!slices.Contains([]string{"high", "middle", "low"}, item.Priority) ||
+			!slices.Contains([]string{"low", "medium", "high"}, item.Complexity) ||
+			!slices.Contains([]string{"short", "expanded"}, item.VariantID) {
 			return invalid("recommendation")
 		}
 		recommendations[item.ID] = true
 	}
 	if report.Explanation.CatalogVersion != a.Versions.RecommendationCatalog ||
 		report.Explanation.SchemaVersion != a.Versions.ExplanationSchema ||
-		report.Explanation.PromptVersion != a.Versions.Prompt ||
-		(report.Explanation.Mode != "ai_catalog_selection" && report.Explanation.Mode != "deterministic_fallback") {
+		report.Explanation.PromptVersion != a.Versions.Prompt {
 		return invalid("explanation versions")
+	}
+	ex := report.Explanation
+	switch ex.Mode {
+	case "ai_catalog_selection":
+		if ex.Model == nil || *ex.Model == "" || ex.FallbackReason != nil {
+			return invalid("AI explanation metadata")
+		}
+	case "deterministic_fallback":
+		if ex.FallbackReason == nil || !slices.Contains([]string{"ai_unavailable", "ai_timeout", "ai_invalid_response", "ai_not_configured", "no_findings"}, *ex.FallbackReason) {
+			return invalid("fallback reason")
+		}
+	default:
+		return invalid("explanation mode")
 	}
 	return nil
 }
