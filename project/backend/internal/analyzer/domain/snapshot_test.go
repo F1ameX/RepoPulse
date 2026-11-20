@@ -71,6 +71,33 @@ func TestSnapshotContractRoundTripPreservesUnknownZeroFalse(t *testing.T) {
 	}
 }
 
+func TestPublicationRejectsInvalidFindingGraphAndMetadata(t *testing.T) {
+	s := fixtureSnapshot(t)
+	a := runningAnalysis(s)
+	for name, change := range map[string]func(*Report){
+		"second finding for rule": func(r *Report) {
+			f := r.Findings[0]
+			f.ID += "-other"
+			r.Findings = append(r.Findings, f)
+		},
+		"duplicate recommendation":  func(r *Report) { r.Recommendations = append(r.Recommendations, r.Recommendations[0]) },
+		"foreign finding":           func(r *Report) { r.Recommendations[0].FindingID = "other" },
+		"foreign evidence":          func(r *Report) { r.Findings[0].EvidenceIDs = []string{"other"} },
+		"unknown severity":          func(r *Report) { r.Findings[0].Severity = "unknown" },
+		"unknown variant":           func(r *Report) { r.Recommendations[0].VariantID = "custom" },
+		"missing fallback reason":   func(r *Report) { r.Explanation.FallbackReason = nil },
+		"AI with fallback metadata": func(r *Report) { r.Explanation.Mode = "ai_catalog_selection" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := fixtureReport(t)
+			change(&r)
+			if _, err := NewResult(a, NewID(), NewID(), a.AssessmentAt, s.SnapshotData, r.ReportData); !errors.Is(err, ErrInvalidData) {
+				t.Fatalf("invalid report accepted: %v", err)
+			}
+		})
+	}
+}
+
 func TestScalarCopiesDoNotChangeAnEarlierSnapshot(t *testing.T) {
 	var original Scalar
 	if err := json.Unmarshal([]byte("true"), &original); err != nil {
