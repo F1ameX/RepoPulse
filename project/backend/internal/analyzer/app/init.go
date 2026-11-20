@@ -13,27 +13,27 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/osv"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/repository"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/activity"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/ci"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/scoring"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/snapshot"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/storage"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/worker"
 )
 
-func githubCICollector() snapshot.CICollector {
+func githubClient() *github.Client {
 	// A reused connection can make net/http silently replay a GET. Use fresh
 	// connections so the collector controls all retries under its budget.
 	transport := &http.Transport{Proxy: http.ProxyFromEnvironment, DisableKeepAlives: true}
-	client := github.NewClient(&http.Client{Transport: transport}, os.Getenv("GITHUB_TOKEN"))
-	return snapshot.NewCICollector(client)
+	return github.NewClient(&http.Client{Transport: transport}, os.Getenv("GITHUB_TOKEN"))
 }
 
 func newActivityProcessor(engine *scoring.Engine) *activity.Processor {
-	return activity.NewProcessorWithCI(engine, githubCICollector())
+	return activity.NewProcessorWithCI(engine, ci.Collector{Reader: githubClient()})
 }
 
 func newInputProcessor(collectors []snapshot.Collector, calculator snapshot.Calculator) *snapshot.Processor {
 	all := append([]snapshot.Collector{}, collectors...)
-	all = append(all, githubCICollector())
+	all = append(all, snapshot.NewCICollector(githubClient()))
 	return snapshot.NewProcessorWithOSV(all, calculator, osv.NewClient(nil))
 }
 
