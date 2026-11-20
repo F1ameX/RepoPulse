@@ -93,7 +93,7 @@ export function MetricDetails({
         </div>
 
         {input.id === 'CI_SUCCESS_RATE' && !isUnavailable && (
-          <div className={styles.hint} style={{ marginBottom: '8px', fontStyle: 'italic' }}>
+          <div className={styles.hint} style={{ marginBottom: '8px' }}>
             Доля успешных CI-запусков (runs), а не отдельных тестов.
           </div>
         )}
