@@ -19,6 +19,7 @@ import (
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/adapter/out/repository"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/activity"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/ci"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/scoring"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/storage"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/worker"
@@ -37,6 +38,12 @@ import (
 )
 
 type reportResolver struct{ owner, foreign string }
+
+type ciCollectorFunc func(context.Context, domain.Analysis) (ci.ExternalData, error)
+
+func (f ciCollectorFunc) CollectCI(ctx context.Context, a domain.Analysis) (ci.ExternalData, error) {
+	return f(ctx, a)
+}
 
 func (v reportResolver) ResolveContext(_ context.Context, tokens apidomain.SessionTokens) (domain.VerifiedContext, error) {
 	if tokens.GuestToken == nil {
@@ -143,7 +150,7 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 			withPartialTree := strings.HasPrefix(filepath.Base(path), "ACT-06")
 			if withTree {
 				data.Sources = append(data.Sources, domain.SourceState{Source: "git", Scope: "tree", Status: "complete", ObtainedAt: &vector.Input.At})
-				for _, name := range []string{"README.md", "LICENSE", ".github/LICENSE", "src/main.go", "src/main_test.go"} {
+				for _, name := range []string{"README.md", "LICENSE", ".github/LICENSE", "src/main.go", "src/main_test.go", ".github/workflows/ci.yml"} {
 					data.Files = append(data.Files, domain.GitFile{Path: name, Mode: "100644"})
 				}
 			}
@@ -186,7 +193,19 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 				t.Fatal(err)
 			}
 			git := &snapshotSource{session: &snapshotSession{data: data}}
-			runner := worker.NewService(pg, git, activity.NewProcessor(engine), store, time.Minute)
+			processor := activity.NewProcessor(engine)
+			var ciCalls int
+			if withTree {
+				processor = activity.NewProcessorWithCI(engine, ciCollectorFunc(func(_ context.Context, a domain.Analysis) (ci.ExternalData, error) {
+					ciCalls++
+					return ci.ExternalData{
+						Actions:  domain.SourceState{Status: "complete", ObtainedAt: &a.AssessmentAt},
+						Attempts: []ci.Attempt{{RunID: 1, Number: 2, CreatedAt: a.Window.From, CompletedAt: a.Window.From.Add(time.Hour), Conclusion: "success"}},
+						Rules:    domain.SourceState{Status: "complete", ObtainedAt: &a.AssessmentAt},
+					}, nil
+				}))
+			}
+			runner := worker.NewService(pg, git, processor, store, time.Minute)
 			if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
 				t.Fatalf("worker: %v", err)
 			}
@@ -250,11 +269,19 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 				docs, tests := report.Categories[1], report.Categories[2]
 				share := docs.Metrics[1]
 				test := tests.Metrics[0]
-				if docs.ID != "documentation" || tests.ID != "testing" || report.Coverage.Calculated != 6 ||
+				if docs.ID != "documentation" || tests.ID != "testing" || report.Coverage.Calculated != 9 ||
 					share.NormalizedScore == nil || *share.NormalizedScore != 33.3 || len(share.Input.Evidence) != 2 ||
 					test.NormalizedScore == nil || *test.NormalizedScore != 100 || len(test.Input.Evidence) != 1 ||
 					test.Input.Evidence[0].Path == nil || *test.Input.Evidence[0].Path != "src/main_test.go" {
 					t.Fatalf("tree evidence or scores changed at HTTP boundary: docs=%+v tests=%+v", docs, tests)
+				}
+				ciCategory := report.Categories[4]
+				rate := ciCategory.Metrics[1]
+				if ciCategory.ID != "ci_cd" || ciCategory.Status != "complete" ||
+					rate.NormalizedScore == nil || *rate.NormalizedScore != 100 || len(rate.Input.Evidence) != 1 ||
+					rate.Input.Evidence[0].Attempt == nil || *rate.Input.Evidence[0].Attempt != 2 ||
+					!reflect.DeepEqual(rate.Input, stored.Snapshot.Inputs[10]) {
+					t.Fatalf("CI evidence or score changed between collection, storage and HTTP: %+v", rate)
 				}
 			}
 			if withEmptyTree || withPartialTree {
@@ -269,6 +296,9 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 				if again.Code != 200 || again.Body.String() != response.Body.String() || git.calls != 1 {
 					t.Fatal("reading changed the result or queried Git")
 				}
+			}
+			if withTree && ciCalls != 1 {
+				t.Fatalf("CI was collected %d times", ciCalls)
 			}
 			for cookie, status := range map[string]int{"foreign": 404, "expired": 401, "": 401} {
 				if got := read(report.ID, cookie); got.Code != status {
@@ -304,7 +334,11 @@ func checkTreeDetails(t *testing.T, report domain.Report, partial bool) {
 			t.Fatalf("independent last-commit proof was associated with the incomplete history: %v", source.MetricIDs)
 		}
 	}
-	if tree == nil || !reflect.DeepEqual(tree.MetricIDs, []string{"DOC_README", "DOC_SUPPORT_SHARE", "TEST_PRESENCE"}) {
+	wantTreeMetrics := []string{"DOC_README", "DOC_SUPPORT_SHARE", "TEST_PRESENCE", "CI_PRESENT"}
+	if !partial {
+		wantTreeMetrics = append(wantTreeMetrics, "CI_SUCCESS_RATE")
+	}
+	if tree == nil || !reflect.DeepEqual(tree.MetricIDs, wantTreeMetrics) {
 		t.Fatalf("missing links for the tree scope: %+v", tree)
 	}
 	if partial {
