@@ -70,7 +70,7 @@ type snapshotCalculator struct{}
 func (snapshotCalculator) Calculate(_ context.Context, a domain.Analysis, data domain.SnapshotData) (domain.ReportData, error) {
 	reason := &domain.Reason{Code: "test_calculator", Message: "Контроль публикации", CannotConclude: "Баллы не вычислялись"}
 	report := domain.ReportData{OverallReason: reason, Summary: "Контроль сохранения входов", Coverage: domain.Coverage{Total: 12, Unavailable: 12},
-		Explanation: domain.Explanation{Mode: "deterministic_fallback", FallbackReason: text("test_calculator"), CatalogVersion: a.Versions.RecommendationCatalog,
+		Explanation: domain.Explanation{Mode: "deterministic_fallback", FallbackReason: text("no_findings"), CatalogVersion: a.Versions.RecommendationCatalog,
 			SchemaVersion: a.Versions.ExplanationSchema, PromptVersion: a.Versions.Prompt}}
 	for _, category := range []string{"activity", "documentation", "testing", "security", "ci_cd"} {
 		item := domain.Category{ID: category, Status: "unavailable", Reason: reason}
