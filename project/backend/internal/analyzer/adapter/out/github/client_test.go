@@ -188,7 +188,7 @@ func TestNetworkFailuresTimeoutCancellationAndResponseLimit(t *testing.T) {
 		{"network error", func(*http.Request) (*http.Response, error) { return nil, fmt.Errorf("private transport detail") }, domain.ErrRepositoryCheck},
 		{"timeout", func(*http.Request) (*http.Response, error) { return nil, context.DeadlineExceeded }, domain.ErrUpstreamTimeout},
 		{"oversized response", func(*http.Request) (*http.Response, error) {
-			return response(200, strings.Repeat("x", maxResponseBytes+1), nil), nil
+			return response(200, strings.Repeat("x", domain.HTTPResponseLimit+1), nil), nil
 		}, domain.ErrRepositoryCheck},
 		{"deadline", func(r *http.Request) (*http.Response, error) { <-r.Context().Done(); return nil, r.Context().Err() }, domain.ErrUpstreamTimeout},
 	} {

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -17,7 +16,6 @@ import (
 )
 
 const apiOrigin = "https://api.github.com"
-const maxResponseBytes = 5 << 20
 
 type Client struct {
 	http  *http.Client
@@ -204,15 +202,15 @@ func (c *Client) attempt(ctx context.Context, path string) ([]byte, int, http.He
 		return nil, 0, nil, domain.ErrRepositoryCheck
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	body, err := domain.ReadHTTPInput(ctx, response.Body)
 	if err != nil {
+		if errors.Is(err, domain.ErrHTTPResponseLimit) || errors.Is(err, domain.ErrHTTPInputLimit) {
+			return nil, 0, nil, errors.Join(domain.ErrRepositoryCheck, err)
+		}
 		var networkError net.Error
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) || (errors.As(err, &networkError) && networkError.Timeout()) {
 			return nil, 0, nil, domain.ErrUpstreamTimeout
 		}
-		return nil, 0, nil, domain.ErrRepositoryCheck
-	}
-	if len(body) > maxResponseBytes {
 		return nil, 0, nil, domain.ErrRepositoryCheck
 	}
 	return body, response.StatusCode, response.Header, nil

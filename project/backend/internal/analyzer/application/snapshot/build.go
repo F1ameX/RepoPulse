@@ -53,6 +53,12 @@ func Build(a domain.Analysis, git domain.GitData, collections ...Collection) (do
 	}
 	inputs := map[string]Input{}
 	for _, collection := range collections {
+		if collection.GitHubCI != nil {
+			if data.GitHubCI != nil {
+				return domain.SnapshotData{}, domain.ErrInvalidData
+			}
+			data.GitHubCI = collection.GitHubCI.Clone()
+		}
 		if err := addSources(collection.Sources); err != nil {
 			return domain.SnapshotData{}, err
 		}
@@ -112,10 +118,12 @@ func Build(a domain.Analysis, git domain.GitData, collections ...Collection) (do
 		return domain.SnapshotData{}, domain.ErrInvalidData
 	}
 	// Own every nested slice/pointer before sorting or normalization.
+	ci := data.GitHubCI
 	data, err := clone(data)
 	if err != nil {
 		return domain.SnapshotData{}, err
 	}
+	data.GitHubCI = ci
 	data.Dependencies, err = NormalizeDependencies(data.Dependencies)
 	if err != nil {
 		return domain.SnapshotData{}, err

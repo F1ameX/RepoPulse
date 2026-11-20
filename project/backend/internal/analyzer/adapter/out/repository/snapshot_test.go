@@ -50,9 +50,23 @@ func (c snapshotCollector) Collect(_ context.Context, a domain.Analysis, git wor
 	if len(git.Data().Files) != 0 {
 		return snapshot.Collection{}, domain.ErrInvalidData
 	}
+	runAt := a.AssessmentAt.Add(-24 * time.Hour)
+	actionsCount := 1
 	return snapshot.Collection{
-		Sources: []domain.SourceState{{Source: "github", Scope: "branch_rules", Status: "unavailable",
-			Reason: &domain.Reason{Code: "insufficient_permissions", Message: "Источник недоступен", CannotConclude: "Настройки неизвестны"}}},
+		GitHubCI: &domain.GitHubCI{
+			Attempts: []domain.ActionsAttempt{
+				{RunID: "9007199254740993", Attempt: 2, HeadSHA: *a.Repository.CommitSHA, Status: "completed", Conclusion: "success",
+					CreatedAt: runAt, StartedAt: &runAt, UpdatedAt: runAt.Add(time.Minute), ObtainedAt: c.obtained},
+			},
+			Rules: []domain.BranchRule{}, ConfigPaths: []string{}, ConfigTreeComplete: true,
+		},
+		Sources: []domain.SourceState{
+			{Source: "github", Scope: domain.ActionsScope, Status: "partial", ObtainedAt: &c.obtained,
+				Sample: domain.Sample{Collected: &actionsCount},
+				Reason: &domain.Reason{Code: "GITHUB_CI_INTERRUPTED", Message: "Следующая страница не получена", CannotConclude: "Полнота запусков неизвестна"}},
+			{Source: "github", Scope: domain.BranchRulesScope, Status: "unavailable",
+				Reason: &domain.Reason{Code: "insufficient_permissions", Message: "Источник недоступен", CannotConclude: "Настройки неизвестны"}},
+		},
 		Inputs: []snapshot.Input{
 			{Value: domain.MetricInput{ID: "DOC_README", Unit: "bool", RawValue: readme, Status: "complete"}, Sources: []snapshot.Source{{Name: "git", Scope: "tree"}}},
 			{Value: domain.MetricInput{ID: "DOC_SUPPORT_SHARE", Unit: "ratio", RawValue: zero, Status: "complete"}, Sources: []snapshot.Source{{Name: "git", Scope: "tree"}}},
@@ -132,8 +146,22 @@ func TestNormalizedSnapshotIsPublishedAndReadOfflineForOriginalOwner(t *testing.
 			t.Fatalf("input %d = %s, want %s", index, raw, want)
 		}
 	}
-	if saved.Inputs[1].ObservedAt != nil || saved.Sources[1].ObtainedAt != nil || saved.Sources[1].Sample.Collected != nil || saved.Vulnerabilities[0].Severity != nil || !saved.Vulnerabilities[0].ObtainedAt.Equal(obtained) {
+	if saved.Inputs[1].ObservedAt != nil || saved.Vulnerabilities[0].Severity != nil || !saved.Vulnerabilities[0].ObtainedAt.Equal(obtained) {
 		t.Fatal("unknown fields were fabricated or observation time changed")
+	}
+	if saved.GitHubCI == nil {
+		t.Fatal("normalized CI inputs were not stored")
+	}
+	latest, found := saved.GitHubCI.LatestCompleted(saved.Window)
+	if !found || latest.RunID != "9007199254740993" || latest.Attempt != 2 || latest.Conclusion != "success" || !latest.ObtainedAt.Equal(obtained) {
+		t.Fatalf("Actions attempt changed on round trip: %+v", latest)
+	}
+	actions, rules := saved.Sources[1], saved.Sources[2]
+	if actions.Scope != domain.ActionsScope || actions.Status != "partial" || actions.Reason == nil ||
+		actions.Reason.Code != "GITHUB_CI_INTERRUPTED" || actions.Sample.Total != nil ||
+		rules.Scope != domain.BranchRulesScope || rules.Status != "unavailable" || rules.ObtainedAt != nil ||
+		rules.Sample.Collected != nil || saved.GitHubCI.RequiredChecks(rules) != nil {
+		t.Fatalf("CI source completeness changed on round trip: actions=%+v rules=%+v", actions, rules)
 	}
 	if !result.Report.CompletedAt.After(a.CreatedAt) || result.Report.AnalysisID != a.ID || result.Report.SnapshotID != saved.ID {
 		t.Fatal("completion metadata not generated from this execution")
@@ -148,7 +176,7 @@ func TestNormalizedSnapshotIsPublishedAndReadOfflineForOriginalOwner(t *testing.
 			t.Fatal(err)
 		}
 		actual, _ := json.Marshal(again)
-		if string(actual) != string(encoded) || source.calls != 1 {
+		if string(actual) != string(encoded) || !reflect.DeepEqual(again.Snapshot.GitHubCI, saved.GitHubCI) || source.calls != 1 {
 			t.Fatal("offline read changed snapshot or re-fetched the source")
 		}
 	}

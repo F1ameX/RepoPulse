@@ -128,6 +128,7 @@ type MetricInput struct {
 // SnapshotData is produced by trusted collectors; it cannot replace server-owned
 // IDs, owner, accepted repository, window or versions.
 type SnapshotData struct {
+	GitHubCI        *GitHubCI       `json:"-"`
 	Refs            []GitRef        `json:"refs"`
 	Sources         []SourceState   `json:"sources"`
 	Inputs          []MetricInput   `json:"inputs"`

@@ -2,6 +2,7 @@
 package ci
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"slices"
@@ -27,10 +28,49 @@ type Attempt struct {
 // checks enforced by applicable default branch rules, excluding review rules.
 // A complete Rules source confirms the entire applicable set was inspected.
 type ExternalData struct {
+	facts                *domain.GitHubCI
 	Actions              domain.SourceState
 	Attempts             []Attempt
 	Rules                domain.SourceState
 	RequiredStatusChecks int
+}
+
+type Collector struct {
+	Reader snapshot.CIReader
+}
+
+func (collector Collector) CollectCI(ctx context.Context, analysis domain.Analysis) (ExternalData, error) {
+	facts, sources := collector.Reader.CollectCI(ctx, analysis.Repository, analysis.Window)
+	if err := ctx.Err(); err != nil {
+		return ExternalData{}, err
+	}
+	data := ExternalData{facts: &facts}
+	for _, source := range sources {
+		switch source.Scope {
+		case domain.ActionsScope:
+			data.Actions = source
+		case domain.BranchRulesScope:
+			data.Rules = source
+		}
+	}
+	for _, run := range facts.Attempts {
+		id, err := strconv.ParseUint(run.RunID, 10, 64)
+		if err != nil {
+			id = 0
+		}
+		attempt := Attempt{RunID: id, Number: run.Attempt, CreatedAt: run.CreatedAt, Conclusion: run.Conclusion}
+		if run.Status == "completed" {
+			attempt.CompletedAt = run.UpdatedAt
+		}
+		data.Attempts = append(data.Attempts, attempt)
+	}
+	if facts.ClassicRequiredChecks != nil {
+		data.RequiredStatusChecks = *facts.ClassicRequiredChecks
+	}
+	for _, rule := range facts.Rules {
+		data.RequiredStatusChecks += rule.RequiredChecks
+	}
+	return data, nil
 }
 
 func Inputs(a domain.Analysis, git domain.GitData, tree domain.SourceState, external ExternalData) snapshot.Collection {
@@ -74,8 +114,14 @@ func Inputs(a domain.Analysis, git domain.GitData, tree domain.SourceState, exte
 			required.EvidenceTotal = new(len(required.Evidence))
 		}
 	}
+	var facts *domain.GitHubCI
+	if external.facts != nil {
+		facts = external.facts.Clone()
+		facts.CollectConfigurations(git)
+	}
 	return snapshot.Collection{
-		Sources: []domain.SourceState{actions, rules},
+		GitHubCI: facts,
+		Sources:  []domain.SourceState{actions, rules},
 		Inputs: []snapshot.Input{
 			{Value: presence, Sources: []snapshot.Source{{Name: "git", Scope: domain.GitTreeScope}}},
 			{Value: success, Sources: successSources},
