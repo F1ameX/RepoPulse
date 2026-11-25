@@ -117,10 +117,7 @@ func fromFinding(v *wire.Finding) models.Finding {
 	r.Description = v.Description
 	r.Severity = v.Severity
 	r.PossibleConsequence = v.PossibleConsequence
-	r.EvidenceIDs = []string{}
-	for _, item := range v.EvidenceIds {
-		r.EvidenceIDs = append(r.EvidenceIDs, item)
-	}
+	r.EvidenceIDs = append([]string{}, v.EvidenceIds...)
 	r.Vulnerabilities = []models.Vulnerability{}
 	for _, item := range v.Vulnerabilities {
 		r.Vulnerabilities = append(r.Vulnerabilities, fromVulnerability(item))

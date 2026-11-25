@@ -75,12 +75,12 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 		t.mu.Unlock()
 		if attemptLimit {
 			t.failed("GIT_HTTP_LIMIT")
-			http.Error(w, "Git budget exceeded", 502)
+			http.Error(w, "Git budget exceeded", http.StatusBadGateway)
 			return
 		}
 		if exhausted {
 			t.failed("GIT_SIZE_LIMIT")
-			http.Error(w, "Git budget exceeded", 502)
+			http.Error(w, "Git budget exceeded", http.StatusBadGateway)
 			return
 		}
 		body := http.MaxBytesReader(w, r.Body, 8<<20)
@@ -93,12 +93,12 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 		request, err := http.NewRequestWithContext(attempt, r.Method, url, body)
 		if err != nil {
 			t.failed("GIT_FETCH_FAILED")
-			http.Error(w, "Git unavailable", 502)
+			http.Error(w, "Git unavailable", http.StatusBadGateway)
 			return
 		}
 		if r.ContentLength > 8<<20 {
 			t.failed("GIT_REQUEST_LIMIT")
-			http.Error(w, "Git budget exceeded", 502)
+			http.Error(w, "Git budget exceeded", http.StatusBadGateway)
 			return
 		}
 		request.ContentLength = r.ContentLength
@@ -127,13 +127,13 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 			} else {
 				t.failed("GIT_FETCH_FAILED")
 			}
-			http.Error(w, "Git unavailable", 502)
+			http.Error(w, "Git unavailable", http.StatusBadGateway)
 			return
 		}
-		defer response.Body.Close()
+		defer func() { _ = response.Body.Close() }()
 		if response.StatusCode != 200 {
 			t.failed("GIT_FETCH_FAILED")
-			http.Error(w, "Git unavailable", 502)
+			http.Error(w, "Git unavailable", http.StatusBadGateway)
 			return
 		}
 		t.mu.Lock()
@@ -141,7 +141,7 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 		t.mu.Unlock()
 		if response.ContentLength > remaining {
 			t.failed("GIT_SIZE_LIMIT")
-			http.Error(w, "Git budget exceeded", 502)
+			http.Error(w, "Git budget exceeded", http.StatusBadGateway)
 			return
 		}
 		w.Header().Set("Content-Type", response.Header.Get("Content-Type"))

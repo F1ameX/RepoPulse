@@ -26,7 +26,7 @@ func (s *trailerStream) SetTrailer(md metadata.MD) error {
 	return nil
 }
 
-func invoke(t *testing.T, ctx context.Context, handlerErr error) (error, *commonv1.ApiError) {
+func invoke(t *testing.T, ctx context.Context, handlerErr error) (*commonv1.ApiError, error) {
 	t.Helper()
 	stream := &trailerStream{}
 	ctx = grpc.NewContextWithServerTransportStream(ctx, stream)
@@ -40,7 +40,7 @@ func invoke(t *testing.T, ctx context.Context, handlerErr error) (error, *common
 	if err := proto.Unmarshal([]byte(values[0]), &api); err != nil {
 		t.Fatal(err)
 	}
-	return err, &api
+	return &api, err
 }
 
 func TestInterceptorWritesStatusAndApiError(t *testing.T) {
@@ -59,7 +59,7 @@ func TestInterceptorWritesStatusAndApiError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err, api := invoke(t, ctx, tt.err)
+			api, err := invoke(t, ctx, tt.err)
 			if status.Code(err) != tt.code {
 				t.Fatalf("status code = %v, want %v", status.Code(err), tt.code)
 			}
@@ -80,7 +80,7 @@ func TestInvalidCredentialsMessage(t *testing.T) {
 }
 
 func TestInterceptorHidesUnknownErrors(t *testing.T) {
-	err, api := invoke(t, context.Background(), errors.New("dial tcp 10.0.0.1: secret detail"))
+	api, err := invoke(t, context.Background(), errors.New("dial tcp 10.0.0.1: secret detail"))
 	if status.Code(err) != codes.Internal || api.GetCode() != "INTERNAL_ERROR" {
 		t.Fatalf("got %v / %v", err, api)
 	}

@@ -191,7 +191,11 @@ func TestPinnedTreeSurvivesFullHistoryTransferLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close Git session: %v", err)
+		}
+	}()
 	data := session.Data()
 	for _, scope := range data.Sources {
 		switch scope.Scope {
@@ -223,7 +227,11 @@ func TestExperimentalHistoryReadsPinnedAncestorsOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close Git session: %v", err)
+		}
+	}()
 
 	data := session.Data()
 	if len(data.Refs) != 3 || len(data.Files) != 4 || !data.MainWalkComplete ||
@@ -257,7 +265,11 @@ func TestRealGitIsReadWithoutCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close Git session: %v", err)
+		}
+	}()
 	data := session.Data()
 	if _, err := os.Stat(filepath.Join(server.Config.Handler.(*cgi.Handler).Dir, "EXECUTED")); !os.IsNotExist(err) {
 		t.Fatal("user Git config was executed")
@@ -330,7 +342,11 @@ func TestBlobBudgetAndClosedSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close Git session: %v", err)
+		}
+	}()
 	var blob string
 	for _, file := range session.Data().Files {
 		if file.Path == "README.md" {
@@ -364,7 +380,11 @@ func TestPublicGitHubSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close Git session: %v", err)
+		}
+	}()
 	data := session.Data()
 	if data.Repository.CommitSHA == nil || len(data.Files) == 0 || len(data.Commits) == 0 {
 		t.Fatal("public GitHub objects not collected")
@@ -395,7 +415,11 @@ func TestGitLimitsAndInterruptedTransferAreIncomplete(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer session.Close()
+			defer func() {
+				if err := session.Close(); err != nil {
+					t.Errorf("close Git session: %v", err)
+				}
+			}()
 			data := session.Data()
 			if data.ReceivedBytes > tc.limits.Bytes {
 				t.Fatal("received-byte budget exceeded")
@@ -441,7 +465,7 @@ func TestGitTimeoutAndCancellationCleanTemporaryData(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if session, err := reader.Open(ctx, metadata); err == nil {
-		session.Close()
+		_ = session.Close()
 		t.Fatal("cancelled acquisition succeeded")
 	}
 	entries, _ = os.ReadDir(reader.tempRoot)
@@ -462,7 +486,7 @@ func TestTransportPreservesGzipUploadPackRequest(t *testing.T) {
 			http.Error(w, "invalid gzip body", http.StatusBadRequest)
 			return
 		}
-		defer reader.Close()
+		defer func() { _ = reader.Close() }()
 		body, err := io.ReadAll(reader)
 		if err != nil || string(body) != payload {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -496,7 +520,7 @@ func TestTransportPreservesGzipUploadPackRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("compressed upload-pack request failed: HTTP %d", resp.StatusCode)
 	}

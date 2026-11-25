@@ -33,7 +33,7 @@ func newClient(t *testing.T, scenarios Scenarios) authv1.AuthServiceClient {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { _ = conn.Close() })
 	return authv1.NewAuthServiceClient(conn)
 }
 

@@ -34,7 +34,7 @@ func TestServerHealthStubAndShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	callCtx, callCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer callCancel()
 

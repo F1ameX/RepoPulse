@@ -76,7 +76,7 @@ func newAccountClientWith(t *testing.T, server *accountServer, options ...grpc.S
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { _ = conn.Close() })
 	return NewClient(conn, time.Second)
 }
 

@@ -18,6 +18,11 @@ type Postgres struct{ pool *pgxpool.Pool }
 
 func NewPostgres(pool *pgxpool.Pool) *Postgres { return &Postgres{pool: pool} }
 
+func rollback(ctx context.Context, tx pgx.Tx) {
+	// Rollback is safe after commit. Cleanup must not replace the operation's error.
+	_ = tx.Rollback(context.WithoutCancel(ctx))
+}
+
 const analysisSelect = `SELECT a.id::text, a.submission_id::text, s.request_id::text,
 	a.owner_id::text, p.kind, a.repository, a.assessment_at, a.window_from, a.window_until,
 	a.versions, a.status, a.created_at, a.started_at, a.deadline_at, a.completed_at, a.report_id::text, a.stage, a.error
@@ -73,7 +78,7 @@ func (p *Postgres) Create(ctx context.Context, a domain.Analysis) (domain.Analys
 	if err != nil {
 		return domain.Analysis{}, fmt.Errorf("begin acceptance: %w", err)
 	}
-	defer tx.Rollback(context.WithoutCancel(ctx))
+	defer rollback(ctx, tx)
 	// Confirm principal kind without creating or altering Auth-owned identities.
 	var kind string
 	if err := tx.QueryRow(ctx, "SELECT kind FROM auth.principals WHERE id = $1", a.Owner.ID).Scan(&kind); err != nil {
@@ -144,7 +149,7 @@ func (p *Postgres) Complete(ctx context.Context, result domain.Result) error {
 	if err != nil {
 		return fmt.Errorf("begin result: %w", err)
 	}
-	defer tx.Rollback(context.WithoutCancel(ctx))
+	defer rollback(ctx, tx)
 	a, err := scanAnalysis(tx.QueryRow(ctx, analysisSelect+" WHERE a.id=$1 FOR UPDATE OF a", result.Snapshot.AnalysisID))
 	if err != nil {
 		return err

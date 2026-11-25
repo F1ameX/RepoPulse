@@ -66,7 +66,7 @@ func NormalizeLogin(raw string) (string, *FieldError) {
 	for i := 0; i < len(login); i++ {
 		c := login[i]
 		letter := c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z'
-		if i == 0 && !letter || i > 0 && !letter && !(c >= '0' && c <= '9') && c != '_' {
+		if i == 0 && !letter || i > 0 && !letter && (c < '0' || c > '9') && c != '_' {
 			return "", loginError(CodeInvalidCharacters, "Логин: первая латинская буква, далее латинские буквы, цифры или _")
 		}
 	}

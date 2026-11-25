@@ -61,7 +61,7 @@ func NewReader(tempRoot string, limits Limits) (*Reader, error) {
 	}
 	binary, err := exec.LookPath("git")
 	if err != nil {
-		return nil, errors.New("Git executable is required")
+		return nil, errors.New("git executable is required")
 	}
 	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, DisableCompression: true, DisableKeepAlives: true}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	return &Reader{binary: binary, tempRoot: tempRoot, limits: limits, client: client}, nil
@@ -183,7 +183,7 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 			_, _ = b.Buffer.Write(p[:int(left)])
 		}
 		b.exceeded = true
-		return 0, errors.New("Git output budget")
+		return 0, errors.New("git output budget")
 	}
 	return b.Buffer.Write(p)
 }

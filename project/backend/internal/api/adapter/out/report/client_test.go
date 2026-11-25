@@ -46,7 +46,7 @@ func TestBinaryReportRoundTripPreservesAllContractFields(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 			client := NewClient(conn, time.Second)
 			decoded, err := client.GetReport(t.Context(), models.VerifiedContext{}, report.ID)
 			if err != nil {

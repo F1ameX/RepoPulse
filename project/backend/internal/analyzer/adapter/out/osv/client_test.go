@@ -45,7 +45,7 @@ func TestQuerySendsExactCoordinatesAndKeepsPagesAfterFailure(t *testing.T) {
 		}
 		page := pages[calls]
 		calls++
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 		var got queryBody
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatal(err)
@@ -86,7 +86,7 @@ func TestQuerySharesFortyAttemptsAcrossProfilesPagesAndRetries(t *testing.T) {
 	calls := 0
 	client := NewClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		calls++
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 		switch calls {
 		case 10, 19, 28, 37:
 			return response(200, "{}"), nil
@@ -123,7 +123,7 @@ func TestOSVAttemptBudgetIsNotResetBySecondQueryCall(t *testing.T) {
 	calls := 0
 	client := NewClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		calls++
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 		return response(200, "{}"), nil
 	})})
 	queries := []domain.OSVQuery{{Ecosystem: "npm", Name: "pkg", Version: "1.0.0"}}
@@ -138,7 +138,7 @@ func TestOSVAttemptBudgetIsNotResetBySecondQueryCall(t *testing.T) {
 func TestOSVDiscardsConflictingAdvisoryAcrossPages(t *testing.T) {
 	calls := 0
 	client := NewClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 		calls++
 		if calls == 1 {
 			return response(200, `{"vulns":[{"id":"A","summary":"one"},{"id":"B"}],"next_page_token":"2"}`), nil
@@ -156,7 +156,7 @@ func TestOSVDiscardsConflictingAdvisoryAcrossPages(t *testing.T) {
 func TestOSVDoesNotRequestPageEleven(t *testing.T) {
 	calls := 0
 	client := NewClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 		calls++
 		return response(200, fmt.Sprintf(`{"next_page_token":"page-%d"}`, calls+1)), nil
 	})})

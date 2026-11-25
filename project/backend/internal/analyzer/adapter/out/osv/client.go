@@ -243,7 +243,7 @@ func (c *Client) attempt(ctx context.Context, body []byte) ([]byte, failure) {
 	if err != nil {
 		return nil, requestFailure(ctx, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	raw, err := domain.ReadHTTPResponse(ctx, response.Body, response.ContentLength)
 	switch {
 	case errors.Is(err, domain.ErrHTTPInputLimit):

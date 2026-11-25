@@ -23,7 +23,7 @@ func decodeStoredSnapshot(body []byte) (domain.Snapshot, error) {
 		return domain.Snapshot{}, domain.ErrInvalidData
 	}
 	stored.Snapshot.GitHubCI = stored.GitHubCI
-	if err := stored.Snapshot.Validate(); err != nil {
+	if err := stored.Validate(); err != nil {
 		return domain.Snapshot{}, err
 	}
 	return stored.Snapshot, nil

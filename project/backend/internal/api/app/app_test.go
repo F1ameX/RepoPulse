@@ -21,7 +21,7 @@ func TestServerHealthAndShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	var logs bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&logs, nil)).With("service", "api-service")
 	ctx, cancel := context.WithCancel(logger.With(context.Background(), log))
@@ -43,7 +43,7 @@ func TestServerHealthAndShutdown(t *testing.T) {
 			t.Fatal(err)
 		}
 		body, readErr := io.ReadAll(response.Body)
-		response.Body.Close()
+		_ = response.Body.Close()
 		if readErr != nil || response.StatusCode != http.StatusOK {
 			t.Fatalf("health: status=%d, read error=%v", response.StatusCode, readErr)
 		}
@@ -87,7 +87,7 @@ func TestServerHealthAndShutdown(t *testing.T) {
 		t.Fatalf("got %d request logs, want 2", requestsLogged)
 	}
 	if response, err := client.Get("http://" + listener.Addr().String() + "/health"); err == nil {
-		response.Body.Close()
+		_ = response.Body.Close()
 		t.Fatal("server still accepts requests after shutdown")
 	}
 }
@@ -97,7 +97,7 @@ func TestRunReportsOccupiedPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	ctx := context.Background()
 	server := newHTTPServer(ctx, Config{HTTPAddr: listener.Addr().String()})
 	err = runHTTP(ctx, server, time.Second)

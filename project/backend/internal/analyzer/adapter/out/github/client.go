@@ -210,7 +210,7 @@ func (c *Client) attempt(ctx context.Context, path string) ([]byte, int, http.He
 		}
 		return nil, 0, nil, domain.ErrRepositoryCheck
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	body, err := domain.ReadHTTPResponse(ctx, response.Body, response.ContentLength)
 	if err != nil {
 		if errors.Is(err, domain.ErrHTTPResponseLimit) || errors.Is(err, domain.ErrHTTPInputLimit) {

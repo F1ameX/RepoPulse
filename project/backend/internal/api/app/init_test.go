@@ -60,7 +60,7 @@ func TestRequestContextKeepsLoggerWithoutProcessCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	response.Body.Close()
+	_ = response.Body.Close()
 	got := <-observed
 	if got.log != log || got.err != nil {
 		t.Fatalf("request lost its logger or inherited process cancellation: %+v", got)

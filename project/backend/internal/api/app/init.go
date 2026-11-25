@@ -59,7 +59,10 @@ func newAPIHandler(ctx context.Context, cfg Config, settings AnalysisConfig, ses
 		Sessions: sessions, CookieSecure: cfg.CookieSecure, PublicOrigin: cfg.PublicOrigin, Analyses: scenarios,
 		Reports: reportclient.NewClient(reportConn, cfg.ReportRequestTimeout),
 	})
-	return handler, func() { reportConn.Close(); pool.Close() }, nil
+	return handler, func() {
+		_ = reportConn.Close()
+		pool.Close()
+	}, nil
 }
 
 func newHTTPServer(ctx context.Context, cfg Config, sessions ...*session.Service) *http.Server {

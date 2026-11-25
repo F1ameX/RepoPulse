@@ -22,7 +22,7 @@ func (p *Postgres) Claim(ctx context.Context, at time.Time, budget time.Duration
 	if err != nil {
 		return domain.Analysis{}, err
 	}
-	defer tx.Rollback(context.WithoutCancel(ctx))
+	defer rollback(ctx, tx)
 	var id string
 	err = tx.QueryRow(ctx, `SELECT id::text FROM analyzer.analyses WHERE status='queued' AND created_at<=$1
   ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, at).Scan(&id)
@@ -51,7 +51,7 @@ func (p *Postgres) Advance(ctx context.Context, id, stage string, at time.Time) 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(context.WithoutCancel(ctx))
+	defer rollback(ctx, tx)
 	a, err := scanAnalysis(tx.QueryRow(ctx, analysisSelect+" WHERE a.id=$1 FOR UPDATE OF a", id))
 	if err != nil {
 		return err
@@ -75,7 +75,7 @@ func (p *Postgres) Pin(ctx context.Context, id string, metadata domain.Repositor
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(context.WithoutCancel(ctx))
+	defer rollback(ctx, tx)
 	a, err := scanAnalysis(tx.QueryRow(ctx, analysisSelect+" WHERE a.id=$1 FOR UPDATE OF a", id))
 	if err != nil {
 		return err
