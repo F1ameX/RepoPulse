@@ -111,55 +111,10 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	}
 	// Re-evaluate exactly the detached inputs that will be stored, including
 	// any completeness constraints enforced while assembling the snapshot.
-	activityInputs := append([]domain.MetricInput{}, data.Inputs[:3]...)
-	category, err = p.engine.ActivityFromInputs(a.AssessmentAt, a.Window, a.Versions, activityInputs)
+	report, err := p.engine.Calculate(ctx, a, data)
 	if err != nil {
 		return worker.Output{}, err
 	}
-	treeCategories, err := p.engine.TreeCategories(a.Versions, data.Inputs)
-	if err != nil {
-		return worker.Output{}, err
-	}
-	ciCategory, err := p.engine.CICategory(a.Versions, data.Inputs)
-	if err != nil {
-		return worker.Output{}, err
-	}
-	overallReason := &domain.Reason{
-		Code: "INCOMPLETE_CATEGORIES", Message: "Общая оценка недоступна",
-		CannotConclude: "Общая оценка по пяти категориям ещё не рассчитана",
-	}
-	fallback := "no_findings"
-	report := domain.ReportData{
-		OverallReason: overallReason, Summary: "Сохранён анализ активности, документации, файловых признаков тестов и CI/CD",
-		Categories: append([]domain.Category{category}, treeCategories...), Findings: []domain.Finding{}, Recommendations: []domain.Recommendation{},
-		Explanation: domain.Explanation{
-			Mode: "deterministic_fallback", FallbackReason: &fallback,
-			CatalogVersion: a.Versions.RecommendationCatalog, SchemaVersion: a.Versions.ExplanationSchema, PromptVersion: a.Versions.Prompt,
-		},
-	}
-	pending := &domain.Reason{
-		Code: "INPUT_NOT_COLLECTED", Message: "Входные данные проверки не получены",
-		CannotConclude: "Оценка категории недоступна",
-	}
-	security := domain.Category{
-		ID: "security", Status: "unavailable", Reason: pending, Explanation: pending.Message,
-		Coverage: domain.Coverage{Total: 3, Unavailable: 3}, Metrics: []domain.Metric{},
-	}
-	for _, input := range data.Inputs[6:9] {
-		security.Metrics = append(security.Metrics, domain.Metric{
-			Input: input, RuleVersion: a.Versions.Methodology,
-			Explanation: "Входные данные проверки не получены",
-		})
-	}
-	report.Categories = append(report.Categories, security, ciCategory)
-	for _, item := range report.Categories {
-		report.Coverage.Total += item.Coverage.Total
-		report.Coverage.Calculated += item.Coverage.Calculated
-		report.Coverage.Partial += item.Coverage.Partial
-		report.Coverage.Unavailable += item.Coverage.Unavailable
-		report.Coverage.NotApplicable += item.Coverage.NotApplicable
-	}
-	report.Coverage.Percentage = float64(report.Coverage.Calculated) * 100 / float64(report.Coverage.Total)
 	if err := ctx.Err(); err != nil {
 		return worker.Output{}, err
 	}
