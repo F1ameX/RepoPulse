@@ -34,7 +34,7 @@ func TestOSVPartialCollectionKeepsFindingsAndIndependentSources(t *testing.T) {
 			{VulnerabilityIDs: []string{"TEST-1"}, ObtainedAt: latest},
 		}}}
 	})
-	osvFacts, err := collectOSV(t.Context(), client, []Collection{dependencyFacts})
+	osvFacts, err := CollectOSV(t.Context(), client, []Collection{dependencyFacts})
 	if err != nil {
 		t.Fatal(err)
 	}

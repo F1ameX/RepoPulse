@@ -24,12 +24,17 @@ type CICollector interface {
 type Processor struct {
 	engine      *scoring.Engine
 	ciCollector CICollector
+	osv         snapshot.OSVQuerier
 }
 
 func NewProcessor(engine *scoring.Engine) *Processor { return &Processor{engine: engine} }
 
 func NewProcessorWithCI(engine *scoring.Engine, collector CICollector) *Processor {
 	return &Processor{engine: engine, ciCollector: collector}
+}
+
+func NewProcessorWithSources(engine *scoring.Engine, collector CICollector, osv snapshot.OSVQuerier) *Processor {
+	return &Processor{engine: engine, ciCollector: collector, osv: osv}
 }
 
 func (p *Processor) Process(ctx context.Context, a domain.Analysis, session worker.GitSession, advance func(string) error) (worker.Output, error) {
@@ -42,11 +47,20 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 		return worker.Output{}, err
 	}
 	var ciData ci.ExternalData
-	if p.ciCollector != nil {
+	if p.ciCollector != nil || p.osv != nil {
 		if err := advance("collecting_external"); err != nil {
 			return worker.Output{}, err
 		}
+	}
+	if p.ciCollector != nil {
 		ciData, err = p.ciCollector.CollectCI(ctx, a)
+		if err != nil {
+			return worker.Output{}, err
+		}
+	}
+	var osvCollection snapshot.Collection
+	if p.osv != nil {
+		osvCollection, err = snapshot.CollectOSV(ctx, p.osv, []snapshot.Collection{dependencyCollection})
 		if err != nil {
 			return worker.Output{}, err
 		}
@@ -105,7 +119,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	for _, input := range p.engine.TreeInputs(git, tree) {
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
 	}
-	data, err := snapshot.Build(a, git, collection, dependencyCollection, ci.Inputs(a, git, tree, ciData))
+	data, err := snapshot.Build(a, git, collection, dependencyCollection, osvCollection, ci.Inputs(a, git, tree, ciData))
 	if err != nil {
 		return worker.Output{}, err
 	}
@@ -150,6 +164,30 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 			Input: input, RuleVersion: a.Versions.Methodology,
 			Explanation: "Входные данные проверки не получены",
 		})
+	}
+	if p.osv != nil {
+		metric, findings := p.engine.VulnerabilityRisk(&data)
+		security.Metrics[1] = metric
+		switch metric.Input.Status {
+		case "complete":
+			security.Status = "partial"
+			security.Reason = &domain.Reason{Code: "INCOMPLETE_METRICS", Message: "Доступны не все метрики безопасности", CannotConclude: "Полная оценка безопасности недоступна"}
+			security.Explanation = security.Reason.Message
+			security.Score = metric.NormalizedScore
+			security.Coverage.Calculated = 1
+			security.Coverage.Percentage = float64(security.Coverage.Calculated) * 100 / float64(security.Coverage.Total)
+			security.Coverage.Unavailable--
+		case "partial":
+			security.Coverage.Partial++
+			security.Coverage.Unavailable--
+		case "not_applicable":
+			security.Coverage.NotApplicable++
+			security.Coverage.Unavailable--
+		}
+		report.Findings = append(report.Findings, findings...)
+		if len(findings) > 0 {
+			report.Explanation.FallbackReason = new("ai_not_configured")
+		}
 	}
 	report.Categories = append(report.Categories, security, ciCategory)
 	for _, item := range report.Categories {

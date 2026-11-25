@@ -11,14 +11,18 @@ type OSVQuerier interface {
 	Query(context.Context, []domain.OSVQuery) []domain.OSVResult
 }
 
-func collectOSV(ctx context.Context, client OSVQuerier, collections []Collection) (Collection, error) {
+func CollectOSV(ctx context.Context, client OSVQuerier, collections []Collection) (Collection, error) {
 	var items []domain.Dependency
 	hasDependencies, incomplete := false, false
+	var dependencyReason *domain.Reason
 	for _, collection := range collections {
 		items = append(items, collection.Dependencies...)
 		for _, source := range collection.Sources {
 			if source.Scope == "dependencies" {
 				hasDependencies = true
+				if dependencyReason == nil && source.Status != "complete" {
+					dependencyReason = source.Reason
+				}
 				incomplete = incomplete || source.Status == "partial" || source.Status == "unavailable"
 			}
 		}
@@ -76,9 +80,13 @@ func collectOSV(ctx context.Context, client OSVQuerier, collections []Collection
 				latest = page.ObtainedAt
 			}
 			for _, id := range page.VulnerabilityIDs {
+				var severity *string
+				if level := page.Severity[id]; level != "" {
+					severity = &level
+				}
 				collected.Vulnerabilities = append(collected.Vulnerabilities, domain.Vulnerability{
 					ID: id, Ecosystem: result.Query.Ecosystem, Package: result.Query.Name,
-					Version: result.Query.Version, ObtainedAt: page.ObtainedAt,
+					Version: result.Query.Version, Severity: severity, ObtainedAt: page.ObtainedAt,
 				})
 			}
 		}
@@ -89,6 +97,9 @@ func collectOSV(ctx context.Context, client OSVQuerier, collections []Collection
 	source.Sample.Collected = &count // dependencies whose query reached the last page
 	if code == "" && (incomplete || !hasDependencies) {
 		code = "OSV_DEPENDENCY_COVERAGE_INCOMPLETE"
+		if dependencyReason != nil {
+			code = dependencyReason.Code
+		}
 	}
 	switch {
 	case code == "":
@@ -98,6 +109,9 @@ func collectOSV(ctx context.Context, client OSVQuerier, collections []Collection
 	case !latest.IsZero():
 		source.Status = "partial"
 		source.Reason = osvReason(code, "Получены не все данные OSV")
+		if dependencyReason != nil && code == dependencyReason.Code {
+			source.Reason = dependencyReason
+		}
 	default:
 		source.Status = "unavailable"
 		source.Reason = osvReason(code, "Данные OSV не получены")

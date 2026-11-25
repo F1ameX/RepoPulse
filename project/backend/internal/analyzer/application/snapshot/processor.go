@@ -98,7 +98,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, git worker.G
 		collections = append(collections, collected)
 	}
 	if p.osv != nil {
-		collected, err := collectOSV(ctx, p.osv, collections)
+		collected, err := CollectOSV(ctx, p.osv, collections)
 		if err != nil {
 			return worker.Output{}, err
 		}
