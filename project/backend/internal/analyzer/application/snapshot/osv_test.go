@@ -57,3 +57,21 @@ func TestOSVPartialCollectionKeepsFindingsAndIndependentSources(t *testing.T) {
 		}
 	}
 }
+
+func TestOSVUnresolvedVersionsKeepPartialStatus(t *testing.T) {
+	reason := osvReason("VERSION_UNRESOLVED", "Конкретная версия зависимости не определена")
+	client := osvQueryFunc(func(context.Context, []domain.OSVQuery) []domain.OSVResult {
+		t.Fatal("OSV must not receive a query without a concrete version")
+		return nil
+	})
+	result, err := CollectOSV(t.Context(), client, []Collection{{Sources: []domain.SourceState{
+		{Source: "git", Scope: "dependencies", Status: "partial", Reason: reason},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Sources) != 1 || result.Sources[0].Status != "partial" ||
+		result.Sources[0].Reason == nil || result.Sources[0].Reason.Code != reason.Code {
+		t.Fatalf("expected partial OSV coverage with the dependency reason, got %+v", result.Sources)
+	}
+}

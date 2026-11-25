@@ -27,6 +27,9 @@ func severityRank(level string) int {
 
 func advisorySeverity(label string, scores []severityScore) string {
 	level := strings.ToLower(strings.TrimSpace(label))
+	if level == "moderate" {
+		level = "medium"
+	}
 	if severityRank(level) == 0 {
 		level = ""
 	}

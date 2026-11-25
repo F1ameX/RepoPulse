@@ -15,11 +15,13 @@ func CollectOSV(ctx context.Context, client OSVQuerier, collections []Collection
 	var items []domain.Dependency
 	hasDependencies, incomplete := false, false
 	var dependencyReason *domain.Reason
+	dependencyPartial := false
 	for _, collection := range collections {
 		items = append(items, collection.Dependencies...)
 		for _, source := range collection.Sources {
 			if source.Scope == "dependencies" {
 				hasDependencies = true
+				dependencyPartial = dependencyPartial || source.Status == "partial"
 				if dependencyReason == nil && source.Status != "complete" {
 					dependencyReason = source.Reason
 				}
@@ -37,7 +39,10 @@ func CollectOSV(ctx context.Context, client OSVQuerier, collections []Collection
 	}
 	source := domain.SourceState{Source: "osv", Scope: domain.OSVScope}
 	if len(deps) == 0 {
-		if incomplete {
+		if dependencyPartial {
+			source.Status = "partial"
+			source.Reason = dependencyReason
+		} else if incomplete {
 			source.Status = "unavailable"
 			source.Reason = osvReason("OSV_DEPENDENCIES_UNAVAILABLE", "Список конкретных версий зависимостей недоступен")
 		} else {

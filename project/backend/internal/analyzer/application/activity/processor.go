@@ -46,6 +46,19 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	if err != nil {
 		return worker.Output{}, err
 	}
+	git := session.Data()
+	treeKey := snapshot.Source{Name: "git", Scope: domain.GitTreeScope}
+	treeIndex := slices.IndexFunc(git.Sources, func(source domain.SourceState) bool {
+		return source.Source == treeKey.Name && source.Scope == treeKey.Scope
+	})
+	tree := domain.SourceState{Source: treeKey.Name, Scope: treeKey.Scope, Status: "unavailable", Reason: &domain.Reason{
+		Code: "GIT_TREE_UNAVAILABLE", Message: "Дерево основной ветки не получено",
+		CannotConclude: "Нельзя проверить документацию, признаки тестов и конфигурацию CI",
+	}}
+	if treeIndex >= 0 {
+		tree = git.Sources[treeIndex]
+	}
+	sast := ci.SASTInput(ctx, session, tree)
 	var ciData ci.ExternalData
 	if p.ciCollector != nil || p.osv != nil {
 		if err := advance("collecting_external"); err != nil {
@@ -68,13 +81,15 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	if err := advance("calculating"); err != nil {
 		return worker.Output{}, err
 	}
-	git := session.Data()
 	category, err := p.engine.ActivityFromGit(a, git)
 	if err != nil {
 		return worker.Output{}, err
 	}
 	facts := git.Activity(a.Window)
 	collection := snapshot.Collection{}
+	if treeIndex < 0 {
+		collection.Sources = append(collection.Sources, tree)
+	}
 	if !slices.ContainsFunc(git.Sources, func(source domain.SourceState) bool {
 		return source.Source == "git" && source.Scope == domain.ActivityHistoryScope
 	}) {
@@ -103,23 +118,10 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 		addEvidence(&input, a.Repository, commits)
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{key}})
 	}
-	treeKey := snapshot.Source{Name: "git", Scope: domain.GitTreeScope}
-	treeIndex := slices.IndexFunc(git.Sources, func(source domain.SourceState) bool {
-		return source.Source == treeKey.Name && source.Scope == treeKey.Scope
-	})
-	tree := domain.SourceState{Source: treeKey.Name, Scope: treeKey.Scope, Status: "unavailable", Reason: &domain.Reason{
-		Code: "GIT_TREE_UNAVAILABLE", Message: "Дерево основной ветки не получено",
-		CannotConclude: "Нельзя проверить документацию, признаки тестов и конфигурацию CI",
-	}}
-	if treeIndex >= 0 {
-		tree = git.Sources[treeIndex]
-	} else {
-		collection.Sources = append(collection.Sources, tree)
-	}
 	for _, input := range p.engine.TreeInputs(git, tree) {
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
 	}
-	data, err := snapshot.Build(a, git, collection, dependencyCollection, osvCollection, ci.Inputs(a, git, tree, ciData))
+	data, err := snapshot.Build(a, git, collection, dependencyCollection, osvCollection, ci.Inputs(a, git, tree, ciData), sast)
 	if err != nil {
 		return worker.Output{}, err
 	}
@@ -151,43 +153,18 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 			CatalogVersion: a.Versions.RecommendationCatalog, SchemaVersion: a.Versions.ExplanationSchema, PromptVersion: a.Versions.Prompt,
 		},
 	}
-	pending := &domain.Reason{
-		Code: "INPUT_NOT_COLLECTED", Message: "Входные данные проверки не получены",
-		CannotConclude: "Оценка категории недоступна",
-	}
-	security := domain.Category{
-		ID: "security", Status: "unavailable", Reason: pending, Explanation: pending.Message,
-		Coverage: domain.Coverage{Total: 3, Unavailable: 3}, Metrics: []domain.Metric{},
-	}
-	for _, input := range data.Inputs[6:9] {
-		security.Metrics = append(security.Metrics, domain.Metric{
-			Input: input, RuleVersion: a.Versions.Methodology,
-			Explanation: "Входные данные проверки не получены",
-		})
-	}
+	var risk *domain.Metric
 	if p.osv != nil {
 		metric, findings := p.engine.VulnerabilityRisk(&data)
-		security.Metrics[1] = metric
-		switch metric.Input.Status {
-		case "complete":
-			security.Status = "partial"
-			security.Reason = &domain.Reason{Code: "INCOMPLETE_METRICS", Message: "Доступны не все метрики безопасности", CannotConclude: "Полная оценка безопасности недоступна"}
-			security.Explanation = security.Reason.Message
-			security.Score = metric.NormalizedScore
-			security.Coverage.Calculated = 1
-			security.Coverage.Percentage = float64(security.Coverage.Calculated) * 100 / float64(security.Coverage.Total)
-			security.Coverage.Unavailable--
-		case "partial":
-			security.Coverage.Partial++
-			security.Coverage.Unavailable--
-		case "not_applicable":
-			security.Coverage.NotApplicable++
-			security.Coverage.Unavailable--
-		}
+		risk = &metric
 		report.Findings = append(report.Findings, findings...)
 		if len(findings) > 0 {
 			report.Explanation.FallbackReason = new("ai_not_configured")
 		}
+	}
+	security, err := p.engine.SecurityCategory(data.Inputs, risk)
+	if err != nil {
+		return worker.Output{}, err
 	}
 	report.Categories = append(report.Categories, security, ciCategory)
 	for _, item := range report.Categories {
