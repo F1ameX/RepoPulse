@@ -119,7 +119,12 @@ export function ReportLimitations({
   ].sort((a, b) => a.order - b.order);
 
   return (
-    <section className={styles.categoryList} aria-label="Ограничения анализа">
+    <section
+      id="report-limitations"
+      tabIndex={-1}
+      className={styles.categoryList}
+      aria-label="Ограничения анализа"
+    >
       <h2 className={styles.sectionTitle}>Ограничения анализа</h2>
       {coverage &&
         [coverage.partial, coverage.unavailable, coverage.not_applicable].every(

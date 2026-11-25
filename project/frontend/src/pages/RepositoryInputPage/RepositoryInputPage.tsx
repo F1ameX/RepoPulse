@@ -77,8 +77,8 @@ export default function RepositoryInputPage() {
           Техническое здоровье GitHub-репозитория
         </h1>
         <p className={styles.description}>
-          RepoPulse анализирует историю, документацию, тесты, зависимости, CI/CD и code review — и
-          выдаёт Repo Health Score от 0 до 100 с объяснением и рекомендациями.
+          RepoPulse анализирует историю, документацию, тесты, зависимости и CI/CD и выдаёт Repo
+          Health Score от 0 до 100 с объяснением и рекомендациями.
         </p>
         <form
           className={styles.form}

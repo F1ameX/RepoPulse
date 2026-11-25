@@ -91,6 +91,13 @@ export function MetricDetails({
             </span>
           </div>
         </div>
+
+        {input.id === 'CI_SUCCESS_RATE' && !isUnavailable && (
+          <div className={styles.hint} style={{ marginBottom: '8px' }}>
+            Доля успешных CI-запусков (runs), а не отдельных тестов.
+          </div>
+        )}
+
         {reason && (
           <div className={styles.naReason}>
             {reason.specific}. {reason.general}
@@ -129,7 +136,6 @@ export function MetricDetails({
             <strong>Коммиты по периодам:</strong> <span>{input.series.join(', ')}</span>
           </div>
         )}
-        {/* По обновлённому FR-10: порог и версия методики. metric.rule не выводится. */}
         <div>
           <strong>Порог:</strong> {metric.threshold ?? 'Не задан'}
         </div>
