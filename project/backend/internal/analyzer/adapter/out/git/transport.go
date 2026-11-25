@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
 )
 
 // Native Git only talks to this private loopback endpoint. The fixed HTTPS
@@ -56,7 +58,7 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 	}
 	attemptTimeout := t.attemptTimeout
 	if attemptTimeout == 0 {
-		attemptTimeout = 15 * time.Second
+		attemptTimeout = domain.HTTPAttemptTime
 	}
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.requestMu.Lock()
@@ -68,8 +70,7 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 			return
 		}
 		t.mu.Lock()
-		t.attempts++
-		attemptLimit := t.attempts > 20
+		attemptLimit := t.attempts >= domain.GitHubHTTPLimit
 		exhausted := t.received >= t.maximum
 		t.mu.Unlock()
 		if attemptLimit {
@@ -107,6 +108,18 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 				request.Header.Set(name, value)
 			}
 		}
+		if err := domain.TakeHTTPAttempt(attempt, domain.HTTPGitHub); err != nil {
+			if errors.Is(err, domain.ErrHTTPAttemptLimit) || errors.Is(err, domain.ErrHTTPInputLimit) {
+				t.failed("GIT_HTTP_LIMIT")
+			} else {
+				t.failed("GIT_TIME_LIMIT")
+			}
+			http.Error(w, "Git unavailable", http.StatusBadGateway)
+			return
+		}
+		t.mu.Lock()
+		t.attempts++
+		t.mu.Unlock()
 		response, err := t.client.Do(request)
 		if err != nil {
 			if errors.Is(attempt.Err(), context.DeadlineExceeded) {

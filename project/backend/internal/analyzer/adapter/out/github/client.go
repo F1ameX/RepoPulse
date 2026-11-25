@@ -27,6 +27,9 @@ func NewClient(client *http.Client, token string) *Client {
 		client = &http.Client{}
 	}
 	copy := *client
+	if copy.Transport == nil {
+		copy.Transport = &http.Transport{Proxy: http.ProxyFromEnvironment, DisableKeepAlives: true}
+	}
 	// Every redirect is inspected before making another request. Never send a
 	// service credential to a destination supplied by an untrusted Location.
 	copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -47,6 +50,7 @@ type metadata struct {
 }
 
 func (c *Client) Lookup(ctx context.Context, address domain.RepositoryURL) (domain.ValidatedRepository, error) {
+	ctx = domain.WithHTTPInputBudget(ctx)
 	path := "/repos/" + address.Owner + "/" + address.Name
 	body, status, headers, err := c.get(ctx, path)
 	if err != nil {
@@ -124,7 +128,7 @@ func validID(value string) bool {
 }
 
 func (c *Client) get(ctx context.Context, path string) ([]byte, int, http.Header, error) {
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := 1; attempt <= domain.HTTPMaxTries; attempt++ {
 		body, status, headers, err := c.attempt(ctx, path)
 		if ctx.Err() != nil {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -135,6 +139,8 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, int, http.Header
 		delay := time.Second
 		retry := false
 		switch {
+		case errors.Is(err, domain.ErrHTTPAttemptLimit), errors.Is(err, domain.ErrHTTPInputLimit), errors.Is(err, domain.ErrHTTPResponseLimit):
+			return nil, 0, nil, errors.Join(domain.ErrRepositoryCheck, err)
 		case err != nil:
 			retry = true
 		case status == http.StatusTooManyRequests || (status == http.StatusForbidden && rateLimited(headers, body)):
@@ -157,13 +163,13 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, int, http.Header
 		case status != http.StatusOK && status != http.StatusMovedPermanently && status != http.StatusTemporaryRedirect && status != http.StatusConflict:
 			err = domain.ErrRepositoryCheck
 		}
-		if !retry || attempt == 1 {
+		if !retry || attempt == domain.HTTPMaxTries {
 			return body, status, headers, err
 		}
 		if headers.Get("Retry-After") != "" {
 			delay = max(delay, rateLimitDelay(headers))
 		}
-		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= delay {
+		if domain.HTTPAttemptAvailable(ctx, domain.HTTPGitHub) != nil || !domain.HTTPRetryFits(ctx, delay) {
 			return nil, 0, nil, err
 		}
 		timer := time.NewTimer(delay)
@@ -181,7 +187,7 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, int, http.Header
 }
 
 func (c *Client) attempt(ctx context.Context, path string) ([]byte, int, http.Header, error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, domain.HTTPAttemptTime)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, apiOrigin+path, nil)
 	if err != nil {
@@ -193,6 +199,9 @@ func (c *Client) attempt(ctx context.Context, path string) ([]byte, int, http.He
 	if c.token != "" {
 		request.Header.Set("Authorization", "Bearer "+c.token)
 	}
+	if err := domain.TakeHTTPAttempt(ctx, domain.HTTPGitHub); err != nil {
+		return nil, 0, nil, err
+	}
 	response, err := c.http.Do(request)
 	if err != nil {
 		var networkError net.Error
@@ -202,7 +211,7 @@ func (c *Client) attempt(ctx context.Context, path string) ([]byte, int, http.He
 		return nil, 0, nil, domain.ErrRepositoryCheck
 	}
 	defer response.Body.Close()
-	body, err := domain.ReadHTTPInput(ctx, response.Body)
+	body, err := domain.ReadHTTPResponse(ctx, response.Body, response.ContentLength)
 	if err != nil {
 		if errors.Is(err, domain.ErrHTTPResponseLimit) || errors.Is(err, domain.ErrHTTPInputLimit) {
 			return nil, 0, nil, errors.Join(domain.ErrRepositoryCheck, err)

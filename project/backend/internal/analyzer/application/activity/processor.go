@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/ci"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/dependencies"
@@ -24,6 +25,8 @@ type CICollector interface {
 type Processor struct {
 	engine      *scoring.Engine
 	ciCollector CICollector
+	osv         snapshot.OSVQuerier
+	secretScan  snapshot.SecretScanCollector
 }
 
 func NewProcessor(engine *scoring.Engine) *Processor { return &Processor{engine: engine} }
@@ -32,7 +35,12 @@ func NewProcessorWithCI(engine *scoring.Engine, collector CICollector) *Processo
 	return &Processor{engine: engine, ciCollector: collector}
 }
 
+func NewProcessorWithSources(engine *scoring.Engine, ci CICollector, osv snapshot.OSVQuerier, scanner snapshot.Collector) *Processor {
+	return &Processor{engine: engine, ciCollector: ci, osv: osv, secretScan: snapshot.SecretScanCollector{Scanner: scanner}}
+}
+
 func (p *Processor) Process(ctx context.Context, a domain.Analysis, session worker.GitSession, advance func(string) error) (worker.Output, error) {
+	ctx = domain.WithHTTPInputBudget(ctx)
 	if err := ctx.Err(); err != nil {
 		return worker.Output{}, err
 	}
@@ -42,14 +50,34 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 		return worker.Output{}, err
 	}
 	var ciData ci.ExternalData
-	if p.ciCollector != nil {
+	if p.ciCollector != nil || p.osv != nil || p.secretScan.Scanner != nil {
 		if err := advance("collecting_external"); err != nil {
 			return worker.Output{}, err
 		}
+	}
+	if p.ciCollector != nil {
 		ciData, err = p.ciCollector.CollectCI(ctx, a)
 		if err != nil {
 			return worker.Output{}, err
 		}
+	}
+	var osvCollection snapshot.Collection
+	if p.osv != nil {
+		osvCtx := ctx
+		if deadline, ok := ctx.Deadline(); ok && p.secretScan.Scanner != nil {
+			// A slow OSV request must leave a collection window for the scan.
+			var cancel context.CancelFunc
+			osvCtx, cancel = context.WithTimeout(ctx, max(0, time.Until(deadline))/2)
+			defer cancel()
+		}
+		osvCollection, err = snapshot.CollectOSV(osvCtx, p.osv, dependencyCollection)
+		if err != nil {
+			return worker.Output{}, err
+		}
+	}
+	scanCollection, err := p.secretScan.Collect(ctx, a, session)
+	if err != nil {
+		return worker.Output{}, err
 	}
 	if err := advance("calculating"); err != nil {
 		return worker.Output{}, err
@@ -105,7 +133,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	for _, input := range p.engine.TreeInputs(git, tree) {
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
 	}
-	data, err := snapshot.Build(a, git, collection, dependencyCollection, ci.Inputs(a, git, tree, ciData))
+	data, err := snapshot.Build(a, git, collection, dependencyCollection, ci.Inputs(a, git, tree, ciData), osvCollection, scanCollection)
 	if err != nil {
 		return worker.Output{}, err
 	}
@@ -143,12 +171,24 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	}
 	security := domain.Category{
 		ID: "security", Status: "unavailable", Reason: pending, Explanation: pending.Message,
-		Coverage: domain.Coverage{Total: 3, Unavailable: 3}, Metrics: []domain.Metric{},
+		Coverage: domain.Coverage{Total: 3}, Metrics: []domain.Metric{},
 	}
 	for _, input := range data.Inputs[6:9] {
+		explanation := "Оценка метрики безопасности ещё не рассчитана"
+		if input.Reason != nil {
+			explanation = input.Reason.Message
+		}
+		switch input.Status {
+		case "partial":
+			security.Coverage.Partial++
+		case "not_applicable":
+			security.Coverage.NotApplicable++
+		default:
+			security.Coverage.Unavailable++
+		}
 		security.Metrics = append(security.Metrics, domain.Metric{
 			Input: input, RuleVersion: a.Versions.Methodology,
-			Explanation: "Входные данные проверки не получены",
+			Explanation: explanation,
 		})
 	}
 	report.Categories = append(report.Categories, security, ciCategory)

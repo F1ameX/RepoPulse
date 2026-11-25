@@ -14,7 +14,7 @@ import (
 // Claim commits the ownership transition before any Git I/O. Concurrent workers
 // skip locked rows rather than executing the same queued job.
 func (p *Postgres) Claim(ctx context.Context, at time.Time, budget time.Duration) (domain.Analysis, error) {
-	if budget <= 0 || budget > 320*time.Second {
+	if budget <= 0 || budget > domain.JobTimeLimit {
 		return domain.Analysis{}, domain.ErrInvalidData
 	}
 	at = domain.UTC(at)

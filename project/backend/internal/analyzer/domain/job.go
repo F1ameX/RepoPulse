@@ -27,7 +27,7 @@ func IsGitLimit(reason string) bool {
 
 func isGitSizeLimit(reason string) bool {
 	switch reason {
-	case "GIT_SIZE_LIMIT", "GIT_PATH_LIMIT", "GIT_COMMIT_LIMIT", "GIT_OUTPUT_LIMIT":
+	case "GIT_SIZE_LIMIT", "GIT_PATH_LIMIT", "GIT_COMMIT_LIMIT", "GIT_OUTPUT_LIMIT", "GIT_HTTP_LIMIT", "GIT_REQUEST_LIMIT":
 		return true
 	default:
 		return false

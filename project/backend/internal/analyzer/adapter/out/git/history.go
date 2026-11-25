@@ -35,6 +35,8 @@ func (s *Session) walkHistory(ctx context.Context, revisionArgs ...string) histo
 
 func parseHistory(ctx context.Context, output []byte, limit int) historyWalk {
 	walk := historyWalk{ids: map[string]struct{}{}}
+	seen := map[string]int64{}
+	rejected := map[string]bool{}
 	// rev-list emits committer seconds and SHA only. Date filtering is done
 	// after traversal so a skewed parent timestamp cannot hide its ancestors.
 	for rest := string(output); rest != "" && ctx.Err() == nil; {
@@ -53,20 +55,31 @@ func parseHistory(ctx context.Context, output []byte, limit int) historyWalk {
 		seconds, parseErr := strconv.ParseInt(fields[0], 10, 64)
 		// Git timestamps are unsigned; the upper bound is 9999-12-31 UTC.
 		valid := parseErr == nil && seconds >= 0 && seconds <= 253402300799
-		if !valid {
-			walk.code = "GIT_HISTORY_INVALID"
-		}
-		if _, seen := walk.ids[sha]; seen {
-			continue
-		}
-		if len(walk.ids) == limit {
+		previous, exists := seen[sha]
+		if !exists && len(seen) == limit {
 			walk.code = "GIT_COMMIT_LIMIT"
 			break
 		}
-		walk.ids[sha] = struct{}{}
-		if valid {
+		seen[sha] = seconds
+		if !valid || exists && previous != seconds {
+			walk.code = "GIT_HISTORY_INVALID"
+			delete(walk.ids, sha)
+			rejected[sha] = true
+			continue
+		}
+		if !exists {
+			walk.ids[sha] = struct{}{}
 			walk.commits = append(walk.commits, domain.ActivityCommit{SHA: sha, CommittedAt: time.Unix(seconds, 0).UTC()})
 		}
+	}
+	if len(rejected) > 0 {
+		kept := walk.commits[:0]
+		for _, commit := range walk.commits {
+			if !rejected[commit.SHA] {
+				kept = append(kept, commit)
+			}
+		}
+		walk.commits = kept
 	}
 	return walk
 }

@@ -51,6 +51,8 @@ type Processor interface {
 // An optional explanation adapter receives only the remaining job budget.
 // A failed attempt may retain a processor-supplied deterministic fallback.
 type Explainer interface {
+	// One call may make at most one request; the worker reserves that attempt
+	// and provides its deadline. HTTP responses use the job's input budget.
 	Explain(context.Context, domain.Analysis, Output) (Output, error)
 }
 
@@ -69,7 +71,7 @@ func NewService(queue Queue, git GitSource, processor Processor, publisher Publi
 // Run executes one job at a time in this process. Multiple processes safely
 // share Claim's SKIP LOCKED queue; reads of status never call this method.
 func (s *Service) Run(ctx context.Context, poll time.Duration) error {
-	if s.budget <= 0 || s.budget > 320*time.Second || poll <= 0 {
+	if s.budget <= 0 || s.budget > domain.JobTimeLimit || poll <= 0 {
 		return domain.ErrInvalidData
 	}
 	timer := time.NewTimer(0)
@@ -131,6 +133,26 @@ func (s *Service) RunOnce(ctx context.Context) (bool, error) {
 type jobError struct{ code string }
 
 func (e *jobError) Error() string { return e.code }
+
+type unavailableGit struct{ data domain.GitData }
+
+func (g unavailableGit) Data() domain.GitData { return g.data }
+func (unavailableGit) ReadBlob(context.Context, string) ([]byte, error) {
+	return nil, domain.ErrInvalidData
+}
+func (unavailableGit) Close() error { return nil }
+
+func gitUnavailable(repository domain.RepositoryMetadata, code string) GitSession {
+	data := domain.GitData{Repository: repository, Refs: []domain.GitRef{}}
+	for _, scope := range []string{"refs", domain.GitTreeScope, domain.ActivityHistoryScope, "history"} {
+		data.Sources = append(data.Sources, domain.SourceState{Source: "git", Scope: scope, Status: "unavailable", Reason: &domain.Reason{
+			Code: code, Message: "Данные Git недоступны",
+			CannotConclude: "Нельзя подтвердить состояние дерева или полноту истории Git",
+		}})
+	}
+	return unavailableGit{data}
+}
+
 func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 	ctx = domain.WithHTTPInputBudget(ctx)
 	defer func() {
@@ -138,13 +160,28 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 			err = &jobError{"ANALYSIS_FAILED"}
 		}
 	}()
-	git, err := s.git.Open(ctx, a.Repository)
-	if err != nil {
-		var failure sourceError
-		if errors.As(err, &failure) && domain.IsGitLimit(failure.ReasonCode()) {
-			return &jobError{failure.ReasonCode()}
+	// Git acquisition and processing share the core deadline. External source
+	// deadlines can end earlier and still leave time for assembling a report.
+	coreUntil := minTime(a.StartedAt.Add(domain.CoreTimeLimit), *a.DeadlineAt)
+	processCtx, processCancel := context.WithDeadline(ctx, coreUntil)
+	defer processCancel()
+	git, openErr := s.git.Open(processCtx, a.Repository)
+	if openErr != nil {
+		if errors.Is(processCtx.Err(), context.DeadlineExceeded) {
+			return &jobError{"BUDGET_EXCEEDED"}
 		}
-		return err
+		if processCtx.Err() != nil {
+			return processCtx.Err()
+		}
+		code := "GIT_OPEN_UNAVAILABLE"
+		var failure sourceError
+		if errors.As(openErr, &failure) && domain.IsGitLimit(failure.ReasonCode()) {
+			code = failure.ReasonCode()
+		}
+		if s.processor == nil {
+			return &jobError{code}
+		}
+		git = gitUnavailable(a.Repository, code)
 	}
 	defer func() {
 		if closeErr := git.Close(); closeErr != nil && err == nil {
@@ -152,21 +189,18 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 		}
 	}()
 	data := git.Data()
-	if err = s.queue.Pin(ctx, a.ID, data.Repository); err != nil {
-		return err
+	if openErr == nil {
+		if err = s.queue.Pin(processCtx, a.ID, data.Repository); err != nil {
+			if errors.Is(processCtx.Err(), context.DeadlineExceeded) {
+				return &jobError{"BUDGET_EXCEEDED"}
+			}
+			return err
+		}
+		a.Repository = data.Repository
 	}
-	a.Repository = data.Repository
 	if s.processor == nil {
 		return &jobError{"ANALYSIS_FAILED"}
 	}
-	// Core processing ends by 300s; explanation may use up to 20s within the
-	// total 320s. The stage callback also bounds a shorter configured budget.
-	coreUntil := a.StartedAt.Add(300 * time.Second)
-	if a.DeadlineAt.Before(coreUntil) {
-		coreUntil = *a.DeadlineAt
-	}
-	processCtx, processCancel := context.WithDeadline(ctx, coreUntil)
-	defer processCancel()
 	current := "collecting_git"
 	advance := func(stage string) error {
 		if domain.StageOrder(stage) == 0 || domain.StageOrder(stage) < domain.StageOrder(current) || stage == "saving" {
@@ -176,7 +210,7 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 			return domain.ErrInvalidTransition
 		}
 
-		if err := s.queue.Advance(ctx, a.ID, stage, time.Now()); err != nil {
+		if err := s.queue.Advance(processCtx, a.ID, stage, time.Now()); err != nil {
 			return err
 		}
 		current = stage
@@ -193,6 +227,15 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 		return err
 	}
 	processCancel()
+	if !useful(result) {
+		// Only recognized limits can select a specialized FR-05 message.
+		for _, source := range git.Data().Sources {
+			if source.Source == "git" && source.Status != "complete" && source.Reason != nil && domain.IsGitLimit(source.Reason.Code) {
+				return &jobError{source.Reason.Code}
+			}
+		}
+		return &jobError{domain.FailureNoUsefulData}
+	}
 	if explainer, ok := s.processor.(Explainer); ok {
 		if err = s.queue.Advance(ctx, a.ID, "explaining", time.Now()); err != nil {
 			return err
@@ -200,28 +243,24 @@ func (s *Service) execute(ctx context.Context, a domain.Analysis) (err error) {
 		// Leave a small part of the total deadline for publishing the ready
 		// fallback, rather than spending the entire remaining time on AI.
 		reserve := min(time.Second, s.budget/10)
-		explanationUntil := minTime(time.Now().Add(20*time.Second), a.DeadlineAt.Add(-reserve))
+		now := time.Now()
+		explanationUntil := minTime(now.Add(domain.ExplainTimeLimit), a.DeadlineAt.Add(-reserve))
+		explanationUntil = minTime(explanationUntil, now.Add(domain.HTTPAttemptTime))
 		explanationCtx, explanationCancel := context.WithDeadline(ctx, explanationUntil)
-		explained, explanationErr := explainer.Explain(explanationCtx, a, result)
+		var explained Output
+		explanationErr := domain.TakeHTTPAttempt(explanationCtx, domain.HTTPLLM)
+		if explanationErr == nil {
+			explained, explanationErr = explainer.Explain(explanationCtx, a, result)
+			if explanationErr == nil {
+				explanationErr = explanationCtx.Err()
+			}
+		}
 		explanationCancel()
 		if explanationErr == nil {
 			result = explained
 		} else if result.Report.Explanation.Mode != "deterministic_fallback" {
 			return &jobError{"ANALYSIS_FAILED"}
 		}
-	}
-	if !useful(result) {
-		// Keep only recognized, safe terminal reasons from the collector.
-		// Useful partial results bypass this failure decision and are published.
-		for _, source := range git.Data().Sources {
-			if source.Source != "git" || source.Status == "complete" || source.Reason == nil {
-				continue
-			}
-			if domain.IsGitLimit(source.Reason.Code) {
-				return &jobError{source.Reason.Code}
-			}
-		}
-		return &jobError{domain.FailureNoUsefulData}
 	}
 	// Collector completeness cannot be replaced with a claim of full coverage.
 	data = git.Data()
@@ -274,7 +313,7 @@ func useful(output Output) bool {
 			return true
 		}
 	}
-	if len(output.Report.Findings) > 0 {
+	if len(output.Report.Findings) > 0 || len(output.Snapshot.Vulnerabilities) > 0 {
 		return true
 	}
 	for _, input := range output.Snapshot.Inputs {

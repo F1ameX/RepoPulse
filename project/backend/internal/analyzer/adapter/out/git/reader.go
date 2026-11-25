@@ -63,7 +63,7 @@ func NewReader(tempRoot string, limits Limits) (*Reader, error) {
 	if err != nil {
 		return nil, errors.New("Git executable is required")
 	}
-	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, DisableCompression: true}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, DisableCompression: true, DisableKeepAlives: true}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	return &Reader{binary: binary, tempRoot: tempRoot, limits: limits, client: client}, nil
 }
 
@@ -249,7 +249,7 @@ func (r *Reader) Open(ctx context.Context, metadata domain.RepositoryMetadata) (
 			refCode = transportCode
 		}
 	}
-	if parseErr != nil {
+	if parseErr != nil && refCode == "" {
 		refCode = "GIT_REFS_INVALID"
 	}
 	if acquire.Err() != nil {
@@ -262,7 +262,7 @@ func (r *Reader) Open(ctx context.Context, metadata domain.RepositoryMetadata) (
 	s.data.Sources = append(s.data.Sources, source("refs", len(refs), refCode, refState))
 	var pinnedFiles []domain.GitFile
 	var pinnedTree domain.SourceState
-	if refCode == "" && s.data.Repository.CommitSHA != nil {
+	if acquire.Err() == nil && s.data.Repository.CommitSHA != nil {
 		pinnedFiles, pinnedTree = s.collectPinnedTree(acquire, local)
 		_, reason := transport.state()
 		if pinnedTree.Status == "" && reason == "GIT_TIME_LIMIT" && acquire.Err() == nil {
@@ -330,34 +330,58 @@ func (r *Reader) Open(ctx context.Context, metadata domain.RepositoryMetadata) (
 
 func parseRefs(data []byte) (head, sha string, refs []domain.GitRef, err error) {
 	refs = []domain.GitRef{}
-	seen := map[string]bool{}
+	seen := map[string]string{}
+	rejected := map[string]bool{}
+	invalid := errors.New("invalid or conflicting refs")
+	add := func(name, value string, valid bool) {
+		if rejected[name] {
+			return
+		}
+		if previous, exists := seen[name]; !valid || exists && previous != value {
+			err = invalid
+			delete(seen, name)
+			rejected[name] = true
+			return
+		}
+		seen[name] = value
+	}
 	for _, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
 		if line == "" {
 			continue
 		}
 		parts := strings.SplitN(line, "\t", 2)
 		if len(parts) != 2 {
-			return head, sha, refs, errors.New("invalid refs")
-		}
-		if strings.HasPrefix(parts[0], "ref: ") && parts[1] == "HEAD" {
-			head = strings.TrimPrefix(parts[0], "ref: ")
+			err = invalid
 			continue
 		}
-		if !hash(parts[0]) {
-			return head, sha, refs, errors.New("invalid object")
+		if strings.HasPrefix(parts[0], "ref: ") && parts[1] == "HEAD" {
+			ref := strings.TrimPrefix(parts[0], "ref: ")
+			add("symref", ref, strings.HasPrefix(ref, "refs/heads/") && refName(ref))
+			continue
 		}
 		if parts[1] == "HEAD" {
-			sha = parts[0]
+			add("HEAD", parts[0], hash(parts[0]))
 			continue
 		}
 		if strings.HasSuffix(parts[1], "^{}") {
 			continue
 		}
-		if !refName(parts[1]) || seen[parts[1]] {
-			return head, sha, refs, errors.New("invalid ref")
+		if !refName(parts[1]) {
+			err = invalid
+			continue
 		}
-		seen[parts[1]] = true
-		refs = append(refs, domain.GitRef{Name: parts[1], ObjectSHA: parts[0]})
+		add(parts[1], parts[0], hash(parts[0]))
+	}
+	head, sha = seen["symref"], seen["HEAD"]
+	if headSHA, ok := seen[head]; ok && sha != "" && sha != headSHA {
+		err = invalid
+		delete(seen, head)
+		sha = ""
+	}
+	for name, object := range seen {
+		if name != "HEAD" && name != "symref" {
+			refs = append(refs, domain.GitRef{Name: name, ObjectSHA: object})
+		}
 	}
 	sort.Slice(refs, func(i, j int) bool { return refs[i].Name < refs[j].Name })
 	return
@@ -404,18 +428,27 @@ func (s *Session) ReadBlob(ctx context.Context, objectSHA string) ([]byte, error
 	if s.ctx.Err() != nil {
 		return nil, &readError{"GIT_TIME_LIMIT"}
 	}
+	if s.blobBytes >= 200<<20 {
+		return nil, &readError{"GIT_BLOB_LIMIT"}
+	}
 	bounded, cancel := context.WithCancel(ctx)
 	stop := context.AfterFunc(s.ctx, cancel)
 	defer stop()
 	defer cancel()
 	ctx = bounded
 	kind, err := s.command(ctx, "", 64, "cat-file", "-t", objectSHA)
-	if err != nil || strings.TrimSpace(string(kind)) != "blob" {
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(string(kind)) != "blob" {
 		return nil, &readError{"GIT_BLOB_UNAVAILABLE"}
 	}
 	sizeText, err := s.command(ctx, "", 64, "cat-file", "-s", objectSHA)
+	if err != nil {
+		return nil, err
+	}
 	size, parseErr := strconv.ParseInt(strings.TrimSpace(string(sizeText)), 10, 64)
-	if err != nil || parseErr != nil || size < 0 {
+	if parseErr != nil || size < 0 {
 		return nil, &readError{"GIT_BLOB_UNAVAILABLE"}
 	}
 	if size > 1<<20 || s.blobBytes+size > 200<<20 {

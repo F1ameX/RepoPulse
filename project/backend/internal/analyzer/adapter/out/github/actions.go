@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
@@ -46,12 +47,24 @@ func decodeAttempt(raw []byte, at time.Time, branch string) (domain.ActionsAttem
 	}
 	// The REST API supplies numeric IDs; json.Number also accepts quoted values,
 	// but in either form only a positive integer identifier is retained.
-	return result, result.Valid()
+	_, idErr := strconv.ParseUint(result.RunID, 10, 64)
+	return result, idErr == nil && result.Valid()
 }
 
 type attemptKey struct {
 	id      string
 	attempt int
+}
+
+func readAttemptKey(raw []byte) attemptKey {
+	var id struct {
+		Run     json.Number `json:"id"`
+		Attempt int         `json:"run_attempt"`
+	}
+	if json.Unmarshal(raw, &id) != nil || !validID(id.Run.String()) || id.Attempt < 1 {
+		return attemptKey{}
+	}
+	return attemptKey{id.Run.String(), id.Attempt}
 }
 
 type actionsSample struct {
@@ -61,10 +74,20 @@ type actionsSample struct {
 	conflicts int
 }
 
-func (s *actionsSample) add(item domain.ActionsAttempt, budget *ciBudget) bool {
+func (s *actionsSample) exclude(key attemptKey) {
+	if key.id == "" {
+		s.invalid++
+	} else if !s.rejected[key] {
+		s.invalid++
+		delete(s.items, key)
+		s.rejected[key] = true
+	}
+}
+
+func (s *actionsSample) add(item domain.ActionsAttempt) {
 	key := attemptKey{item.RunID, item.Attempt}
 	if s.rejected[key] {
-		return true
+		return
 	}
 	if previous, found := s.items[key]; found {
 		sameStart := previous.StartedAt == nil && item.StartedAt == nil ||
@@ -74,23 +97,22 @@ func (s *actionsSample) add(item domain.ActionsAttempt, budget *ciBudget) bool {
 			delete(s.items, key)
 			s.rejected[key] = true
 			s.conflicts++
-			return true
+			return
 		}
-	} else if budget.objects == ciObjects {
-		return false
-	} else {
-		budget.objects++
 	}
 	s.items[key] = item
-	return true
 }
 
 func (b *ciBudget) collectActions(ctx context.Context, root string, repository domain.RepositoryMetadata, window domain.Window, ci *domain.GitHubCI) domain.SourceState {
+	ctx = domain.WithHTTPInputBudget(ctx)
 	if repository.DefaultBranch == nil {
 		return ciSource(domain.ActionsScope, "GITHUB_CI_BRANCH_UNAVAILABLE", time.Time{}, 0, 0, 0)
 	}
 	branch := *repository.DefaultBranch
 	path := root + "/actions/runs"
+	record := func(key attemptKey) bool {
+		return key.id == "" || domain.RecordGitHubObject(ctx, fmt.Sprintf("%s/%s/attempts/%d", path, key.id, key.attempt))
+	}
 	filters := url.Values{
 		"branch":  {branch},
 		"created": {window.From.UTC().Format(time.RFC3339) + ".." + window.Until.UTC().Format(time.RFC3339)},
@@ -117,18 +139,24 @@ func (b *ciBudget) collectActions(ctx context.Context, root string, repository d
 		} else if announced != *payload.Total {
 			code = "GITHUB_CI_INCONSISTENT_PAGES"
 		}
+		overflow := false
 		for _, raw := range payload.Runs {
+			key := readAttemptKey(raw)
+			if !record(key) {
+				overflow = true
+				break
+			}
 			item, valid := decodeAttempt(raw, at, branch)
 			if !valid {
-				sample.invalid++
+				sample.exclude(key)
 				continue
 			}
 			listed[item.RunID] = true
+			// Check duplicates even when a conflicting date puts one copy
+			// outside the requested window. Filter only after deduplication.
+			sample.add(item)
 			if item.CreatedAt.Before(window.From) || !item.CreatedAt.Before(window.Until) {
 				continue
-			}
-			if !sample.add(item, b) {
-				break
 			}
 			if previous := totals[item.RunID]; item.Attempt > previous.Attempt {
 				totals[item.RunID] = item
@@ -136,7 +164,7 @@ func (b *ciBudget) collectActions(ctx context.Context, root string, repository d
 		}
 		next, valid := nextCIPage(response.headers, path, repository.GitHubID, page)
 		switch {
-		case b.objects == ciObjects:
+		case overflow || next && domain.GitHubObjectsExhausted(ctx):
 			code = "GITHUB_CI_OBJECT_LIMIT"
 			next = false
 		case !valid:
@@ -161,6 +189,7 @@ func (b *ciBudget) collectActions(ctx context.Context, root string, repository d
 	sort.Strings(runIDs)
 	// GitHub lists the current attempt; recover missing earlier attempts using
 	// the per-attempt endpoint, without repeating attempts already on the pages.
+backfill:
 	for _, id := range runIDs {
 		latest := totals[id]
 		for number := latest.Attempt - 1; number > 0; number-- {
@@ -173,21 +202,23 @@ func (b *ciBudget) collectActions(ctx context.Context, root string, repository d
 				if code == "" {
 					code = failed
 				}
-				if ctx.Err() != nil || b.rateLimit || b.remaining == 0 || b.objects == ciObjects || domain.HTTPInputExhausted(ctx) {
-					break
+				if failed == "GITHUB_CI_OBJECT_LIMIT" || failed == "GITHUB_CI_INPUT_LIMIT" || failed == "GITHUB_CI_REQUEST_LIMIT" ||
+					ctx.Err() != nil || b.blocked != "" || b.remaining == 0 {
+					break backfill
 				}
 				continue
 			}
+			if !record(key) {
+				code = "GITHUB_CI_OBJECT_LIMIT"
+				break backfill
+			}
 			item, valid := decodeAttempt(response.body, response.obtainedAt, branch)
 			if !valid || item.RunID != id || item.Attempt != number || item.HeadSHA != latest.HeadSHA {
-				sample.invalid++
+				sample.exclude(key)
 				continue
 			}
 			at = response.obtainedAt
-			if !sample.add(item, b) || b.objects == ciObjects {
-				code = "GITHUB_CI_OBJECT_LIMIT"
-				break
-			}
+			sample.add(item)
 		}
 	}
 	for _, item := range sample.items {
