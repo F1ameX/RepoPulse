@@ -10,6 +10,7 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/ci"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/dependencies"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/scoring"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/secrets"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/snapshot"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/worker"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
@@ -105,7 +106,8 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	for _, input := range p.engine.TreeInputs(git, tree) {
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
 	}
-	data, err := snapshot.Build(a, git, collection, dependencyCollection, ci.Inputs(a, git, tree, ciData))
+	secretCollection := secrets.Collect(ctx, a, session)
+	data, err := snapshot.Build(a, git, collection, dependencyCollection, ci.Inputs(a, git, tree, ciData), secretCollection)
 	if err != nil {
 		return worker.Output{}, err
 	}
@@ -137,19 +139,9 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 			CatalogVersion: a.Versions.RecommendationCatalog, SchemaVersion: a.Versions.ExplanationSchema, PromptVersion: a.Versions.Prompt,
 		},
 	}
-	pending := &domain.Reason{
-		Code: "INPUT_NOT_COLLECTED", Message: "Входные данные проверки не получены",
-		CannotConclude: "Оценка категории недоступна",
-	}
-	security := domain.Category{
-		ID: "security", Status: "unavailable", Reason: pending, Explanation: pending.Message,
-		Coverage: domain.Coverage{Total: 3, Unavailable: 3}, Metrics: []domain.Metric{},
-	}
-	for _, input := range data.Inputs[6:9] {
-		security.Metrics = append(security.Metrics, domain.Metric{
-			Input: input, RuleVersion: a.Versions.Methodology,
-			Explanation: "Входные данные проверки не получены",
-		})
+	security, err := p.engine.SecretsCategory(a.Versions, data.Inputs)
+	if err != nil {
+		return worker.Output{}, err
 	}
 	report.Categories = append(report.Categories, security, ciCategory)
 	for _, item := range report.Categories {

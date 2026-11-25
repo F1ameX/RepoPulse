@@ -246,3 +246,13 @@ reason.code=INPUT_NOT_COLLECTED. Это причина полноты входа
 
 Форма JSON/protobuf не меняется. Алгоритм, причины N/A, доказательство полноты
 и версии — [в описании расчёта](../architecture/activity-scoring.md).
+
+### SEC_SECRETS
+
+Для входа с unit=secret_scan raw_value содержит число совпадений по сочетанию
+тип–путь–ревизия. Sample.collected/total обозначает число проверенных/требуемых
+коммитов. При полном скане sample.numerator содержит число совпадений
+private_key_header, sample.denominator — общее число совпадений обоих типов.
+Эти счётчики включают основания сверх лимита evidence и позволяют повторить
+расчёт 100/50/0 без чтения исходных Git-объектов. При неполноте raw_value и
+балл равны null, reason обязателен. Версия правил хранится в versions.secret_rules.

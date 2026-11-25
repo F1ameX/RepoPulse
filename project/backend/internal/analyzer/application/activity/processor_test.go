@@ -107,3 +107,35 @@ func TestRuntimeProcessorPreservesDependenciesInSnapshot(t *testing.T) {
 		t.Fatal("dependency collection state lost during snapshot.Build")
 	}
 }
+
+type secretSession struct{ controlSession }
+
+func (s secretSession) HistoryTree(context.Context, string) ([]domain.GitFile, error) {
+	return []domain.GitFile{{Path: "historical.txt", Mode: "100644", ObjectSHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Size: 21}}, nil
+}
+func (s secretSession) ReadBlob(context.Context, string) ([]byte, error) {
+	return []byte("token = \"abcdefghijk\""), nil
+}
+
+func TestRuntimeProcessorIncludesSecretHistory(t *testing.T) {
+	a := runningAnalysis(t)
+	e, err := scoring.Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := domain.GitData{Repository: a.Repository, Commits: []domain.GitCommit{{SHA: *a.Repository.CommitSHA}}, Sources: []domain.SourceState{
+		{Source: "git", Scope: "refs", Status: "complete"}, {Source: "git", Scope: "history", Status: "complete"},
+	}}
+	output, err := NewProcessor(e).Process(t.Context(), a, secretSession{controlSession{data}}, func(string) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := output.Snapshot.Inputs[6]
+	metric := output.Report.Categories[3].Metrics[0]
+	if input.ID != "SEC_SECRETS" || input.Status != "complete" || len(input.Evidence) != 1 || metric.NormalizedScore == nil || *metric.NormalizedScore != 50 {
+		t.Fatalf("secret scan did not reach runtime snapshot/report: %+v %+v", input, metric)
+	}
+	if err := output.Snapshot.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
