@@ -2,7 +2,6 @@ package scoring
 
 import (
 	"fmt"
-	"math"
 	"slices"
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
@@ -10,8 +9,8 @@ import (
 
 const vulnerabilityRiskID = "SEC_VULN_RISK"
 
-// VulnerabilityRisk computes the metric from the normalized snapshot, without network access.
-func (e *Engine) VulnerabilityRisk(data *domain.SnapshotData) (domain.Metric, []domain.Finding) {
+// PrepareVulnerabilityRisk writes the normalized OSV input before snapshot publication.
+func (e *Engine) PrepareVulnerabilityRisk(data *domain.SnapshotData) {
 	var params parameters
 	for _, category := range e.config.Categories {
 		for _, metric := range category.Metrics {
@@ -22,17 +21,13 @@ func (e *Engine) VulnerabilityRisk(data *domain.SnapshotData) (domain.Metric, []
 	}
 	index := slices.IndexFunc(data.Inputs, func(input domain.MetricInput) bool { return input.ID == vulnerabilityRiskID })
 	input := data.Inputs[index]
-	metric := domain.Metric{
-		Input: input, RuleVersion: e.config.MethodologyVersion,
-		Rule: fmt.Sprintf("100 × exp(−Risk / %g)", *params.K), Explanation: unscoredExplanation,
-	}
 	hasOSV := false
 	for i := range data.Sources {
 		source := &data.Sources[i]
 		if source.Source == "osv" && source.Scope == domain.OSVScope {
 			hasOSV = true
-			metric.Input.Status, metric.Input.Reason = source.Status, source.Reason
-			metric.Input.Sample, metric.Input.ObservedAt = source.Sample, source.ObtainedAt
+			input.Status, input.Reason = source.Status, source.Reason
+			input.Sample, input.ObservedAt = source.Sample, source.ObtainedAt
 		} else if source.Source != "git" || source.Scope != "dependencies" {
 			continue
 		}
@@ -41,7 +36,7 @@ func (e *Engine) VulnerabilityRisk(data *domain.SnapshotData) (domain.Metric, []
 		}
 	}
 	if !hasOSV {
-		return metric, nil
+		return
 	}
 
 	type key struct{ ecosystem, name, version string }
@@ -50,16 +45,9 @@ func (e *Engine) VulnerabilityRisk(data *domain.SnapshotData) (domain.Metric, []
 		dependencies[key{dep.Ecosystem, dep.Package, dep.Version}] = dep
 	}
 
-	metric.Input.Evidence = []domain.Evidence{}
-	risk, highestWeight := 0.0, 0.0
+	input.Evidence = []domain.Evidence{}
+	risk := 0.0
 	unknown := false
-	finding := domain.Finding{
-		ID: vulnerabilityRiskID, RuleID: vulnerabilityRiskID, Category: "security",
-		Title:               "Известные уязвимости зависимостей",
-		Description:         "OSV вернул находки для конкретных версий прямых зависимостей.",
-		PossibleConsequence: "Используемые версии могут содержать известные уязвимости.",
-		Severity:            "informational", Vulnerabilities: data.Vulnerabilities,
-	}
 	for i, v := range data.Vulnerabilities {
 		dep := dependencies[key{v.Ecosystem, v.Package, v.Version}]
 		evidence := domain.Evidence{
@@ -67,32 +55,52 @@ func (e *Engine) VulnerabilityRisk(data *domain.SnapshotData) (domain.Metric, []
 			Description: "Известная уязвимость прямой зависимости",
 			Path:        &dep.ManifestPath, URL: v.EvidenceURL, Dependency: &dep, VulnerabilityID: &v.ID,
 		}
-		metric.Input.Evidence = append(metric.Input.Evidence, evidence)
-		finding.EvidenceIDs = append(finding.EvidenceIDs, evidence.ID)
+		input.Evidence = append(input.Evidence, evidence)
 		if v.Severity == nil || params.SeverityWeights[*v.Severity] == 0 {
 			unknown = true
 			continue
 		}
 		weight := params.SeverityWeights[*v.Severity]
 		risk += weight
-		if weight > highestWeight {
-			highestWeight, finding.Severity = weight, *v.Severity
+	}
+	if input.Status == "complete" && unknown {
+		input.Status = "partial"
+		input.Reason = reason("OSV_SEVERITY_UNKNOWN", "Не удалось определить уровень всех найденных уязвимостей")
+	}
+	if input.Status == "complete" {
+		input.RawValue = scalar(risk)
+	} else {
+		input.RawValue = domain.Scalar{}
+	}
+	data.Inputs[index] = input
+}
+
+func vulnerabilityFindings(data domain.SnapshotData) []domain.Finding {
+	if len(data.Vulnerabilities) == 0 {
+		return []domain.Finding{}
+	}
+	index := slices.IndexFunc(data.Inputs, func(input domain.MetricInput) bool { return input.ID == vulnerabilityRiskID })
+	evidence := data.Inputs[index].Evidence
+	if len(evidence) == 0 {
+		return []domain.Finding{}
+	}
+	finding := domain.Finding{
+		ID: vulnerabilityRiskID, RuleID: vulnerabilityRiskID, Category: "security",
+		Title:               "Известные уязвимости зависимостей",
+		Description:         "OSV вернул находки для конкретных версий прямых зависимостей.",
+		PossibleConsequence: "Используемые версии могут содержать известные уязвимости.",
+		Severity:            "informational", Vulnerabilities: data.Vulnerabilities,
+	}
+	severities := []string{"informational", "low", "medium", "high", "critical"}
+	for _, v := range data.Vulnerabilities {
+		if v.Severity != nil && slices.Index(severities, *v.Severity) > slices.Index(severities, finding.Severity) {
+			finding.Severity = *v.Severity
 		}
 	}
-	if metric.Input.Status == "complete" && unknown {
-		metric.Input.Status = "partial"
-		metric.Input.Reason = reason("OSV_SEVERITY_UNKNOWN", "Не удалось определить уровень всех найденных уязвимостей")
+	for _, item := range evidence {
+		if item.Source == "osv" && item.VulnerabilityID != nil {
+			finding.EvidenceIDs = append(finding.EvidenceIDs, item.ID)
+		}
 	}
-	if metric.Input.Status == "complete" {
-		metric.Input.RawValue = scalar(risk)
-		metric.NormalizedScore = pointer(100 * math.Exp(-risk / *params.K))
-		metric.Explanation = "Риск равен сумме весов уникальных известных уязвимостей."
-	} else {
-		metric.Input.RawValue = domain.Scalar{}
-	}
-	data.Inputs[index] = metric.Input
-	if len(finding.Vulnerabilities) > 0 {
-		return metric, []domain.Finding{finding}
-	}
-	return metric, nil
+	return []domain.Finding{finding}
 }

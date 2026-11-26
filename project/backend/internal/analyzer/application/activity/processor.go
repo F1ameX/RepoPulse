@@ -127,6 +127,7 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	}
 	// Re-evaluate exactly the detached inputs that will be stored, including
 	// any completeness constraints enforced while assembling the snapshot.
+	p.engine.PrepareVulnerabilityRisk(&data)
 	report, err := p.engine.Calculate(ctx, a, data)
 	if err != nil {
 		return worker.Output{}, err

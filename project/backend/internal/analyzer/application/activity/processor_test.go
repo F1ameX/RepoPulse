@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -153,10 +154,19 @@ func TestRuntimeVulnerabilityRisk(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := domain.NewResult(a, domain.NewID(), domain.NewID(), a.AssessmentAt, out.Snapshot, out.Report); err != nil {
+			published, err := domain.NewResult(a, domain.NewID(), domain.NewID(), a.AssessmentAt, out.Snapshot, out.Report)
+			if err != nil {
+				t.Fatal(err)
+			}
+			replayed, err := engine.Replay(t.Context(), published.Snapshot)
+			if err != nil {
 				t.Fatal(err)
 			}
 			metric := out.Report.Categories[3].Metrics[1]
+			if !reflect.DeepEqual(published.Report.Categories[3].Metrics[1], replayed.Categories[3].Metrics[1]) ||
+				!reflect.DeepEqual(published.Report.Findings, replayed.Findings) {
+				t.Fatal("replay changed the OSV metric or findings")
+			}
 			raw, _ := metric.Input.RawValue.MarshalJSON()
 			if metric.Input.ID != "SEC_VULN_RISK" || string(raw) != tc.raw || metric.Input.Status != tc.status {
 				t.Fatalf("unexpected metric: %+v, raw %s", metric, raw)
