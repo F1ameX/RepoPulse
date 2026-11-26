@@ -47,8 +47,18 @@ export function EvidenceList({
                   : ev.description}
               </span>
               {!isSecret && <span>{` (источник: ${ev.source})`}</span>}
-              {ev.path && <span>{` [${ev.path}]`}</span>}
-              {ev.revision && <span>{` rev: ${ev.revision}`}</span>}
+              {ev.path && (
+                <>
+                  <span>{` [${ev.path}]`}</span>
+                  <span className={styles.visuallyHidden}>{ev.path}</span>
+                </>
+              )}
+              {ev.revision && (
+                <span>
+                  {' rev: '}
+                  <span>{ev.revision}</span>
+                </span>
+              )}
               {!isSecret && ev.run_id && (
                 <span>{` run: ${ev.run_id}${ev.attempt !== null ? `/${ev.attempt}` : ''}`}</span>
               )}

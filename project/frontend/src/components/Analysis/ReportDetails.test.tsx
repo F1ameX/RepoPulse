@@ -519,7 +519,12 @@ it('FR-10: секрет не показывает run/dependency/vulnerability',
   expect(screen.queryByText(/vuln:/)).toBeNull();
   expect(screen.getByText('aws_key')).toBeTruthy();
   expect(screen.getByText(/\[src\/index\.ts\]/)).toBeTruthy();
-  expect(screen.getByText(/rev: abc123/)).toBeTruthy();
+  expect(
+    screen.getByText((_, element) =>
+      element?.tagName === 'SPAN' &&
+     element.textContent?.trim() === 'rev: abc123'
+   )
+  ).toBeTruthy();
 });
 
 it('FR-10: пустой evidence при reason: null → «причина не указана»', () => {
