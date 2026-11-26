@@ -34,6 +34,32 @@ function ReportLink({ target, children }: { target: string; children: ReactNode 
   );
 }
 
+const VULNERABILITY_SEVERITY_LABELS: Record<string, string> = {
+  critical: 'Критический',
+  high: 'Высокий',
+  medium: 'Средний',
+  low: 'Низкий',
+};
+
+function versionSourceLabel(source: string): string {
+  const labels: Record<string, string> = {
+    npm_lock_v2: 'npm lock v2',
+    npm_lock_v3: 'npm lock v3',
+    maven_declaration: 'Декларация Maven',
+    maven_dependency_management: 'dependencyManagement Maven',
+    go_require_declaration: 'Декларация require в go.mod',
+  };
+  return labels[source] ?? source;
+}
+
+function isDeclaredBuildVersion(source: string): boolean {
+  return (
+    source === 'maven_declaration' ||
+    source === 'maven_dependency_management' ||
+    source === 'go_require_declaration'
+  );
+}
+
 function FindingEvidence({ finding, report }: { finding: Finding; report: Report }) {
   const categories = Array.isArray(report.categories) ? report.categories : [];
   const metrics = categories.flatMap((item) => (Array.isArray(item?.metrics) ? item.metrics : []));
@@ -74,23 +100,79 @@ function FindingEvidence({ finding, report }: { finding: Finding; report: Report
         total={metric?.input.evidence_total ?? null}
         reason={metric?.input.reason ?? null}
         limit={finding.rule_id === 'TEST_PRESENCE' ? 10 : undefined}
+        secret={finding.rule_id === 'SEC_SECRETS'}
       />
-      {finding.vulnerabilities.length > 0 && finding.rule_id !== 'SEC_SECRETS' && (
-        <ul>
-          {finding.vulnerabilities.map((item) => (
-            <li key={`${item.vulnerability_id}/${item.ecosystem}/${item.package}/${item.version}`}>
-              {item.vulnerability_id} · {item.ecosystem}/{item.package}@{item.version}
-              {isSafeUrl(item.evidence_url) && (
-                <>
-                  {' '}
-                  <a href={item.evidence_url} target="_blank" rel="noopener noreferrer">
-                    Источник
-                  </a>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
+      {finding.rule_id === 'SEC_VULN_RISK' && finding.vulnerabilities.length > 0 && (
+        <>
+          {metric &&
+          !['unavailable', 'not_applicable'].includes(metric.input.status) &&
+          metric.input.raw_value !== null &&
+          metric.input.raw_value !== undefined ? (
+            <p>
+              <strong>Risk:</strong> {String(metric.input.raw_value)}
+            </p>
+          ) : (
+            <p>
+              <strong>Risk:</strong> не рассчитан
+            </p>
+          )}
+          <ul>
+            {finding.vulnerabilities.map((item) => {
+              const dependencies = Array.isArray(report.dependencies) ? report.dependencies : [];
+              const dependency = dependencies.find(
+                (candidate) =>
+                  candidate.ecosystem === item.ecosystem &&
+                  candidate.package === item.package &&
+                  candidate.version === item.version,
+              );
+              const origins = dependency?.origins?.length
+                ? dependency.origins
+                : dependency
+                  ? [
+                      {
+                        manifest_path: dependency.manifest_path,
+                        version_source: dependency.version_source,
+                      },
+                    ]
+                  : [];
+              return (
+                <li
+                  key={`${item.vulnerability_id}/${item.ecosystem}/${item.package}/${item.version}`}
+                >
+                  <strong>{item.vulnerability_id}</strong> · {item.ecosystem}/{item.package}@
+                  {item.version}
+                  <div>
+                    Уровень:{' '}
+                    {item.severity
+                      ? VULNERABILITY_SEVERITY_LABELS[item.severity] ?? item.severity
+                      : 'Неизвестен'}
+                  </div>
+                  {origins.length === 0 && (
+                    <div className={styles.hint}>
+                      Сведения о манифесте и источнике версии недоступны.
+                    </div>
+                  )}
+                  {origins.map((origin) => (
+                    <div key={`${origin.manifest_path}/${origin.version_source}`}>
+                      Манифест: {origin.manifest_path} · Источник версии:{' '}
+                      {versionSourceLabel(origin.version_source)}
+                      {isDeclaredBuildVersion(origin.version_source) && (
+                        <div className={styles.hint}>
+                          Версия объявлена в манифесте; фактический граф сборки не подтверждён.
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {isSafeUrl(item.evidence_url) && (
+                    <a href={item.evidence_url} target="_blank" rel="noopener noreferrer">
+                      Источник OSV
+                    </a>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </>
   );
@@ -118,7 +200,7 @@ export function ReportFindings({
   const incomplete = ['partial', 'unavailable'].includes(scope);
   const limitations = (
     <p className={styles.hint}>
-      Часть проверок недоступна.{' '}
+      Часть проверок неполная, недоступна или неприменима.{' '}
       <ReportLink target="report-limitations">Ограничения анализа</ReportLink>
     </p>
   );
@@ -141,6 +223,14 @@ export function ReportFindings({
     if (scope === 'error') return error('список проблем');
     if (scope === 'not_applicable') return <p>Применимые проверки отсутствуют</p>;
     if (scope === 'unavailable') return <p>Недостаточно данных для выявления проблем</p>;
+    if (scope === 'partial') {
+      return (
+        <p>
+          По доступным результатам проблемы не обнаружены, но часть проверок неполная или неприменима;
+          отсутствие проблем не подтверждено.
+        </p>
+      );
+    }
     return <p>По выполненным проверкам проблемы не обнаружены</p>;
   };
 
@@ -168,10 +258,18 @@ export function ReportFindings({
                 {finding.rule_id === 'SEC_SECRETS' && (
                   <p>Действительность реквизитов не проверялась</p>
                 )}
-                <p>{finding.description}</p>
-                <p>
-                  <strong>Возможное последствие</strong> — {finding.possible_consequence}
-                </p>
+                {finding.rule_id === 'SEC_SECRETS' ? (
+                  <p>
+                    Совпадение с правилом поиска секрета. Значение и исходная строка не отображаются.
+                  </p>
+                ) : (
+                  <>
+                    <p>{finding.description}</p>
+                    <p>
+                      <strong>Возможное последствие</strong> — {finding.possible_consequence}
+                    </p>
+                  </>
+                )}
                 <FindingEvidence finding={finding} report={report} />
                 <div className={listStyles.links}>
                   {recommendations

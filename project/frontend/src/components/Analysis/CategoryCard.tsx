@@ -1,6 +1,13 @@
 import { useId } from 'react';
-import type { Category, CategoryId } from '@/types';
-import { formatCoverage, isKnownStatus, roundHalfUp, STATUS_LABELS } from '@/lib/metricFormatting';
+import type { Category, CategoryId, Dependency, SourceState } from '@/types';
+import {
+  formatCoverage,
+  formatSample,
+  isKnownStatus,
+  METRIC_LABELS,
+  roundHalfUp,
+  STATUS_LABELS,
+} from '@/lib/metricFormatting';
 import { MetricDetails } from './MetricDetails';
 import styles from './Analysis.module.css';
 
@@ -11,6 +18,30 @@ const CATEGORY_LABELS: Partial<Record<CategoryId, string>> = {
   security: 'Безопасность',
   ci_cd: 'CI/CD',
 };
+
+function sourceSampleText(source: SourceState): string {
+  const { collected, total } = source.sample;
+  if (collected === null && total === null) return 'Размер выборки неизвестен';
+  if (collected === null) return `Всего: ${total}; полученное количество неизвестно`;
+  if (total === null) return `Получено: ${collected}; полный объём неизвестен`;
+  return `Получено: ${collected} из ${total}`;
+}
+
+const VERSION_SOURCE_LABELS: Record<string, string> = {
+  npm_lock_v2: 'npm lock v2',
+  npm_lock_v3: 'npm lock v3',
+  maven_declaration: 'декларация Maven',
+  maven_dependency_management: 'dependencyManagement Maven',
+  go_require_declaration: 'декларация require в go.mod',
+};
+
+function isDeclaredVersion(versionSource: string): boolean {
+  return [
+    'maven_declaration',
+    'maven_dependency_management',
+    'go_require_declaration',
+  ].includes(versionSource);
+}
 
 function emptyScoreLabel(category: Category): string {
   if (
@@ -28,12 +59,16 @@ export function CategoryCard({
   title,
   defaultOpen = false,
   reportDetails = false,
+  sources,
+  dependencies,
 }: {
   category: Category;
   sha?: string | null;
   title?: string;
   defaultOpen?: boolean;
   reportDetails?: boolean;
+  sources?: SourceState[];
+  dependencies?: Dependency[];
 }) {
   const label = title ?? CATEGORY_LABELS[category.id] ?? category.id;
   const explanationId = useId();
@@ -54,6 +89,7 @@ export function CategoryCard({
 
   const hasScore = category.score !== null;
   const scoreText = hasScore ? roundHalfUp(category.score!, 1) : emptyScoreLabel(category);
+  const osvSource = sources?.find((item) => item.source === 'osv' && item.scope === 'osv');
 
   return (
     <section className={styles.categoryCard} aria-label={`Категория: ${label}`}>
@@ -90,15 +126,145 @@ export function CategoryCard({
           {category.reason.message}. {category.reason.cannot_conclude}
         </p>
       )}
+      {reportDetails && category.id === 'security' && (
+        <div className={styles.securityChecks} aria-label="Охват проверок безопасности">
+          {category.metrics.map(({ input }) => {
+            const linkedSources = (sources ?? []).filter(
+              (source) =>
+                source.metric_ids?.includes(input.id) ||
+                (input.id === 'SEC_SECRETS' &&
+                  source.source === 'git' &&
+                  source.scope === 'secret_history'),
+            );
+            return (
+              <div className={styles.securityCheck} key={input.id}>
+                <strong>{METRIC_LABELS[input.id]}</strong>
+                <span>{STATUS_LABELS[input.status]}</span>
+                <span className={styles.hint}>{formatSample(input.sample, input.id)}</span>
+                {input.reason && (
+                  <span className={styles.naReason}>
+                    {input.reason.message}. {input.reason.cannot_conclude}
+                  </span>
+                )}
+                {linkedSources.map((source) => (
+                  <div className={styles.securitySource} key={`${source.source}/${source.scope}`}>
+                    <span>
+                      Источник {source.source} · {source.scope}: {STATUS_LABELS[source.status]}
+                    </span>
+                    <span className={styles.hint}>{sourceSampleText(source)}</span>
+                    {source.reason && (
+                      <span className={styles.naReason}>
+                        {source.reason.message}. {source.reason.cannot_conclude}
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {input.id === 'SEC_SECRETS' && input.status !== 'complete' && (
+                  <span className={styles.hint}>
+                    Неполный охват истории не подтверждает отсутствие секретов в непроверенных
+                    ревизиях.
+                  </span>
+                )}
+                {input.id === 'SEC_VULN_RISK' && input.raw_value === null && (
+                  <span className={styles.hint}>
+                    Неизвестная версия или уровень OSV не означают отсутствие уязвимости.
+                  </span>
+                )}
+                {input.id === 'SEC_SAST' && (
+                  <span className={styles.hint}>
+                    Обнаружение конфигурации не подтверждает успешный запуск SAST.
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {reportDetails && category.id === 'security' && (
+        <section className={styles.securityCoverage} aria-label="Покрытие экосистем OSV">
+          <h4>Зависимости, переданные на проверку OSV</h4>
+          {(['npm', 'Maven', 'Go'] as const).map((ecosystem) => {
+            const scope = `dependencies_${ecosystem.toLowerCase()}`;
+            const source = sources?.find((item) => item.source === 'git' && item.scope === scope);
+            const items = (dependencies ?? []).filter((item) => item.ecosystem === ecosystem);
+            return (
+              <div className={styles.securityEcosystem} key={ecosystem}>
+                <strong>{ecosystem}</strong>
+                {source ? (
+                  <>
+                    <span>
+                      Источник {source.source} · {source.scope}: {STATUS_LABELS[source.status]}
+                    </span>
+                    <span className={styles.hint}>{sourceSampleText(source)}</span>
+                    {source.reason && (
+                      <span className={styles.naReason}>
+                        {source.reason.message}. {source.reason.cannot_conclude}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className={styles.hint}>
+                    Состояние извлечения зависимостей не передано; отсутствие записей не
+                    подтверждает отсутствие зависимостей.
+                  </span>
+                )}
+                {items.length > 0 ? (
+                  <ul>
+                    {items.map((item) => (
+                      <li key={`${item.ecosystem}/${item.package}/${item.version}`}>
+                        {item.package}@{item.version} · манифест: {item.manifest_path} · источник
+                        версии: {VERSION_SOURCE_LABELS[item.version_source] ?? item.version_source}
+                        {isDeclaredVersion(item.version_source) && (
+                          <div className={styles.hint}>
+                            Версия объявлена в манифесте; фактический граф сборки не подтверждён.
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className={styles.hint}>
+                    Нет сохранённых зависимостей этой экосистемы. Проверьте состояние и причину
+                    выше.
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          <div className={styles.securityEcosystem}>
+            <strong>Запросы OSV</strong>
+            {osvSource ? (
+              <>
+                <span>
+                  Источник {osvSource.source} · {osvSource.scope}: {STATUS_LABELS[osvSource.status]}
+                </span>
+                <span className={styles.hint}>{sourceSampleText(osvSource)}</span>
+                {osvSource.reason && (
+                  <span className={styles.naReason}>
+                    {osvSource.reason.message}. {osvSource.reason.cannot_conclude}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className={styles.hint}>
+                Состояние источника OSV не передано; отсутствие уязвимостей не подтверждено.
+              </span>
+            )}
+          </div>
+        </section>
+      )}
 
       {category.explanation && (
         <p id={explanationId} className={styles.hint}>
           {category.explanation}
         </p>
       )}
-      {reportDetails && !hasScore && !category.reason && (
-        <p className={styles.naReason}>Причина недоступности не определена</p>
-      )}
+      {reportDetails &&
+        !hasScore &&
+        !category.reason &&
+        !category.metrics.some((metric) => metric.input.reason) && (
+          <p className={styles.naReason}>Причина недоступности не определена</p>
+        )}
 
       {category.metrics.length > 0 ? (
         <details className={styles.categoryDetails} open={defaultOpen}>

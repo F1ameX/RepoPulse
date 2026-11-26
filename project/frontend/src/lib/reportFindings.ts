@@ -164,7 +164,8 @@ export function findingsScope(
     )
   )
     return 'unavailable';
-  if (metrics.some(({ input }) => ['partial', 'unavailable'].includes(input.status)))
-    return 'partial';
+  // A not-applicable metric is not evidence that the corresponding check found no issues.
+  // Keep the empty findings state cautious unless every metric is complete.
+  if (metrics.some(({ input }) => input.status !== 'complete')) return 'partial';
   return 'complete';
 }
