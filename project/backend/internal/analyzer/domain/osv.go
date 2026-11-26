@@ -16,6 +16,7 @@ type OSVQuery struct {
 type OSVPage struct {
 	Body             json.RawMessage
 	VulnerabilityIDs []string
+	Severity         map[string]string
 	ObtainedAt       time.Time
 }
 

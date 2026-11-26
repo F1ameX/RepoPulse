@@ -49,9 +49,12 @@ func (e *Engine) Calculate(ctx context.Context, a domain.Analysis, data domain.S
 	}
 	r := domain.ReportData{
 		Categories: append(append([]domain.Category{activity}, tree...), security, ci),
-		Findings:   []domain.Finding{}, Recommendations: []domain.Recommendation{},
+		Findings:   vulnerabilityFindings(data), Recommendations: []domain.Recommendation{},
 		Explanation: domain.Explanation{Mode: "deterministic_fallback", FallbackReason: pointer("no_findings"),
 			CatalogVersion: a.Versions.RecommendationCatalog, SchemaVersion: a.Versions.ExplanationSchema, PromptVersion: a.Versions.Prompt},
+	}
+	if len(r.Findings) > 0 {
+		r.Explanation.FallbackReason = pointer("ai_not_configured")
 	}
 	e.aggregate(&r)
 	return r, nil

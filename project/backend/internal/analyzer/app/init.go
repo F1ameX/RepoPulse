@@ -28,7 +28,7 @@ func githubClient() *github.Client {
 }
 
 func newActivityProcessor(engine *scoring.Engine) *activity.Processor {
-	return activity.NewProcessorWithCI(engine, ci.Collector{Reader: githubClient()})
+	return activity.NewProcessorWithSources(engine, ci.Collector{Reader: githubClient()}, osv.NewClient(nil))
 }
 
 func newInputProcessor(collectors []snapshot.Collector, calculator snapshot.Calculator) *snapshot.Processor {

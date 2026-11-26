@@ -155,3 +155,24 @@ func (s *Session) readTree(ctx context.Context, fetchCode string, empty, withSiz
 	}
 	s.data.Sources = append(s.data.Sources, source(domain.GitTreeScope, len(s.data.Files), code, state))
 }
+
+func (s *Session) fetchWorkflowBlobs(ctx context.Context, remote string, files []domain.GitFile) {
+	var missing strings.Builder
+	for _, file := range files {
+		name, ok := strings.CutPrefix(file.Path, ".github/workflows/")
+		if !ok || strings.Contains(name, "/") ||
+			!(strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")) ||
+			(file.Mode != "100644" && file.Mode != "100755") || !hash(file.ObjectSHA) {
+			continue
+		}
+		if _, err := s.command(ctx, "", 64, "cat-file", "-e", file.ObjectSHA); err != nil {
+			missing.WriteString(file.ObjectSHA + "\n")
+		}
+	}
+	if missing.Len() != 0 && ctx.Err() == nil {
+		// Fetch only Git objects identified by the pinned tree. The existing
+		// transport and acquisition deadline still bound the transfer.
+		_, _ = s.command(ctx, missing.String(), 1<<20, "fetch", "--stdin", "--no-tags",
+			"--no-recurse-submodules", "--no-auto-maintenance", "--no-write-fetch-head", remote)
+	}
+}

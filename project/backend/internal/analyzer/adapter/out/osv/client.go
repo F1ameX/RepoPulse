@@ -134,7 +134,7 @@ func (c *Client) fetchPage(ctx context.Context, request queryBody, remaining *in
 		(*remaining)--
 		raw, failed := c.attempt(ctx, body)
 		if failed.code == "" {
-			page, next, ok := decodePage(raw)
+			page, next, ok := decodePage(raw, request.Package.Ecosystem, request.Package.Name)
 			if !ok {
 				return domain.OSVPage{}, "", "OSV_INVALID_RESPONSE"
 			}
@@ -222,7 +222,7 @@ func retryAfter(headers http.Header) (time.Duration, bool) {
 	return 0, false
 }
 
-func decodePage(raw []byte) (domain.OSVPage, string, bool) {
+func decodePage(raw []byte, ecosystem, name string) (domain.OSVPage, string, bool) {
 	at := domain.UTC(time.Now())
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil || fields == nil {
@@ -238,17 +238,40 @@ func decodePage(raw []byte) (domain.OSVPage, string, bool) {
 		return domain.OSVPage{}, "", false
 	}
 	var entries []struct {
-		ID string `json:"id"`
+		ID               string          `json:"id"`
+		Severity         []severityScore `json:"severity"`
+		DatabaseSpecific struct {
+			Severity string `json:"severity"`
+		} `json:"database_specific"`
+		Affected []struct {
+			Package struct {
+				Ecosystem string `json:"ecosystem"`
+				Name      string `json:"name"`
+			} `json:"package"`
+			Severity []severityScore `json:"severity"`
+		} `json:"affected"`
 	}
 	if hasVulns && (json.Unmarshal(vulns, &entries) != nil || entries == nil) {
 		return domain.OSVPage{}, "", false
 	}
 	ids := make([]string, 0, len(entries))
+	levels := make(map[string]string)
 	for _, entry := range entries {
 		if !advisoryID.MatchString(entry.ID) {
 			return domain.OSVPage{}, "", false
 		}
 		ids = append(ids, entry.ID)
+		level := advisorySeverity(entry.DatabaseSpecific.Severity, entry.Severity)
+		for _, affected := range entry.Affected {
+			if affected.Package.Ecosystem == ecosystem && affected.Package.Name == name {
+				if candidate := advisorySeverity("", affected.Severity); severityRank(candidate) > severityRank(level) {
+					level = candidate
+				}
+			}
+		}
+		if severityRank(level) > severityRank(levels[entry.ID]) {
+			levels[entry.ID] = level
+		}
 	}
-	return domain.OSVPage{Body: raw, VulnerabilityIDs: ids, ObtainedAt: at}, next, true
+	return domain.OSVPage{Body: raw, VulnerabilityIDs: ids, Severity: levels, ObtainedAt: at}, next, true
 }

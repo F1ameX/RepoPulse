@@ -112,3 +112,17 @@ func TestQuerySharesFortyAttemptsAcrossProfilesPagesAndRetries(t *testing.T) {
 		t.Fatalf("budget was not shared: calls=%d results=%+v", calls, results)
 	}
 }
+
+func TestDecodePageSeverity(t *testing.T) {
+	raw := []byte(`{"vulns":[
+        {"id":"TEST-1","affected":[{"package":{"ecosystem":"Go","name":"example.com/module"},"severity":[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}]}]},
+        {"id":"TEST-2","database_specific":{"severity":"HIGH"}},
+        {"id":"TEST-4","database_specific":{"severity":"MODERATE"},"severity":[{"type":"CVSS_V4","score":"CVSS:4.0/AV:N"}]},
+        {"id":"TEST-3","affected":[{"package":{"ecosystem":"npm","name":"other"},"severity":[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}]}]}
+    ]}`)
+	page, _, ok := decodePage(raw, "Go", "example.com/module")
+	if !ok || len(page.VulnerabilityIDs) != 4 || page.Severity["TEST-1"] != "critical" ||
+		page.Severity["TEST-2"] != "high" || page.Severity["TEST-3"] != "" || page.Severity["TEST-4"] != "medium" {
+		t.Fatalf("unexpected advisory page: %+v", page)
+	}
+}
