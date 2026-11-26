@@ -127,54 +127,10 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	}
 	// Re-evaluate exactly the detached inputs that will be stored, including
 	// any completeness constraints enforced while assembling the snapshot.
-	activityInputs := append([]domain.MetricInput{}, data.Inputs[:3]...)
-	category, err = p.engine.ActivityFromInputs(a.AssessmentAt, a.Window, a.Versions, activityInputs)
+	report, err := p.engine.Calculate(ctx, a, data)
 	if err != nil {
 		return worker.Output{}, err
 	}
-	treeCategories, err := p.engine.TreeCategories(a.Versions, data.Inputs)
-	if err != nil {
-		return worker.Output{}, err
-	}
-	ciCategory, err := p.engine.CICategory(a.Versions, data.Inputs)
-	if err != nil {
-		return worker.Output{}, err
-	}
-	overallReason := &domain.Reason{
-		Code: "INCOMPLETE_CATEGORIES", Message: "Общая оценка недоступна",
-		CannotConclude: "Общая оценка по пяти категориям ещё не рассчитана",
-	}
-	fallback := "no_findings"
-	report := domain.ReportData{
-		OverallReason: overallReason, Summary: "Сохранён анализ активности, документации, файловых признаков тестов и CI/CD",
-		Categories: append([]domain.Category{category}, treeCategories...), Findings: []domain.Finding{}, Recommendations: []domain.Recommendation{},
-		Explanation: domain.Explanation{
-			Mode: "deterministic_fallback", FallbackReason: &fallback,
-			CatalogVersion: a.Versions.RecommendationCatalog, SchemaVersion: a.Versions.ExplanationSchema, PromptVersion: a.Versions.Prompt,
-		},
-	}
-	var risk *domain.Metric
-	if p.osv != nil {
-		metric, findings := p.engine.VulnerabilityRisk(&data)
-		risk = &metric
-		report.Findings = append(report.Findings, findings...)
-		if len(findings) > 0 {
-			report.Explanation.FallbackReason = new("ai_not_configured")
-		}
-	}
-	security, err := p.engine.SecurityCategory(data.Inputs, risk)
-	if err != nil {
-		return worker.Output{}, err
-	}
-	report.Categories = append(report.Categories, security, ciCategory)
-	for _, item := range report.Categories {
-		report.Coverage.Total += item.Coverage.Total
-		report.Coverage.Calculated += item.Coverage.Calculated
-		report.Coverage.Partial += item.Coverage.Partial
-		report.Coverage.Unavailable += item.Coverage.Unavailable
-		report.Coverage.NotApplicable += item.Coverage.NotApplicable
-	}
-	report.Coverage.Percentage = float64(report.Coverage.Calculated) * 100 / float64(report.Coverage.Total)
 	if err := ctx.Err(); err != nil {
 		return worker.Output{}, err
 	}

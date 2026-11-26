@@ -239,6 +239,14 @@ func TestActivityReportGoldenVectorsPublishedAndReadWithoutRecollection(t *testi
 			if !reflect.DeepEqual(report.Sources, stored.Snapshot.Sources) {
 				t.Fatal("source states, samples or metric links changed between storage and HTTP")
 			}
+			replayed, err := engine.Replay(t.Context(), stored.Snapshot)
+			if err != nil || !reflect.DeepEqual(replayed.OverallScore, stored.Report.OverallScore) ||
+				replayed.Coverage != stored.Report.Coverage || replayed.Summary != report.Summary {
+				t.Fatalf("stored snapshot does not reproduce the published score: %v", err)
+			}
+			if replayed.OverallScore != nil && (report.OverallScore == nil || *report.OverallScore != math.Round(*replayed.OverallScore*10)/10) {
+				t.Fatal("HTTP score differs from final half-up rounding")
+			}
 			for i, category := range report.Categories {
 				if category.Coverage.Percentage != math.Round(stored.Report.Categories[i].Coverage.Percentage*10)/10 {
 					t.Fatal("public category coverage is not rounded")
