@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { Category, Evidence, Metric, Report } from '@/types';
+import type { Category, Dependency, Evidence, Metric, Report, SourceState } from '@/types';
 import { MetricDetails } from './MetricDetails';
 import { CategoryCard } from './CategoryCard';
 import { CategoryList } from './CategoryList';
@@ -519,7 +519,12 @@ it('FR-10: секрет не показывает run/dependency/vulnerability',
   expect(screen.queryByText(/vuln:/)).toBeNull();
   expect(screen.getByText('aws_key')).toBeTruthy();
   expect(screen.getByText(/\[src\/index\.ts\]/)).toBeTruthy();
-  expect(screen.getByText(/rev: abc123/)).toBeTruthy();
+  expect(
+    screen.getByText((_, element) =>
+      element?.tagName === 'SPAN' &&
+     element.textContent?.trim() === 'rev: abc123'
+   )
+  ).toBeTruthy();
 });
 
 it('FR-10: пустой evidence при reason: null → «причина не указана»', () => {
@@ -619,4 +624,183 @@ it('FR-13: отсутствующий category.status → ошибка в кар
   (category as unknown as { status: unknown }).status = undefined;
   render(<CategoryCard category={category} />);
   expect(screen.getByRole('alert').textContent).toMatch(/отсутствует состояние полноты данных/i);
+});
+
+
+it('FR-13/FR-22: security card shows check coverage, dependency origins and N/A reasons', () => {
+  const reason = {
+    code: 'OSV_PARTIAL',
+    message: 'Часть зависимостей не проверена',
+    cannot_conclude: 'Отсутствие уязвимостей не подтверждено',
+  };
+  const secretEvidence: Evidence = {
+    id: 'secret-evidence',
+    source: 'git',
+    kind: 'secret_match',
+    description: 'DO_NOT_RENDER_SECRET_VALUE',
+    path: 'config/app.yml',
+    revision: 'abc123',
+    url: null,
+    run_id: null,
+    attempt: null,
+    dependency: null,
+    vulnerability_id: null,
+    secret_match_type: 'suspicious_assignment',
+  };
+  const secrets = makeMetric(
+    {
+      id: 'SEC_SECRETS',
+      raw_value: 1,
+      unit: 'secret_scan',
+      status: 'partial',
+      reason,
+      evidence: [secretEvidence],
+    },
+    { normalized_score: null },
+  );
+  const osv = makeMetric(
+    { id: 'SEC_VULN_RISK', raw_value: null, unit: 'risk', status: 'not_applicable', reason },
+    { normalized_score: null },
+  );
+  const sast = makeMetric({ id: 'SEC_SAST', raw_value: false, unit: 'bool', status: 'complete' });
+  const category = makeCategory({
+    id: 'security',
+    status: 'partial',
+    reason: null,
+    coverage: { ...makeCategory().coverage, total: 3, calculated: 1, percentage: 33.3 },
+    metrics: [secrets, osv, sast],
+  });
+  const sample = {
+    collected: 1,
+    total: 2,
+    numerator: null,
+    denominator: null,
+    excluded: null,
+    excluded_reason: null,
+  };
+  const sources: SourceState[] = [
+    {
+      source: 'git',
+      scope: 'secret_history',
+      status: 'partial',
+      reason,
+      sample,
+      obtained_at: null,
+      fingerprint: null,
+      metric_ids: ['SEC_SECRETS'],
+    },
+    ...(['npm', 'Maven', 'Go'] as const).map((ecosystem) => ({
+      source: 'git' as const,
+      scope: `dependencies_${ecosystem.toLowerCase()}`,
+      status: 'complete' as const,
+      reason: null,
+      sample,
+      obtained_at: null,
+      fingerprint: null,
+    })),
+    {
+      source: 'osv',
+      scope: 'osv',
+      status: 'partial',
+      reason,
+      sample,
+      obtained_at: null,
+      fingerprint: null,
+      metric_ids: ['SEC_VULN_RISK'],
+    },
+  ];
+  const dependencies: Dependency[] = [
+    {
+      ecosystem: 'npm',
+      package: 'left-pad',
+      version: '1.3.0',
+      manifest_path: 'package.json',
+      version_source: 'npm_lock_v3',
+      origins: [
+        { manifest_path: 'package-lock.json', version_source: 'npm_lock_v3' },
+        { manifest_path: 'packages/web/package.json', version_source: 'npm_lock_v3' },
+      ],
+    },
+    {
+      ecosystem: 'Maven',
+      package: 'org.example:sample',
+      version: '1.2.3',
+      manifest_path: 'pom.xml',
+      version_source: 'maven_declaration',
+      origins: [{ manifest_path: 'pom.xml', version_source: 'maven_declaration' }],
+    },
+    {
+      ecosystem: 'Go',
+      package: 'example.com/module',
+      version: 'v1.2.3',
+      manifest_path: 'go.mod',
+      version_source: 'go_require_declaration',
+      origins: [{ manifest_path: 'go.mod', version_source: 'go_require_declaration' }],
+    },
+  ];
+
+  render(
+    <CategoryCard
+      category={category}
+      reportDetails
+      defaultOpen
+      sources={sources}
+      dependencies={dependencies}
+    />,
+  );
+
+  expect(screen.getByText(/secret_history: Частичные данные/)).toBeTruthy();
+  expect(screen.getByText(/Запросы OSV/)).toBeTruthy();
+  expect(screen.getByText(/dependencies_maven/)).toBeTruthy();
+  expect(screen.getByText(/org.example:sample@1.2.3/)).toBeTruthy();
+  expect(screen.getByText(/Манифест: package-lock\.json/)).toBeTruthy();
+  expect(screen.getByText(/Манифест: packages\/web\/package\.json/)).toBeTruthy();
+  expect(
+    screen.getAllByText(/Версия объявлена в манифесте; фактический граф сборки не подтверждён/)
+      .length,
+  ).toBeGreaterThanOrEqual(2);
+  expect(screen.getAllByText(/Отсутствие уязвимостей не подтверждено/).length).toBeGreaterThan(0);
+  expect(screen.getByText('suspicious_assignment')).toBeTruthy();
+  expect(screen.getByText('config/app.yml')).toBeTruthy();
+  expect(screen.getByText('abc123')).toBeTruthy();
+  expect(screen.queryByText('DO_NOT_RENDER_SECRET_VALUE')).toBeNull();
+  expect(screen.getAllByText(/Наличие конфигурации не подтверждает успешный запуск SAST/).length).toBeGreaterThan(0);
+});
+
+
+it('FR-22: SEC_SECRETS never renders raw_value even if it contains unsafe text', () => {
+  const metric = makeMetric(
+    {
+      id: 'SEC_SECRETS',
+      raw_value: 'DO_NOT_RENDER_RAW_SECRET',
+      unit: 'secret_scan',
+      status: 'complete',
+      evidence_total: 1,
+      evidence: [
+        {
+          id: 'secret-evidence',
+          source: 'git',
+          kind: 'secret_match',
+          description: 'DO_NOT_RENDER_EVIDENCE_SECRET',
+          path: 'config/app.yml',
+          revision: 'abc123',
+          url: null,
+          run_id: null,
+          attempt: null,
+          dependency: null,
+          vulnerability_id: null,
+          secret_match_type: 'private_key_header',
+        },
+      ],
+    },
+    { normalized_score: 50 },
+  );
+
+  render(<MetricDetails metric={metric} />);
+
+  expect(screen.getByText('Обнаружены потенциальные совпадения')).toBeTruthy();
+  expect(screen.getByText('private_key_header')).toBeTruthy();
+  expect(screen.getByText('config/app.yml')).toBeTruthy();
+  expect(screen.getByText('abc123')).toBeTruthy();
+  expect(screen.queryByText(/DO_NOT_RENDER_/)).toBeNull();
 });

@@ -121,7 +121,8 @@ it.each(['complete', 'partial', 'unavailable', 'not_applicable'] as const)(
     render(<ReportFindings report={data} />);
     const messages = {
       complete: 'По выполненным проверкам проблемы не обнаружены',
-      partial: 'По выполненным проверкам проблемы не обнаружены',
+      partial:
+        'По доступным результатам проблемы не обнаружены, но часть проверок неполная или недоступна; отсутствие проблем не подтверждено.',
       unavailable: 'Недостаточно данных для выявления проблем',
       not_applicable: 'Применимые проверки отсутствуют',
     };
@@ -368,4 +369,126 @@ it('links incomplete results to the limitations in this report', () => {
     }),
   );
   expect(document.activeElement?.id).toBe('report-limitations');
+});
+
+
+it('FR-13/FR-22: renders OSV identity, unknown severity, Risk and declared Maven origin', () => {
+  const data = report();
+  const security = data.categories.find(({ id }) => id === 'security')!;
+  const risk = security.metrics.find(({ input }) => input.id === 'SEC_VULN_RISK')!;
+  risk.input.status = 'partial';
+  risk.input.raw_value = 1.75;
+  risk.normalized_score = 82.4;
+  data.findings.push({
+    ...data.findings[0],
+    id: 'finding:SEC_VULN_RISK',
+    rule_id: 'SEC_VULN_RISK',
+    category: 'security',
+    title: 'Уязвимость зависимости',
+    description: 'Найдена уязвимость',
+    severity: 'high',
+    possible_consequence: 'Риск использования уязвимой версии',
+    evidence_ids: [],
+    vulnerabilities: [
+      {
+        vulnerability_id: 'GHSA-example',
+        ecosystem: 'Maven',
+        package: 'junit:junit',
+        version: '4.13.2',
+        severity: null,
+        obtained_at: '2026-11-25T00:00:00Z',
+        evidence_url: 'https://osv.dev/vulnerability/GHSA-example',
+      },
+    ],
+  });
+
+  render(<ReportFindings report={data} />);
+
+  expect(screen.getByText('GHSA-example')).toBeTruthy();
+  expect(screen.getByText(/Maven\/junit:junit@4.13.2/)).toBeTruthy();
+  expect(screen.getByText('Уровень: Неизвестен')).toBeTruthy();
+  expect(screen.getByText('Risk:')).toBeTruthy();
+  expect(screen.getByText('1.75')).toBeTruthy();
+  expect(screen.getByText(/Манифест: pom.xml · Источник версии: Декларация Maven/)).toBeTruthy();
+  expect(screen.getByText(/фактический граф сборки не подтверждён/)).toBeTruthy();
+});
+
+it('FR-11/FR-13/FR-22: secret finding uses saved safe text and never renders secret evidence text', () => {
+  const data = report();
+  const secretMetric = data.categories.find(({ id }) => id === 'security')!.metrics.find(
+    ({ input }) => input.id === 'SEC_SECRETS',
+  )!;
+  secretMetric.input.status = 'partial';
+  secretMetric.input.evidence = [
+    {
+      id: 'secret-evidence',
+      source: 'git',
+      kind: 'secret_match',
+      description: 'DO_NOT_RENDER_SECRET_VALUE',
+      path: 'config/app.yml',
+      revision: 'abc123',
+      url: null,
+      run_id: null,
+      attempt: null,
+      dependency: null,
+      vulnerability_id: null,
+      secret_match_type: 'suspicious_assignment',
+    },
+  ];
+  data.findings.push({
+    ...data.findings[0],
+    id: 'finding:SEC_SECRETS',
+    rule_id: 'SEC_SECRETS',
+    category: 'security',
+    title: 'DO_NOT_RENDER_SECRET_TITLE',
+    description: 'Каталог: обнаружен потенциально чувствительный реквизит.',
+    possible_consequence: 'При подтверждении значения возможна компрометация доступа.',
+    severity: 'high',
+    evidence_ids: ['secret-evidence'],
+    vulnerabilities: [],
+  });
+
+  render(<ReportFindings report={data} />);
+
+  expect(screen.getByText('Потенциальный секрет')).toBeTruthy();
+  expect(screen.getByText('Каталог: обнаружен потенциально чувствительный реквизит.')).toBeTruthy();
+  expect(
+    screen.getByText(
+      (_, element) =>
+        element?.tagName === 'P' &&
+        element.textContent?.includes('При подтверждении значения возможна компрометация доступа.') === true,
+    ),
+  ).toBeTruthy();
+  expect(screen.getByText('suspicious_assignment')).toBeTruthy();
+  expect(screen.getByText('config/app.yml')).toBeTruthy();
+  expect(screen.getByText('abc123')).toBeTruthy();
+  expect(screen.queryByText(/DO_NOT_RENDER_SECRET/)).toBeNull();
+});
+
+
+it('FR-11: not-applicable metric does not make otherwise complete checks partial', () => {
+  const data = report();
+  data.findings = [];
+  data.recommendations = [];
+  const risk = data.categories.find(({ id }) => id === 'security')!.metrics.find(
+    ({ input }) => input.id === 'SEC_VULN_RISK',
+  )!;
+  risk.input.status = 'not_applicable';
+  risk.input.raw_value = null;
+  risk.normalized_score = null;
+  data.categories.forEach((category) => {
+    category.metrics.forEach((metric) => {
+      if (metric.input.id !== 'SEC_VULN_RISK') {
+        metric.input.status = 'complete';
+      }
+    });
+  });
+
+  render(<ReportFindings report={data} />);
+
+  expect(
+    within(screen.getByRole('region', { name: 'Проблемы' })).getByText(
+      'По выполненным проверкам проблемы не обнаружены',
+    ),
+  ).toBeTruthy();
 });

@@ -77,6 +77,8 @@ export function CategoryList({ report, onReload }: { report: Report; onReload?: 
               category={category}
               sha={report.repository.commit_sha}
               reportDetails
+              sources={report.sources}
+              dependencies={report.dependencies}
             />
           ) : (
             <section key={id} className={styles.categoryCard} aria-label={`Категория: ${title}`}>

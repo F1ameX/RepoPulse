@@ -164,7 +164,9 @@ export function findingsScope(
     )
   )
     return 'unavailable';
-  if (metrics.some(({ input }) => ['partial', 'unavailable'].includes(input.status)))
+  // Not-applicable metrics are outside the applicable check scope; they do not
+  // make otherwise complete results partial.
+  if (metrics.some(({ input }) => input.status !== 'complete' && input.status !== 'not_applicable'))
     return 'partial';
   return 'complete';
 }

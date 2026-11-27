@@ -51,10 +51,38 @@ export function MetricDetails({
   const isUnavailable =
     input.status === 'unavailable' ||
     input.status === 'not_applicable' ||
-    input.raw_value === null ||
-    input.raw_value === undefined;
+    (input.id !== 'SEC_SECRETS' &&
+      (input.raw_value === null || input.raw_value === undefined));
 
-  const displayRaw = isUnavailable ? 'N/A' : formatRawValue(input.id, input.raw_value);
+  const secretScanResult =
+    input.status === 'unavailable' || input.status === 'not_applicable'
+      ? 'N/A'
+      : input.evidence.length > 0 ||
+          (input.evidence_total !== null && input.evidence_total > 0) ||
+          input.raw_value === true
+        ? 'Обнаружены потенциальные совпадения'
+        : (input.evidence_total === 0 || input.raw_value === false) &&
+            input.status === 'complete'
+          ? 'Совпадений в проверенном охвате не обнаружено'
+          : (input.evidence_total === 0 || input.raw_value === false) &&
+              input.status === 'partial'
+            ? 'В проверенной части совпадений не обнаружено'
+            : input.raw_value !== null
+              ? 'Результат получен; значение не отображается'
+              : 'Результат проверки не представлен';
+
+  const displayRaw =
+    input.id === 'SEC_SECRETS'
+      ? secretScanResult
+      : input.id === 'SEC_SAST' && !isUnavailable && typeof input.raw_value === 'boolean'
+        ? input.raw_value
+          ? 'Конфигурация найдена'
+          : input.status === 'complete'
+            ? 'Конфигурация не найдена'
+            : 'В проверенной области конфигурация не обнаружена'
+        : isUnavailable
+          ? 'N/A'
+          : formatRawValue(input.id, input.raw_value);
   const showUnit = !isUnavailable && !!unit && !displayRaw.endsWith('%');
 
   const reason = input.reason
@@ -74,7 +102,15 @@ export function MetricDetails({
       <dd className={styles.metricDetails}>
         <div className={styles.metricValueLine}>
           <div>
-            <span className={styles.metricCaption}>Исходное значение</span>
+            <span className={styles.metricCaption}>
+              {input.id === 'SEC_VULN_RISK'
+                ? 'Risk'
+                : input.id === 'SEC_SAST'
+                  ? 'Конфигурация SAST'
+                  : input.id === 'SEC_SECRETS'
+                    ? 'Результат сканирования'
+                    : 'Исходное значение'}
+            </span>
             <span className={styles.metricValue}>{displayRaw}</span>
             {showUnit && <span> {unit}</span>}
           </div>
@@ -91,6 +127,24 @@ export function MetricDetails({
             </span>
           </div>
         </div>
+
+        {input.id === 'SEC_SECRETS' && input.status !== 'complete' && (
+          <div className={styles.hint} style={{ marginBottom: '8px' }}>
+            Неполное сканирование истории не подтверждает отсутствие секретов в непроверенных ревизиях.
+          </div>
+        )}
+
+        {input.id === 'SEC_SAST' && (
+          <div className={styles.hint} style={{ marginBottom: '8px' }}>
+            Наличие конфигурации не подтверждает успешный запуск SAST.
+          </div>
+        )}
+
+        {input.id === 'SEC_VULN_RISK' && input.raw_value === null && (
+          <div className={styles.hint} style={{ marginBottom: '8px' }}>
+            Risk не рассчитан: недостаточно данных для оценки; неизвестная версия или уровень OSV не означают отсутствие уязвимости.
+          </div>
+        )}
 
         {input.id === 'CI_SUCCESS_RATE' && !isUnavailable && (
           <div className={styles.hint} style={{ marginBottom: '8px' }}>
@@ -149,6 +203,7 @@ export function MetricDetails({
           total={input.evidence_total}
           reason={input.reason}
           limit={evidenceLimit}
+          secret={input.id === 'SEC_SECRETS'}
         />
       </dd>
     </div>

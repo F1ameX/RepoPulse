@@ -251,3 +251,75 @@
 .limitations > li + li {
   margin-top: 16px;
 }
+
+.securityChecks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.securityCheck {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .securityChecks {
+    grid-template-columns: 1fr;
+  }
+}
+
+.securityCoverage {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.securityCoverage h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.securityEcosystem {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+
+.securityEcosystem ul {
+  margin: 4px 0 0;
+  padding-inline-start: 20px;
+}
+
+
+.securitySource {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border);
+}
+
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

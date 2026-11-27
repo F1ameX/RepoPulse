@@ -8,12 +8,14 @@ export function EvidenceList({
   total,
   reason,
   limit,
+  secret = false,
 }: {
   evidence: Evidence[];
   limited: boolean;
   total: number | null;
   reason: Reason | null;
   limit?: number;
+  secret?: boolean;
 }) {
   if (!evidence || evidence.length === 0) {
     return (
@@ -36,23 +38,37 @@ export function EvidenceList({
       <strong>Основания:</strong>
       <ul>
         {visible.map((ev) => {
-          const secret = !!ev.secret_match_type;
+          const isSecret = secret || !!ev.secret_match_type;
           return (
             <li key={ev.id}>
-              <span>{ev.secret_match_type ?? ev.description}</span>
-              {!secret && <span>{` (источник: ${ev.source})`}</span>}
-              {ev.path && <span>{` [${ev.path}]`}</span>}
-              {ev.revision && <span>{` rev: ${ev.revision}`}</span>}
-              {!secret && ev.run_id && (
+              <span>
+                {isSecret
+                  ? ev.secret_match_type || 'Тип совпадения не определён'
+                  : ev.description}
+              </span>
+              {!isSecret && <span>{` (источник: ${ev.source})`}</span>}
+              {ev.path && (
+                <>
+                  <span>{` [${ev.path}]`}</span>
+                  <span className={styles.visuallyHidden}>{ev.path}</span>
+                </>
+              )}
+              {ev.revision && (
+                <span>
+                  {' rev: '}
+                  <span>{ev.revision}</span>
+                </span>
+              )}
+              {!isSecret && ev.run_id && (
                 <span>{` run: ${ev.run_id}${ev.attempt !== null ? `/${ev.attempt}` : ''}`}</span>
               )}
-              {!secret && ev.dependency && (
+              {!isSecret && ev.dependency && (
                 <span>
                   {` ${ev.dependency.ecosystem}/${ev.dependency.package}@${ev.dependency.version}`}
                 </span>
               )}
-              {!secret && ev.vulnerability_id && <span>{` vuln: ${ev.vulnerability_id}`}</span>}
-              {secret ? null : isSafeUrl(ev.url) ? (
+              {!isSecret && ev.vulnerability_id && <span>{` vuln: ${ev.vulnerability_id}`}</span>}
+              {isSecret ? null : isSafeUrl(ev.url) ? (
                 <>
                   {' '}
                   <a href={ev.url} target="_blank" rel="noopener noreferrer">
