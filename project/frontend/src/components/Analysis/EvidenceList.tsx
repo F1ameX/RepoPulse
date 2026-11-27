@@ -9,6 +9,8 @@ export function EvidenceList({
   reason,
   limit,
   secret = false,
+  collapsible = false,
+  showHeading = true,
 }: {
   evidence: Evidence[];
   limited: boolean;
@@ -16,11 +18,13 @@ export function EvidenceList({
   reason: Reason | null;
   limit?: number;
   secret?: boolean;
+  collapsible?: boolean;
+  showHeading?: boolean;
 }) {
   if (!evidence || evidence.length === 0) {
     return (
       <div className={styles.evidenceBlock}>
-        <strong>Основания:</strong>{' '}
+        {!collapsible && showHeading && <strong>Основания: </strong>}
         <span>
           Основания недоступны
           {reason ? ` (${reason.message})` : ' (причина не указана)'}
@@ -33,41 +37,41 @@ export function EvidenceList({
   const truncated = visible.length < evidence.length;
   const showHint = limited || truncated;
 
-  return (
-    <div className={styles.evidenceBlock}>
-      <strong>Основания:</strong>
-      <ul>
+  const content = (
+    <>
+      <ul className={styles.evidenceList}>
         {visible.map((ev) => {
           const isSecret = secret || !!ev.secret_match_type;
           return (
             <li key={ev.id}>
-              <span>
-                {isSecret
-                  ? ev.secret_match_type || 'Тип совпадения не определён'
-                  : ev.description}
-              </span>
-              {!isSecret && <span>{` (источник: ${ev.source})`}</span>}
-              {ev.path && (
-                <>
-                  <span>{` [${ev.path}]`}</span>
-                  <span className={styles.visuallyHidden}>{ev.path}</span>
-                </>
-              )}
-              {ev.revision && (
-                <span>
-                  {' rev: '}
-                  <span>{ev.revision}</span>
-                </span>
-              )}
-              {!isSecret && ev.run_id && (
-                <span>{` run: ${ev.run_id}${ev.attempt !== null ? `/${ev.attempt}` : ''}`}</span>
-              )}
-              {!isSecret && ev.dependency && (
-                <span>
-                  {` ${ev.dependency.ecosystem}/${ev.dependency.package}@${ev.dependency.version}`}
-                </span>
-              )}
-              {!isSecret && ev.vulnerability_id && <span>{` vuln: ${ev.vulnerability_id}`}</span>}
+              <div>
+                {isSecret ? ev.secret_match_type || 'Тип совпадения не определён' : ev.description}
+              </div>
+              <div className={styles.evidenceMeta}>
+                {!isSecret && <span>{` (источник: ${ev.source})`}</span>}
+                {ev.path && (
+                  <span>
+                    Путь: <span>{ev.path}</span>
+                  </span>
+                )}
+                {ev.revision && (
+                  <span>
+                    {'Ревизия: '}
+                    <span>{ev.revision}</span>
+                  </span>
+                )}
+                {!isSecret && ev.run_id && (
+                  <span>{`Запуск CI: ${ev.run_id}${ev.attempt !== null ? `/${ev.attempt}` : ''}`}</span>
+                )}
+                {!isSecret && ev.dependency && (
+                  <span>
+                    {` ${ev.dependency.ecosystem}/${ev.dependency.package}@${ev.dependency.version}`}
+                  </span>
+                )}
+                {!isSecret && ev.vulnerability_id && (
+                  <span>{`Уязвимость: ${ev.vulnerability_id}`}</span>
+                )}
+              </div>
               {isSecret ? null : isSafeUrl(ev.url) ? (
                 <>
                   {' '}
@@ -76,9 +80,8 @@ export function EvidenceList({
                   </a>
                 </>
               ) : (
-                <span>
-                  {' '}
-                  (Ссылка на источник недоступна)
+                <span className={styles.hint}>
+                  Ссылка на источник недоступна
                   {ev.url && ` ${ev.url}`}
                 </span>
               )}
@@ -93,6 +96,18 @@ export function EvidenceList({
           {limited && '; список ограничен профилем'}.{total !== null && ` Всего: ${total}.`}
         </p>
       )}
+    </>
+  );
+
+  return collapsible ? (
+    <details className={styles.evidenceBlock} data-evidence>
+      <summary className={styles.evidenceSummary}>Источники ({visible.length})</summary>
+      {content}
+    </details>
+  ) : (
+    <div className={styles.evidenceBlock}>
+      {showHeading && <strong>Основания:</strong>}
+      {content}
     </div>
   );
 }

@@ -72,11 +72,11 @@ export function formatRawValue(id: MetricId, raw: unknown): string {
   if (typeof raw === 'boolean') return raw ? 'Обнаружено' : 'Не обнаружено';
   if (typeof raw === 'string') return raw;
   if (typeof raw === 'number' && Number.isFinite(raw)) {
-    if (PERCENTAGE_IDS.has(id)) return formatPercentHalfUp(raw, 1);
-    if (id === 'ACT_COMMIT_FREQ') return roundHalfUp(raw, 2);
+    if (PERCENTAGE_IDS.has(id)) return formatPercentHalfUp(raw, 1).replace('.', ',');
+    if (id === 'ACT_COMMIT_FREQ') return roundHalfUp(raw, 2).replace('.', ',');
     if (id === 'ACT_DAYS_SINCE_LAST') return Math.round(raw).toString();
-    if (id === 'ACT_TREND') return roundHalfUp(raw, 4);
-    return String(raw);
+    if (id === 'ACT_TREND') return roundHalfUp(raw, 4).replace('.', ',');
+    return String(raw).replace('.', ',');
   }
   return 'N/A';
 }
@@ -109,7 +109,7 @@ export function formatCoverage(coverage: Coverage): string {
   if (coverage.total === 0) return 'Неизвестно';
   const pct = Number.isInteger(coverage.percentage)
     ? String(coverage.percentage)
-    : coverage.percentage.toFixed(1);
+    : coverage.percentage.toFixed(1).replace('.', ',');
   const parts: string[] = [`рассчитано: ${coverage.calculated} из ${coverage.total}`, `${pct}%`];
   if (coverage.partial > 0) parts.push(`частично: ${coverage.partial}`);
   if (coverage.unavailable > 0) parts.push(`недоступно: ${coverage.unavailable}`);

@@ -24,6 +24,8 @@ function ReportLink({ target, children }: { target: string; children: ReactNode 
     event.preventDefault();
     const details = element.closest('details');
     if (details) details.open = true;
+    const sources = element.querySelector<HTMLDetailsElement>('details[data-evidence]');
+    if (sources) sources.open = true;
     element.focus({ preventScroll: true });
     element.scrollIntoView?.({ block: 'start' });
   };
@@ -109,11 +111,11 @@ function FindingEvidence({ finding, report }: { finding: Finding; report: Report
           metric.input.raw_value !== null &&
           metric.input.raw_value !== undefined ? (
             <p>
-              <strong>Risk:</strong> {String(metric.input.raw_value)}
+              <strong>Риск:</strong> {String(metric.input.raw_value)}
             </p>
           ) : (
             <p>
-              <strong>Risk:</strong> не рассчитан
+              <strong>Риск:</strong> не рассчитан
             </p>
           )}
           <ul>

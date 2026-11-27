@@ -149,8 +149,8 @@ it('renders saved activity on a direct report visit and reload without starting 
   const activity = within(
     await screen.findByRole('region', { name: 'Категория: Активность и регулярность' }),
   );
-  expect(activity.getByText('0.00')).toBeTruthy();
-  expect(activity.getAllByText('37.5')).toHaveLength(2);
+  expect(activity.getByText('0,00')).toBeTruthy();
+  expect(activity.getAllByText('37,5')).toHaveLength(2);
   expect(activity.getByText(/коммитов: 0, недель: 20/)).toBeTruthy();
   expect(activity.getAllByText('Порог:')[0]?.parentElement?.textContent).toContain('50');
   expect(activity.getAllByText('Версия методики:')[0]?.parentElement?.textContent).toContain('v1');

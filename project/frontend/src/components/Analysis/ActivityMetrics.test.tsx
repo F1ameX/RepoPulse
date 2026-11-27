@@ -122,22 +122,22 @@ it('FR-10: форматирует сырые значения как в ТЗ —
     />,
   );
 
-  expect(screen.getByText('12.35')).toBeTruthy();
+  expect(screen.getByText('12,35')).toBeTruthy();
   expect(screen.getByText('43')).toBeTruthy();
-  expect(screen.getByText('0.1235')).toBeTruthy();
+  expect(screen.getByText('0,1235')).toBeTruthy();
 });
 
 it('P2: округляет half-up (0.00015 -> 0.0002, 2.00085 -> 2.0009, 1e-7 -> 0.0000)', () => {
   const { rerender } = render(
     <ActivityMetrics report={makeReport([makeMetric('ACT_TREND', 0.00015)])} />,
   );
-  expect(screen.getByText('0.0002')).toBeTruthy();
+  expect(screen.getByText('0,0002')).toBeTruthy();
 
   rerender(<ActivityMetrics report={makeReport([makeMetric('ACT_TREND', 2.00085)])} />);
-  expect(screen.getByText('2.0009')).toBeTruthy();
+  expect(screen.getByText('2,0009')).toBeTruthy();
 
   rerender(<ActivityMetrics report={makeReport([makeMetric('ACT_TREND', 1e-7)])} />);
-  expect(screen.getByText('0.0000')).toBeTruthy();
+  expect(screen.getByText('0,0000')).toBeTruthy();
 });
 
 it('FR-17: 0 — валидное значение, а не N/A', () => {
@@ -151,9 +151,9 @@ it('FR-17: 0 — валидное значение, а не N/A', () => {
     />,
   );
 
-  expect(screen.getByText('0.00')).toBeTruthy();
+  expect(screen.getByText('0,00')).toBeTruthy();
   expect(screen.getByText('0')).toBeTruthy();
-  expect(screen.getByText('0.0000')).toBeTruthy();
+  expect(screen.getByText('0,0000')).toBeTruthy();
   expect(screen.queryByText('N/A')).toBeNull();
 });
 
@@ -217,7 +217,7 @@ it('P1: evidence с небезопасным URL (userinfo bypass) не ренд
   render(<ActivityMetrics report={makeReport([metric])} />);
 
   expect(screen.getAllByText(/источник: git/).length).toBe(3);
-  expect(screen.getAllByText(/rev: abc123/).length).toBe(3);
+  expect(screen.getAllByText(/Ревизия: abc123/).length).toBe(3);
 
   const safeLink = screen.getByRole('link', { name: '[ссылка]' });
   expect(safeLink.getAttribute('href')).toBe(safeEvidence.url);

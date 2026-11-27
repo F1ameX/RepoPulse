@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
 import { isKnownStatus, roundHalfUp, STATUS_LABELS } from '@/lib/metricFormatting';
+import { isReportCoverage } from '@/lib/reportPresentation';
 import type { Coverage, DataStatus, MetricInput, Reason, Sample, SourceState } from '@/types';
 import styles from './Analysis.module.css';
 
@@ -126,21 +127,22 @@ export function ReportLimitations({
       aria-label="Ограничения анализа"
     >
       <h2 className={styles.sectionTitle}>Ограничения анализа</h2>
-      {coverage &&
-        [coverage.partial, coverage.unavailable, coverage.not_applicable].every(
-          Number.isInteger,
-        ) && (
-          <p>
-            Частичные данные: {coverage.partial} · Недоступно: {coverage.unavailable} · Неприменимо:{' '}
-            {coverage.not_applicable}
-          </p>
-        )}
-      {(incomplete || invalidSources) && (
+      {isReportCoverage(coverage, 12) && (
+        <p>
+          Частичные данные: {coverage.partial} · Недоступно: {coverage.unavailable} · Неприменимо:{' '}
+          {coverage.not_applicable}
+        </p>
+      )}
+      {(incomplete || invalidSources || !isReportCoverage(coverage, 12)) && (
         <p role="alert">Не удалось загрузить все сведения об ограничениях</p>
       )}
-      {!incomplete && !invalidSources && !metricEntries.length && !sourceEntries.length && (
-        <p>Ограничения по полученным данным не выявлены</p>
-      )}
+      {!incomplete &&
+        !invalidSources &&
+        isReportCoverage(coverage, 12) &&
+        !metricEntries.length &&
+        !sourceEntries.length && (
+          <p>Ограничения по полученным данным не выявлены</p>
+        )}
       {entries.length > 0 && (
         <ul className={styles.limitations}>{entries.map(({ node }) => node)}</ul>
       )}
