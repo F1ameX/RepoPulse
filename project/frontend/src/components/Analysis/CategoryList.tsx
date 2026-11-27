@@ -1,5 +1,6 @@
 import { Button, Message } from '@/components';
 import { isKnownStatus, METRIC_LABELS } from '@/lib/metricFormatting';
+import { isReportCoverage, isReportScore } from '@/lib/reportPresentation';
 import type { Category, CategoryId, MetricId, Report } from '@/types';
 import { CategoryCard } from './CategoryCard';
 import { ReportLimitations } from './ReportLimitations';
@@ -22,14 +23,17 @@ function orderCategory(category: Category | undefined, ids: MetricId[]): Categor
     !category ||
     !isKnownStatus(category.status) ||
     !Array.isArray(category.metrics) ||
-    (category.score !== null && !Number.isFinite(category.score)) ||
-    category.coverage?.total !== ids.length ||
-    !Number.isInteger(category.coverage.calculated)
+    !isReportScore(category.score) ||
+    !isReportCoverage(category.coverage, ids.length) ||
+    category.metrics.length !== ids.length
   ) {
     return null;
   }
 
-  const metrics = ids.map((id) => category.metrics.find((metric) => metric?.input?.id === id));
+  const metrics = ids.map((id) => {
+    const matches = category.metrics.filter((metric) => metric?.input?.id === id);
+    return matches.length === 1 ? matches[0] : undefined;
+  });
   if (
     metrics.some(
       (metric) =>
@@ -39,7 +43,7 @@ function orderCategory(category: Category | undefined, ids: MetricId[]): Categor
         !Array.isArray(metric.input.exclusions) ||
         !Array.isArray(metric.input.evidence) ||
         !('raw_value' in metric.input) ||
-        (metric.normalized_score !== null && !Number.isFinite(metric.normalized_score)),
+        !isReportScore(metric.normalized_score),
     )
   )
     return null;
@@ -53,7 +57,9 @@ export function CategoryList({ report, onReload }: { report: Report; onReload?: 
     id,
     title,
     category: orderCategory(
-      reported.find((category) => category?.id === id),
+      reported.filter((category) => category?.id === id).length === 1
+        ? reported.find((category) => category?.id === id)
+        : undefined,
       metrics,
     ),
   }));

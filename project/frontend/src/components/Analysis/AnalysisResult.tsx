@@ -7,6 +7,7 @@ import { CategoryList } from './CategoryList';
 import { AnalysisTitle } from './AnalysisTitle';
 import { ReportHeader } from './ReportHeader';
 import { ReportFindings } from './ReportFindings';
+import { ReportScore } from './ReportScore';
 import styles from './Analysis.module.css';
 
 export function AnalysisResult({
@@ -56,6 +57,7 @@ export function AnalysisResult({
       {report && (
         <>
           <ReportHeader report={report} repositoryInTitle />
+          <ReportScore report={report} onReload={reload} />
           <CategoryList report={report} onReload={reload} />
           <ReportFindings report={report} onReload={reload} />
         </>

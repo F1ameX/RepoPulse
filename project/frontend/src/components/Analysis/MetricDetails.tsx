@@ -1,4 +1,4 @@
-import type { Metric } from '@/types';
+import type { Dependency, Metric, SourceState } from '@/types';
 import { formatUtc } from '@/lib/analysisView';
 import {
   formatRawValue,
@@ -9,6 +9,7 @@ import {
   STATUS_LABELS,
 } from '@/lib/metricFormatting';
 import { EvidenceList } from './EvidenceList';
+import { SecurityDetails } from './SecurityDetails';
 import styles from './Analysis.module.css';
 
 export function MetricDetails({
@@ -17,12 +18,16 @@ export function MetricDetails({
   label,
   anchor,
   sharedExplanationId,
+  sources,
+  dependencies,
 }: {
   metric: Metric;
   sha?: string | null;
   label?: string;
   anchor?: string;
   sharedExplanationId?: string;
+  sources?: SourceState[];
+  dependencies?: Dependency[];
 }) {
   const { input } = metric;
   const title = label ?? METRIC_LABELS[input.id] ?? input.id;
@@ -31,7 +36,7 @@ export function MetricDetails({
       ? 'коммитов в неделю'
       : input.unit === 'days'
         ? 'дн.'
-        : ['bool', 'ratio'].includes(input.unit)
+        : ['bool', 'ratio', 'secret_scan', 'risk'].includes(input.unit)
           ? ''
           : input.unit;
 
@@ -51,8 +56,7 @@ export function MetricDetails({
   const isUnavailable =
     input.status === 'unavailable' ||
     input.status === 'not_applicable' ||
-    (input.id !== 'SEC_SECRETS' &&
-      (input.raw_value === null || input.raw_value === undefined));
+    (input.id !== 'SEC_SECRETS' && (input.raw_value === null || input.raw_value === undefined));
 
   const secretScanResult =
     input.status === 'unavailable' || input.status === 'not_applicable'
@@ -61,15 +65,11 @@ export function MetricDetails({
           (input.evidence_total !== null && input.evidence_total > 0) ||
           input.raw_value === true
         ? 'Обнаружены потенциальные совпадения'
-        : (input.evidence_total === 0 || input.raw_value === false) &&
-            input.status === 'complete'
+        : (input.evidence_total === 0 || input.raw_value === false) && input.status === 'complete'
           ? 'Совпадений в проверенном охвате не обнаружено'
-          : (input.evidence_total === 0 || input.raw_value === false) &&
-              input.status === 'partial'
+          : (input.evidence_total === 0 || input.raw_value === false) && input.status === 'partial'
             ? 'В проверенной части совпадений не обнаружено'
-            : input.raw_value !== null
-              ? 'Результат получен; значение не отображается'
-              : 'Результат проверки не представлен';
+            : 'Не определён';
 
   const displayRaw =
     input.id === 'SEC_SECRETS'
@@ -90,6 +90,24 @@ export function MetricDetails({
     : null;
 
   const evidenceLimit = input.id === 'TEST_PRESENCE' ? 10 : undefined;
+  const riskSources = input.id === 'SEC_VULN_RISK';
+  const sourceDetails = (
+    <>
+      {(sources || dependencies) && (
+        <SecurityDetails metricId={input.id} sources={sources} dependencies={dependencies} />
+      )}
+      <EvidenceList
+        evidence={input.evidence}
+        limited={input.evidence_limited}
+        total={input.evidence_total}
+        reason={input.reason}
+        limit={evidenceLimit}
+        secret={input.id === 'SEC_SECRETS'}
+        collapsible={!riskSources}
+        showHeading={!riskSources}
+      />
+    </>
+  );
 
   return (
     <div
@@ -104,7 +122,7 @@ export function MetricDetails({
           <div>
             <span className={styles.metricCaption}>
               {input.id === 'SEC_VULN_RISK'
-                ? 'Risk'
+                ? 'Риск'
                 : input.id === 'SEC_SAST'
                   ? 'Конфигурация SAST'
                   : input.id === 'SEC_SECRETS'
@@ -123,14 +141,15 @@ export function MetricDetails({
                   input.sample.denominator === 0
                   ? 'Не рассчитан: нет объектов для расчёта'
                   : 'Не рассчитан'
-                : roundHalfUp(metric.normalized_score, 1)}
+                : roundHalfUp(metric.normalized_score, 1).replace('.', ',')}
             </span>
           </div>
         </div>
 
         {input.id === 'SEC_SECRETS' && input.status !== 'complete' && (
           <div className={styles.hint} style={{ marginBottom: '8px' }}>
-            Неполное сканирование истории не подтверждает отсутствие секретов в непроверенных ревизиях.
+            Неполное сканирование истории не подтверждает отсутствие секретов в непроверенных
+            ревизиях.
           </div>
         )}
 
@@ -142,7 +161,8 @@ export function MetricDetails({
 
         {input.id === 'SEC_VULN_RISK' && input.raw_value === null && (
           <div className={styles.hint} style={{ marginBottom: '8px' }}>
-            Risk не рассчитан: недостаточно данных для оценки; неизвестная версия или уровень OSV не означают отсутствие уязвимости.
+            Риск не рассчитан: недостаточно данных для оценки; неизвестная версия или уровень OSV не
+            означают отсутствие уязвимости.
           </div>
         )}
 
@@ -197,14 +217,14 @@ export function MetricDetails({
         <div>
           <strong>Версия методики:</strong> <span>{metric.rule_version}</span>
         </div>
-        <EvidenceList
-          evidence={input.evidence}
-          limited={input.evidence_limited}
-          total={input.evidence_total}
-          reason={input.reason}
-          limit={evidenceLimit}
-          secret={input.id === 'SEC_SECRETS'}
-        />
+        {riskSources && (sources || dependencies || input.evidence.length > 0) ? (
+          <details className={styles.evidenceBlock} data-evidence>
+            <summary className={styles.evidenceSummary}>Источники</summary>
+            {sourceDetails}
+          </details>
+        ) : (
+          sourceDetails
+        )}
       </dd>
     </div>
   );

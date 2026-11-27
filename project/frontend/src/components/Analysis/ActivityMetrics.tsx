@@ -44,10 +44,10 @@ function formatRawValue(id: MetricId, raw: unknown): string {
   if (typeof raw === 'boolean') return raw ? 'Да' : 'Нет';
   if (typeof raw === 'string') return raw;
   if (typeof raw === 'number' && Number.isFinite(raw)) {
-    if (id === 'ACT_COMMIT_FREQ') return roundHalfUp(raw, 2);
+    if (id === 'ACT_COMMIT_FREQ') return roundHalfUp(raw, 2).replace('.', ',');
     if (id === 'ACT_DAYS_SINCE_LAST') return Math.round(raw).toString();
-    if (id === 'ACT_TREND') return roundHalfUp(raw, 4);
-    return String(raw);
+    if (id === 'ACT_TREND') return roundHalfUp(raw, 4).replace('.', ',');
+    return String(raw).replace('.', ',');
   }
   return 'N/A';
 }
@@ -111,7 +111,7 @@ function EvidenceList({
             <span>{ev.secret_match_type ?? ev.description}</span>
             {!ev.secret_match_type && <span>{` (источник: ${ev.source})`}</span>}
             {ev.path && <span>{` [${ev.path}]`}</span>}
-            {ev.revision && <span>{` rev: ${ev.revision}`}</span>}
+            {ev.revision && <span>{`Ревизия: ${ev.revision}`}</span>}
             {ev.secret_match_type ? null : isSafeUrl(ev.url) ? (
               <>
                 {' '}
@@ -176,7 +176,7 @@ function MetricRow({ metric, sha }: { metric: Metric; sha: string | null }) {
             <span className={styles.metricValue}>
               {metric.normalized_score === null
                 ? 'Не рассчитан'
-                : roundHalfUp(metric.normalized_score, 1)}
+                : roundHalfUp(metric.normalized_score, 1).replace('.', ',')}
             </span>
           </div>
         </div>

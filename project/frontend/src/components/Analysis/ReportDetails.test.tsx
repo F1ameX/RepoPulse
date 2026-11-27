@@ -83,7 +83,7 @@ function makeCategory(overrides: Partial<Category> = {}): Category {
 
 it('FR-13: 0 — валидное значение, не N/A', () => {
   render(<MetricDetails metric={makeMetric({ raw_value: 0 })} />);
-  expect(screen.getByText('0.00')).toBeTruthy();
+  expect(screen.getByText('0,00')).toBeTruthy();
   expect(screen.queryByText('N/A')).toBeNull();
 });
 
@@ -170,6 +170,7 @@ it('FR-10: javascript:/userinfo/секреты — не ссылки', () => {
       })}
     />,
   );
+  fireEvent.click(screen.getByText('Источники (4)'));
   expect(screen.getAllByRole('link', { name: '[ссылка]' })).toHaveLength(1);
   expect(screen.getAllByText(/Ссылка на источник недоступна/)).toHaveLength(2);
   expect(screen.getByText('aws_key')).toBeTruthy();
@@ -205,9 +206,9 @@ it('FR-09: карточка с баллом, покрытием и раскры�
       defaultOpen
     />,
   );
-  expect(screen.getByText('37.5')).toBeTruthy();
+  expect(screen.getByText('37,5')).toBeTruthy();
   expect(screen.getByText(/рассчитано: 2 из 3/)).toBeTruthy();
-  expect(screen.getByText(/66\.7%/)).toBeTruthy();
+  expect(screen.getByText(/66,7%/)).toBeTruthy();
   expect(screen.getByText('Показатели (1)')).toBeTruthy();
 });
 
@@ -288,7 +289,7 @@ it('FR-13: partial с причиной → причина показана ря�
       })}
     />,
   );
-  expect(screen.getByText('12.00')).toBeTruthy();
+  expect(screen.getByText('12,00')).toBeTruthy();
   expect(screen.getAllByText(/Получена часть истории/).length).toBeGreaterThanOrEqual(1);
   expect(screen.getAllByText(/Полная оценка недоступна/).length).toBeGreaterThanOrEqual(1);
 });
@@ -332,12 +333,12 @@ it('FR-10: порог и версия методики выводятся, rule 
 
 it('FR-10: CI_SUCCESS_RATE показывается процентом с одним знаком', () => {
   render(<MetricDetails metric={makeMetric({ id: 'CI_SUCCESS_RATE', raw_value: 0.75 })} />);
-  expect(screen.getByText('75.0%')).toBeTruthy();
+  expect(screen.getByText('75,0%')).toBeTruthy();
 });
 
 it('FR-10: DOC_SUPPORT_SHARE показывается процентом с одним знаком', () => {
   render(<MetricDetails metric={makeMetric({ id: 'DOC_SUPPORT_SHARE', raw_value: 0.4567 })} />);
-  expect(screen.getByText('45.7%')).toBeTruthy();
+  expect(screen.getByText('45,7%')).toBeTruthy();
 });
 
 it('FR-09: score null и все метрики not_applicable → «Неприменимо»', () => {
@@ -375,18 +376,18 @@ it('FR-09: category.explanation выводится в карточке', () => {
 
 it('FR-10: 0.0055 доли → 0.6% (half-up по проценту, не по сырому числу)', () => {
   render(<MetricDetails metric={makeMetric({ id: 'DOC_SUPPORT_SHARE', raw_value: 0.0055 })} />);
-  expect(screen.getByText('0.6%')).toBeTruthy();
-  expect(screen.queryByText('0.5%')).toBeNull();
+  expect(screen.getByText('0,6%')).toBeTruthy();
+  expect(screen.queryByText('0,5%')).toBeNull();
 });
 
 it('FR-10: CI_SUCCESS_RATE тоже half-up по проценту', () => {
   render(<MetricDetails metric={makeMetric({ id: 'CI_SUCCESS_RATE', raw_value: 0.0055 })} />);
-  expect(screen.getByText('0.6%')).toBeTruthy();
+  expect(screen.getByText('0,6%')).toBeTruthy();
 });
 
 it('FR-10: чистые проценты не регрессируют (0.75 → 75.0%)', () => {
   render(<MetricDetails metric={makeMetric({ id: 'CI_SUCCESS_RATE', raw_value: 0.75 })} />);
-  expect(screen.getByText('75.0%')).toBeTruthy();
+  expect(screen.getByText('75,0%')).toBeTruthy();
 });
 
 it('FR-10: CI run/attempt выводятся', () => {
@@ -409,7 +410,7 @@ it('FR-10: CI run/attempt выводятся', () => {
       metric={makeMetric({ raw_value: 1, evidence: [{ ...base, run_id: '12345', attempt: 2 }] })}
     />,
   );
-  expect(screen.getByText(/run: 12345\/2/)).toBeTruthy();
+  expect(screen.getByText(/Запуск CI: 12345\/2/)).toBeTruthy();
 });
 
 it('FR-10: dependency (ecosystem/package@version) выводится', () => {
@@ -473,7 +474,7 @@ it('FR-10: vulnerability_id выводится', () => {
       })}
     />,
   );
-  expect(screen.getByText(/vuln: CVE-2024-1234/)).toBeTruthy();
+  expect(screen.getByText(/Уязвимость: CVE-2024-1234/)).toBeTruthy();
 });
 
 it('FR-10: секрет не показывает run/dependency/vulnerability', () => {
@@ -514,15 +515,16 @@ it('FR-10: секрет не показывает run/dependency/vulnerability',
       })}
     />,
   );
-  expect(screen.queryByText(/run:/)).toBeNull();
+  expect(screen.queryByText(/Запуск CI:/)).toBeNull();
   expect(screen.queryByText(/lodash/)).toBeNull();
-  expect(screen.queryByText(/vuln:/)).toBeNull();
+  expect(screen.queryByText(/Уязвимость:/)).toBeNull();
   expect(screen.getByText('aws_key')).toBeTruthy();
-  expect(screen.getByText(/\[src\/index\.ts\]/)).toBeTruthy();
+  expect(screen.getByText('src/index.ts')).toBeTruthy();
+  expect(document.body.textContent?.split('src/index.ts')).toHaveLength(2);
   expect(
     screen.getByText((_, element) =>
       element?.tagName === 'SPAN' &&
-     element.textContent?.trim() === 'rev: abc123'
+     element.textContent?.trim() === 'Ревизия: abc123'
    )
   ).toBeTruthy();
 });
@@ -530,9 +532,10 @@ it('FR-10: секрет не показывает run/dependency/vulnerability',
 it('FR-10: пустой evidence при reason: null → «причина не указана»', () => {
   render(<MetricDetails metric={makeMetric({ raw_value: 1, evidence: [] })} />);
   expect(screen.getByText(/Основания недоступны \(причина не указана\)/)).toBeTruthy();
+  expect(document.querySelector('details')).toBeNull();
 });
 
-it('FR-10: TEST_PRESENCE показывает не более 10 путей', () => {
+it('FR-10: sources collapse independently and TEST_PRESENCE keeps its 10-path limit', () => {
   const base: Evidence = {
     id: 'e',
     source: 'git',
@@ -563,8 +566,16 @@ it('FR-10: TEST_PRESENCE показывает не более 10 путей', ()
       })}
     />,
   );
+  const summary = screen.getByText('Источники (10)');
+  const sources = summary.closest('details');
+  expect(sources?.open).toBe(false);
+  fireEvent.click(summary);
+  expect(sources?.open).toBe(true);
+  expect(screen.getAllByRole('listitem')).toHaveLength(10);
   expect(screen.getAllByText(/источник: git/)).toHaveLength(10);
   expect(screen.getByText(/Показано 10 из 15/)).toBeTruthy();
+  fireEvent.click(summary);
+  expect(sources?.open).toBe(false);
 });
 
 it('FR-10: DOC_README показывает только название метрики', () => {
@@ -606,7 +617,7 @@ it('FR-13: отсутствующий input.status → ошибка в блок�
   (metric.input as unknown as { status: unknown }).status = undefined;
   render(<MetricDetails metric={metric} />);
   expect(screen.getByRole('alert').textContent).toMatch(/отсутствует состояние полноты данных/i);
-  expect(screen.queryByText('12.00')).toBeNull();
+  expect(screen.queryByText('12,00')).toBeNull();
   expect(screen.queryByText('N/A')).toBeNull();
   expect(screen.queryByText('Не рассчитан')).toBeNull();
 });
@@ -616,7 +627,7 @@ it('FR-13: неизвестное значение input.status → ошибка
   (metric.input as unknown as { status: unknown }).status = 'broken';
   render(<MetricDetails metric={metric} />);
   expect(screen.getByRole('alert').textContent).toMatch(/отсутствует состояние полноты данных/i);
-  expect(screen.queryByText('12.00')).toBeNull();
+  expect(screen.queryByText('12,00')).toBeNull();
 });
 
 it('FR-13: отсутствующий category.status → ошибка в карточке', () => {
@@ -627,7 +638,7 @@ it('FR-13: отсутствующий category.status → ошибка в кар
 });
 
 
-it('FR-13/FR-22: security card shows check coverage, dependency origins and N/A reasons', () => {
+it('FR-13/FR-22: security keeps coverage and dependencies inside the relevant metric details', () => {
   const reason = {
     code: 'OSV_PARTIAL',
     message: 'Часть зависимостей не проверена',
@@ -743,12 +754,38 @@ it('FR-13/FR-22: security card shows check coverage, dependency origins and N/A 
     <CategoryCard
       category={category}
       reportDetails
-      defaultOpen
       sources={sources}
       dependencies={dependencies}
     />,
   );
 
+  const categoryDetails = screen.getByText('Показать основания').closest('details');
+  expect(categoryDetails?.open).toBe(false);
+  const risk = document.getElementById('metric-SEC_VULN_RISK')!;
+  expect(categoryDetails?.contains(risk)).toBe(true);
+  expect(within(risk).getByText('Запросы OSV')).toBeTruthy();
+  expect(within(risk).getByText(/dependencies_maven/)).toBeTruthy();
+  expect(within(risk).getByText(/org.example:sample@1.2.3/)).toBeTruthy();
+  expect(document.getElementById('metric-SEC_SAST')?.contains(risk)).toBe(false);
+  fireEvent.click(screen.getByText('Показать основания'));
+  expect(categoryDetails?.open).toBe(true);
+  const sourceToggle = within(risk).getByText('Источники', { exact: true });
+  const sourceDetails = sourceToggle.closest('details');
+  expect(sourceDetails?.open).toBe(false);
+  fireEvent.click(sourceToggle);
+  expect(sourceDetails?.open).toBe(true);
+  const npmToggle = within(risk).getByLabelText('Зависимости npm (1)');
+  const mavenToggle = within(risk).getByLabelText('Зависимости Maven (1)');
+  expect(npmToggle.closest('details')?.open).toBe(false);
+  expect(mavenToggle.closest('details')?.open).toBe(false);
+  fireEvent.click(npmToggle);
+  expect(npmToggle.closest('details')?.open).toBe(true);
+  const packageName = within(risk).getByText('left-pad@1.3.0');
+  expect(packageName.closest('summary')).toBeNull();
+  expect(packageName.closest('details')).toBe(npmToggle.closest('details'));
+  expect(packageName.parentElement?.querySelector('details')).toBeNull();
+  expect(within(packageName.parentElement!).getByText(/Манифест: package-lock\.json/)).toBeTruthy();
+  expect(mavenToggle.closest('details')?.open).toBe(false);
   expect(screen.getByText(/secret_history: Частичные данные/)).toBeTruthy();
   expect(screen.getByText(/Запросы OSV/)).toBeTruthy();
   expect(screen.getByText(/dependencies_maven/)).toBeTruthy();
@@ -765,8 +802,42 @@ it('FR-13/FR-22: security card shows check coverage, dependency origins and N/A 
   expect(screen.getByText('abc123')).toBeTruthy();
   expect(screen.queryByText('DO_NOT_RENDER_SECRET_VALUE')).toBeNull();
   expect(screen.getAllByText(/Наличие конфигурации не подтверждает успешный запуск SAST/).length).toBeGreaterThan(0);
+  fireEvent.click(npmToggle);
+  expect(npmToggle.closest('details')?.open).toBe(false);
+  fireEvent.click(sourceToggle);
+  expect(sourceDetails?.open).toBe(false);
+  expect(categoryDetails?.open).toBe(true);
 });
 
+
+it('shows dimensionless risk without an internal unit label', () => {
+  render(
+    <MetricDetails
+      metric={makeMetric({ id: 'SEC_VULN_RISK', raw_value: 15, unit: 'risk' })}
+    />,
+  );
+  expect(screen.getByText('Риск')).toBeTruthy();
+  expect(screen.getByText('15')).toBeTruthy();
+  expect(screen.queryByText('risk', { exact: true })).toBeNull();
+});
+
+it('does not append secret_scan or claim no matches when the scan result is unknown', () => {
+  render(
+    <MetricDetails
+      metric={makeMetric({
+        id: 'SEC_SECRETS',
+        raw_value: null,
+        unit: 'secret_scan',
+        status: 'partial',
+        evidence_total: null,
+      }, { normalized_score: null })}
+    />,
+  );
+  expect(screen.getByText('Результат сканирования')).toBeTruthy();
+  expect(screen.getByText('Не определён')).toBeTruthy();
+  expect(document.body.textContent).not.toContain('secret_scan');
+  expect(screen.queryByText(/совпадений не обнаружено/i)).toBeNull();
+});
 
 it('FR-22: SEC_SECRETS never renders raw_value even if it contains unsafe text', () => {
   const metric = makeMetric(

@@ -193,6 +193,10 @@ it('reveals the matching metric in the same report', () => {
         <summary>Документация</summary>
         <div id="metric-DOC_README" tabIndex={-1}>
           Основание README
+          <details data-evidence>
+            <summary>Источники (1)</summary>
+            Сохранённый источник README
+          </details>
         </div>
       </details>
       <ReportFindings report={data} />
@@ -204,6 +208,7 @@ it('reveals the matching metric in the same report', () => {
     })[0],
   );
   expect(document.querySelector('details')?.open).toBe(true);
+  expect(document.querySelector<HTMLDetailsElement>('details[data-evidence]')?.open).toBe(true);
   expect(document.activeElement?.id).toBe('metric-DOC_README');
 });
 
@@ -283,8 +288,8 @@ it('restricts secret findings to safe evidence and does not expose extra secret 
   expect(document.body.textContent).not.toContain(secret);
   expect(document.querySelector(`a[href*="${secret}"]`)).toBeNull();
   expect(screen.getAllByRole('heading', { name: 'Потенциальный секрет' })).toHaveLength(1);
-  expect(screen.getByText('[.env]')).toBeTruthy();
-  expect(screen.getByText('[.env.local]')).toBeTruthy();
+  expect(screen.getByText('.env')).toBeTruthy();
+  expect(screen.getByText('.env.local')).toBeTruthy();
 });
 
 it('shows insufficient data when partial sources provide no confirmed value', () => {
@@ -407,7 +412,7 @@ it('FR-13/FR-22: renders OSV identity, unknown severity, Risk and declared Maven
   expect(screen.getByText('GHSA-example')).toBeTruthy();
   expect(screen.getByText(/Maven\/junit:junit@4.13.2/)).toBeTruthy();
   expect(screen.getByText('Уровень: Неизвестен')).toBeTruthy();
-  expect(screen.getByText('Risk:')).toBeTruthy();
+  expect(screen.getByText('Риск:')).toBeTruthy();
   expect(screen.getByText('1.75')).toBeTruthy();
   expect(screen.getByText(/Манифест: pom.xml · Источник версии: Декларация Maven/)).toBeTruthy();
   expect(screen.getByText(/фактический граф сборки не подтверждён/)).toBeTruthy();
