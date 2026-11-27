@@ -44,7 +44,7 @@ func (c SecretScanCollector) Collect(ctx context.Context, a domain.Analysis, git
 		code = "SECRET_SCAN_TIME_LIMIT"
 	}
 	for _, source := range collected.Sources {
-		if source.Source == "git" && source.Scope == "secret_scan" {
+		if source.Source == "git" && source.Scope == "secret_history" {
 			if scanCtx.Err() == nil && err == nil || source.Status == "partial" && source.Reason != nil {
 				return collected, nil
 			}
@@ -54,7 +54,7 @@ func (c SecretScanCollector) Collect(ctx context.Context, a domain.Analysis, git
 }
 
 func unavailableScan(code string) Collection {
-	key := Source{Name: "git", Scope: "secret_scan"}
+	key := Source{Name: "git", Scope: "secret_history"}
 	reason := &domain.Reason{Code: code, Message: "Результат сканирования секретов недоступен",
 		CannotConclude: "Нельзя подтвердить отсутствие потенциальных секретов"}
 	return Collection{

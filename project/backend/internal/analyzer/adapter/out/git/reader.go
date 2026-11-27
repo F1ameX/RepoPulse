@@ -271,6 +271,10 @@ func (r *Reader) Open(ctx context.Context, metadata domain.RepositoryMetadata) (
 		}
 		transport.clearReason()
 	}
+	if len(pinnedFiles) > 0 && acquire.Err() == nil {
+		s.fetchWorkflowBlobs(acquire, local, pinnedFiles)
+		transport.clearReason()
+	}
 	fetchCode := refCode
 	if s.data.Repository.CommitSHA != nil || !s.reader.limits.MainHistoryOnly && len(refs) > 0 {
 		var input strings.Builder

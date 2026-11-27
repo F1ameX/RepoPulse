@@ -141,14 +141,15 @@ func TestOSVDiscardsConflictingAdvisoryAcrossPages(t *testing.T) {
 		defer func() { _ = r.Body.Close() }()
 		calls++
 		if calls == 1 {
-			return response(200, `{"vulns":[{"id":"A","summary":"one"},{"id":"B"}],"next_page_token":"2"}`), nil
+			return response(200, `{"vulns":[{"id":"A","summary":"one","database_specific":{"severity":"LOW"}},{"id":"B","database_specific":{"severity":"HIGH"}}],"next_page_token":"2"}`), nil
 		}
-		return response(200, `{"vulns":[{"summary":"two","id":"A"},{"id":"B"},{"id":"bad id"},{"id":"C"}]}`), nil
+		return response(200, `{"vulns":[{"summary":"two","id":"A","database_specific":{"severity":"LOW"}},{"database_specific":{"severity":"HIGH"},"id":"B"},{"id":"bad id"},{"id":"C"},{"id":"D","severity":"invalid"}]}`), nil
 	})})
 	queries := []domain.OSVQuery{{Ecosystem: "npm", Name: "pkg", Version: "1.0.0"}}
 	got := client.Query(t.Context(), queries)[0]
-	if got.ReasonCode != "OSV_INVALID_AND_CONFLICTING_RECORDS" || got.Excluded != 2 || len(got.Pages) != 2 ||
-		strings.Join(got.Pages[0].VulnerabilityIDs, ",") != "B" || strings.Join(got.Pages[1].VulnerabilityIDs, ",") != "C" {
+	if got.ReasonCode != "OSV_INVALID_AND_CONFLICTING_RECORDS" || got.Excluded != 3 || len(got.Pages) != 2 ||
+		strings.Join(got.Pages[0].VulnerabilityIDs, ",") != "B" || strings.Join(got.Pages[1].VulnerabilityIDs, ",") != "C" ||
+		got.Pages[0].Severity["B"] != "high" || got.Pages[0].Severity["A"] != "" {
 		t.Fatalf("conflicting record retained or good data lost: %+v", got)
 	}
 }
@@ -164,5 +165,22 @@ func TestOSVDoesNotRequestPageEleven(t *testing.T) {
 	got := client.Query(t.Context(), queries)[0]
 	if calls != 10 || len(got.Pages) != 10 || got.ReasonCode != "OSV_PAGE_LIMIT" {
 		t.Fatalf("page budget not enforced: calls=%d result=%+v", calls, got)
+	}
+}
+
+func TestDecodePageSeverity(t *testing.T) {
+	raw := []byte(`{"vulns":[
+        {"id":"TEST-1","affected":[{"package":{"ecosystem":"Go","name":"example.com/module"},"severity":[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}]}]},
+        {"id":"TEST-2","database_specific":{"severity":"HIGH"}},
+        {"id":"TEST-4","database_specific":{"severity":"MODERATE"},"severity":[{"type":"CVSS_V4","score":"CVSS:4.0/AV:N"}]},
+        {"id":"TEST-3","affected":[{"package":{"ecosystem":"npm","name":"other"},"severity":[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}]}]}
+    ]}`)
+	page, _, ok := decodePage(raw)
+	result := domain.OSVResult{Query: domain.OSVQuery{Ecosystem: "Go", Name: "example.com/module"}, Pages: []domain.OSVPage{page}}
+	normalizeAdvisories(&result)
+	page = result.Pages[0]
+	if !ok || len(page.VulnerabilityIDs) != 4 || page.Severity["TEST-1"] != "critical" ||
+		page.Severity["TEST-2"] != "high" || page.Severity["TEST-3"] != "" || page.Severity["TEST-4"] != "medium" {
+		t.Fatalf("unexpected advisory page: %+v", page)
 	}
 }

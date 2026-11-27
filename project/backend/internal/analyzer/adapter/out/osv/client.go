@@ -125,6 +125,7 @@ func normalizeAdvisories(result *domain.OSVResult) {
 			continue
 		}
 		page.VulnerabilityIDs = []string{}
+		page.Severity = make(map[string]string)
 		for _, raw := range body.Entries {
 			decoder := json.NewDecoder(bytes.NewReader(raw))
 			decoder.UseNumber()
@@ -133,11 +134,12 @@ func normalizeAdvisories(result *domain.OSVResult) {
 				invalid++
 				continue
 			}
-			id, ok := advisory["id"].(string)
-			if !ok || !advisoryID.MatchString(id) {
+			var details advisoryDetails
+			if err := json.Unmarshal(raw, &details); err != nil || !advisoryID.MatchString(details.ID) {
 				invalid++
 				continue
 			}
+			id := details.ID
 			if rejected[id] {
 				continue
 			}
@@ -157,6 +159,9 @@ func normalizeAdvisories(result *domain.OSVResult) {
 			}
 			seen[id] = fingerprint
 			page.VulnerabilityIDs = append(page.VulnerabilityIDs, id)
+			if level := details.level(result.Query); level != "" {
+				page.Severity[id] = level
+			}
 		}
 	}
 	if invalid+conflicts == 0 {
@@ -168,6 +173,8 @@ func normalizeAdvisories(result *domain.OSVResult) {
 		for _, id := range page.VulnerabilityIDs {
 			if !rejected[id] {
 				kept = append(kept, id)
+			} else {
+				delete(page.Severity, id)
 			}
 		}
 		page.VulnerabilityIDs = kept
