@@ -4,6 +4,7 @@ package osv
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"net"
@@ -16,11 +17,7 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
 )
 
-const (
-	queryURL       = "https://api.osv.dev/v1/query"
-	maxAttempts    = 40
-	attemptTimeout = 15 * time.Second
-)
+const queryURL = "https://api.osv.dev/v1/query"
 
 var advisoryID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$`)
 
@@ -33,6 +30,9 @@ func NewClient(client *http.Client) *Client {
 		client = &http.Client{}
 	}
 	copy := *client
+	if copy.Transport == nil {
+		copy.Transport = &http.Transport{Proxy: http.ProxyFromEnvironment, DisableKeepAlives: true}
+	}
 	copy.Jar = nil
 	// Redirects must never send an extra request outside the explicit budget.
 	copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -52,17 +52,16 @@ type queryBody struct {
 // and retries. A failure keeps previously received pages and results.
 func (c *Client) Query(ctx context.Context, queries []domain.OSVQuery) []domain.OSVResult {
 	ctx = domain.WithHTTPInputBudget(ctx)
-	ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, domain.CoreTimeLimit)
 	defer cancel()
 	results := make([]domain.OSVResult, 0, len(queries))
-	remaining := maxAttempts
 	blocked := ""
 	for _, query := range queries {
 		result := domain.OSVResult{Query: query, ReasonCode: blocked}
 		if blocked == "" {
-			result = c.query(ctx, query, &remaining)
+			result = c.query(ctx, query)
 			switch result.ReasonCode {
-			case "OSV_RATE_LIMITED", "OSV_RETRY_DEFERRED", "OSV_INPUT_LIMIT":
+			case "OSV_RATE_LIMITED", "OSV_RETRY_DEFERRED", "OSV_INPUT_LIMIT", "OSV_ATTEMPT_LIMIT":
 				// A service-wide backoff also applies to the remaining packages.
 				blocked = result.ReasonCode
 			}
@@ -72,8 +71,9 @@ func (c *Client) Query(ctx context.Context, queries []domain.OSVQuery) []domain.
 	return results
 }
 
-func (c *Client) query(ctx context.Context, query domain.OSVQuery, remaining *int) domain.OSVResult {
-	result := domain.OSVResult{Query: query}
+func (c *Client) query(ctx context.Context, query domain.OSVQuery) (result domain.OSVResult) {
+	result.Query = query
+	defer func() { normalizeAdvisories(&result) }()
 	switch query.Ecosystem {
 	case "npm", "Maven", "Go":
 	default:
@@ -88,7 +88,7 @@ func (c *Client) query(ctx context.Context, query domain.OSVQuery, remaining *in
 	request.Package.Ecosystem, request.Package.Name, request.Version = query.Ecosystem, query.Name, query.Version
 	seen := make(map[string]bool)
 	for {
-		page, next, code := c.fetchPage(ctx, request, remaining)
+		page, next, code := c.fetchPage(ctx, request)
 		if code != "" {
 			result.ReasonCode = code
 			return result
@@ -110,43 +110,116 @@ func (c *Client) query(ctx context.Context, query domain.OSVQuery, remaining *in
 	}
 }
 
+func normalizeAdvisories(result *domain.OSVResult) {
+	seen := make(map[string][sha256.Size]byte)
+	rejected := make(map[string]bool)
+	invalid, conflicts := 0, 0
+	for i := range result.Pages {
+		page := &result.Pages[i]
+		var body struct {
+			Entries []json.RawMessage `json:"vulns"`
+		}
+		// The envelope was validated when the page was received.
+		if json.Unmarshal(page.Body, &body) != nil {
+			invalid++
+			continue
+		}
+		page.VulnerabilityIDs = []string{}
+		page.Severity = make(map[string]string)
+		for _, raw := range body.Entries {
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.UseNumber()
+			var advisory map[string]any
+			if decoder.Decode(&advisory) != nil {
+				invalid++
+				continue
+			}
+			var details advisoryDetails
+			if err := json.Unmarshal(raw, &details); err != nil || !advisoryID.MatchString(details.ID) {
+				invalid++
+				continue
+			}
+			id := details.ID
+			if rejected[id] {
+				continue
+			}
+			canonical, err := json.Marshal(advisory)
+			if err != nil {
+				invalid++
+				rejected[id] = true
+				continue
+			}
+			fingerprint := sha256.Sum256(canonical)
+			if previous, exists := seen[id]; exists {
+				if previous != fingerprint {
+					rejected[id] = true
+					conflicts++
+				}
+				continue
+			}
+			seen[id] = fingerprint
+			page.VulnerabilityIDs = append(page.VulnerabilityIDs, id)
+			if level := details.level(result.Query); level != "" {
+				page.Severity[id] = level
+			}
+		}
+	}
+	if invalid+conflicts == 0 {
+		return
+	}
+	for i := range result.Pages {
+		page := &result.Pages[i]
+		kept := page.VulnerabilityIDs[:0]
+		for _, id := range page.VulnerabilityIDs {
+			if !rejected[id] {
+				kept = append(kept, id)
+			} else {
+				delete(page.Severity, id)
+			}
+		}
+		page.VulnerabilityIDs = kept
+	}
+	result.Excluded = invalid + conflicts
+	switch {
+	case conflicts > 0 && invalid > 0:
+		result.ExcludedReason = "OSV_INVALID_AND_CONFLICTING_RECORDS"
+	case conflicts > 0:
+		result.ExcludedReason = "OSV_CONFLICTING_RECORD"
+	default:
+		result.ExcludedReason = "OSV_INVALID_RECORD"
+	}
+	if result.ReasonCode == "" {
+		result.ReasonCode = result.ExcludedReason
+	}
+}
+
 type failure struct {
 	code  string
 	retry bool
 	delay time.Duration
 }
 
-func (c *Client) fetchPage(ctx context.Context, request queryBody, remaining *int) (domain.OSVPage, string, string) {
+func (c *Client) fetchPage(ctx context.Context, request queryBody) (domain.OSVPage, string, string) {
 	body, err := json.Marshal(request)
 	if err != nil {
 		return domain.OSVPage{}, "", "OSV_QUERY_INVALID"
 	}
-	for attempt := 0; ; attempt++ {
-		if ctx.Err() != nil {
-			return domain.OSVPage{}, "", "OSV_INTERRUPTED"
-		}
-		if *remaining == 0 {
-			return domain.OSVPage{}, "", "OSV_ATTEMPT_LIMIT"
-		}
-		if domain.HTTPInputExhausted(ctx) {
-			return domain.OSVPage{}, "", "OSV_INPUT_LIMIT"
-		}
-		(*remaining)--
+	for attempt := 1; ; attempt++ {
 		raw, failed := c.attempt(ctx, body)
 		if failed.code == "" {
-			page, next, ok := decodePage(raw, request.Package.Ecosystem, request.Package.Name)
+			page, next, ok := decodePage(raw)
 			if !ok {
 				return domain.OSVPage{}, "", "OSV_INVALID_RESPONSE"
 			}
 			return page, next, ""
 		}
-		if !failed.retry || attempt == 1 {
+		if !failed.retry || attempt == domain.HTTPMaxTries {
 			return domain.OSVPage{}, "", failed.code
 		}
-		if *remaining == 0 {
-			return domain.OSVPage{}, "", "OSV_ATTEMPT_LIMIT"
+		if err := domain.HTTPAttemptAvailable(ctx, domain.HTTPOSV); err != nil {
+			return domain.OSVPage{}, "", budgetFailure(err).code
 		}
-		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= failed.delay {
+		if !domain.HTTPRetryFits(ctx, failed.delay) {
 			return domain.OSVPage{}, "", failed.code
 		}
 		timer := time.NewTimer(failed.delay)
@@ -160,7 +233,7 @@ func (c *Client) fetchPage(ctx context.Context, request queryBody, remaining *in
 }
 
 func (c *Client) attempt(ctx context.Context, body []byte) ([]byte, failure) {
-	ctx, cancel := context.WithTimeout(ctx, attemptTimeout)
+	ctx, cancel := context.WithTimeout(ctx, domain.HTTPAttemptTime)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, queryURL, bytes.NewReader(body))
 	if err != nil {
@@ -170,12 +243,15 @@ func (c *Client) attempt(ctx context.Context, body []byte) ([]byte, failure) {
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "RepoPulse")
+	if err := domain.TakeHTTPAttempt(ctx, domain.HTTPOSV); err != nil {
+		return nil, budgetFailure(err)
+	}
 	response, err := c.http.Do(request)
 	if err != nil {
 		return nil, requestFailure(ctx, err)
 	}
-	defer response.Body.Close()
-	raw, err := domain.ReadHTTPInput(ctx, response.Body)
+	defer func() { _ = response.Body.Close() }()
+	raw, err := domain.ReadHTTPResponse(ctx, response.Body, response.ContentLength)
 	switch {
 	case errors.Is(err, domain.ErrHTTPInputLimit):
 		return nil, failure{code: "OSV_INPUT_LIMIT"}
@@ -203,6 +279,17 @@ func (c *Client) attempt(ctx context.Context, body []byte) ([]byte, failure) {
 	return raw, failure{}
 }
 
+func budgetFailure(err error) failure {
+	switch {
+	case errors.Is(err, domain.ErrHTTPInputLimit):
+		return failure{code: "OSV_INPUT_LIMIT"}
+	case errors.Is(err, domain.ErrHTTPAttemptLimit):
+		return failure{code: "OSV_ATTEMPT_LIMIT"}
+	default:
+		return failure{code: "OSV_INTERRUPTED"}
+	}
+}
+
 func requestFailure(ctx context.Context, err error) failure {
 	var networkError net.Error
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) || (errors.As(err, &networkError) && networkError.Timeout()) {
@@ -222,7 +309,7 @@ func retryAfter(headers http.Header) (time.Duration, bool) {
 	return 0, false
 }
 
-func decodePage(raw []byte, ecosystem, name string) (domain.OSVPage, string, bool) {
+func decodePage(raw []byte) (domain.OSVPage, string, bool) {
 	at := domain.UTC(time.Now())
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil || fields == nil {
@@ -237,41 +324,9 @@ func decodePage(raw []byte, ecosystem, name string) (domain.OSVPage, string, boo
 	if hasToken && (bytes.Equal(token, []byte("null")) || json.Unmarshal(token, &next) != nil) {
 		return domain.OSVPage{}, "", false
 	}
-	var entries []struct {
-		ID               string          `json:"id"`
-		Severity         []severityScore `json:"severity"`
-		DatabaseSpecific struct {
-			Severity string `json:"severity"`
-		} `json:"database_specific"`
-		Affected []struct {
-			Package struct {
-				Ecosystem string `json:"ecosystem"`
-				Name      string `json:"name"`
-			} `json:"package"`
-			Severity []severityScore `json:"severity"`
-		} `json:"affected"`
-	}
+	var entries []json.RawMessage
 	if hasVulns && (json.Unmarshal(vulns, &entries) != nil || entries == nil) {
 		return domain.OSVPage{}, "", false
 	}
-	ids := make([]string, 0, len(entries))
-	levels := make(map[string]string)
-	for _, entry := range entries {
-		if !advisoryID.MatchString(entry.ID) {
-			return domain.OSVPage{}, "", false
-		}
-		ids = append(ids, entry.ID)
-		level := advisorySeverity(entry.DatabaseSpecific.Severity, entry.Severity)
-		for _, affected := range entry.Affected {
-			if affected.Package.Ecosystem == ecosystem && affected.Package.Name == name {
-				if candidate := advisorySeverity("", affected.Severity); severityRank(candidate) > severityRank(level) {
-					level = candidate
-				}
-			}
-		}
-		if severityRank(level) > severityRank(levels[entry.ID]) {
-			levels[entry.ID] = level
-		}
-	}
-	return domain.OSVPage{Body: raw, VulnerabilityIDs: ids, Severity: levels, ObtainedAt: at}, next, true
+	return domain.OSVPage{Body: raw, ObtainedAt: at}, next, true
 }

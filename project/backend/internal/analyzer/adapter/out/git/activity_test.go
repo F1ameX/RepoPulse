@@ -56,7 +56,11 @@ func TestActivityUsesPinnedHistoryAndCommitterWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close Git session: %v", err)
+		}
+	}()
 	data := session.Data()
 	activity := data.Activity(window)
 	if activity.Source.Status != "complete" || activity.Source.Fingerprint == nil || !hasReason(data, "GIT_COMMIT_LIMIT") {
@@ -82,7 +86,11 @@ func TestActivityUsesPinnedHistoryAndCommitterWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer limited.Close()
+	defer func() {
+		if err := limited.Close(); err != nil {
+			t.Errorf("close Git session: %v", err)
+		}
+	}()
 	activity = limited.Data().Activity(window)
 	if activity.Source.Status != "partial" || activity.Source.Reason == nil || activity.Source.Reason.Code != "GIT_COMMIT_LIMIT" ||
 		activity.Source.Sample.Total != nil || activity.Source.Fingerprint != nil || activity.FirstCommit != nil ||

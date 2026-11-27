@@ -31,7 +31,7 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("initialize Auth client: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	handler, closeStorage, err := newAPIHandler(ctx, cfg, settings, sessions)
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func runHTTP(ctx context.Context, server *http.Server, shutdownTimeout time.Dura
 }
 
 func serve(ctx context.Context, listener net.Listener, server *http.Server, shutdownTimeout time.Duration) error {
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 	log := logger.From(ctx)
 
 	serveErr := make(chan error, 1)

@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -223,11 +224,83 @@ func TestActionsCountsUniqueAttemptsAgainstRemainingGitHubObjects(t *testing.T) 
 		}
 		return response(200, runsFixture(4, item, item, runFixture("2", 1, 1, "success"), runFixture("3", 1, 1, "success")), nextPageFixture(path, 2)), nil
 	})}, "")
-	budget := ciBudget{client: client, remaining: ciAttempts, objects: ciObjects - 2}
+	ctx := domain.WithHTTPInputBudget(t.Context())
+	for i := 0; i < domain.GitHubObjectLimit-2; i++ {
+		domain.RecordGitHubObject(ctx, strconv.Itoa(i))
+	}
+	budget := ciBudget{client: client, remaining: ciAttempts}
 	var ci domain.GitHubCI
-	got := budget.collectActions(t.Context(), ciRepoPath, repo, window, &ci)
+	got := budget.collectActions(ctx, ciRepoPath, repo, window, &ci)
 	if calls != 1 || len(ci.Attempts) != 2 || got.Status != "partial" ||
 		got.Reason == nil || got.Reason.Code != "GITHUB_CI_OBJECT_LIMIT" {
 		t.Fatalf("calls=%d attempts=%d source=%+v", calls, len(ci.Attempts), got)
+	}
+}
+
+func TestRulesKeepUsefulDataWhenDuplicateChecksConflict(t *testing.T) {
+	repo, _ := ciTestInputs()
+	const path = ciRepoPath + "/rules/branches/release%2Fmain"
+	client := NewClient(&http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.EscapedPath() {
+		case ciRepoPath + "/branches/release%2Fmain":
+			return response(200, `{"name":"release/main","protected":false}`, nil), nil
+		case path:
+			if r.URL.Query().Get("page") == "1" {
+				return response(200, `[{"ruleset_id":2,"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"build"}]}}]`, nextPageFixture(path, 2)), nil
+			}
+			return response(200, `[{"ruleset_id":2,"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"test"}]}},{"ruleset_id":3,"type":"pull_request"}]`, nil), nil
+		default:
+			t.Fatalf("unexpected request %s", r.URL)
+			return nil, nil
+		}
+	})}, "")
+	budget := ciBudget{client: client, remaining: ciAttempts}
+	var facts domain.GitHubCI
+	state := budget.collectRules(t.Context(), ciRepoPath, repo, &facts)
+	if state.Status != "partial" || state.Reason == nil || state.Reason.Code != "GITHUB_CI_CONFLICTING_RECORD" ||
+		len(facts.Rules) != 1 || facts.Rules[0].RulesetID != "3" || facts.RequiredChecks(state) != nil {
+		t.Fatalf("conflicting rule retained or good data lost: %+v, %+v", state, facts)
+	}
+}
+
+func TestGitHubDoesNotRetryWhenRetryAfterExceedsDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(domain.WithHTTPInputBudget(t.Context()), time.Second)
+	defer cancel()
+	calls := 0
+	client := NewClient(&http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		deadline, ok := r.Context().Deadline()
+		if parent, _ := ctx.Deadline(); !ok || deadline.After(parent) {
+			t.Fatal("HTTP attempt escaped the remaining budget")
+		}
+		return response(429, "", http.Header{"Retry-After": {"60"}}), nil
+	})}, "")
+	budget := ciBudget{client: client, remaining: ciAttempts}
+	_, code := budget.get(ctx, ciRepoPath+"/actions/runs")
+	if calls != 1 || code != "GITHUB_CI_RATE_LIMITED" || ctx.Err() != nil {
+		t.Fatalf("retry backoff exceeded the budget: calls=%d code=%s", calls, code)
+	}
+}
+
+func TestCIUsesRemainingGitHubAttemptAfterGitAcquisition(t *testing.T) {
+	ctx := domain.WithHTTPInputBudget(t.Context())
+	for i := 1; i < domain.GitHubHTTPLimit; i++ {
+		if err := domain.TakeHTTPAttempt(ctx, domain.HTTPGitHub); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repo, window := ciTestInputs()
+	calls := 0
+	client := NewClient(&http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if r.URL.Path != ciRepoPath+"/actions/runs" {
+			t.Fatalf("last GitHub attempt was not reserved for Actions: %s", r.URL)
+		}
+		return response(200, runsFixture(0), nil), nil
+	})}, "")
+	_, states := client.CollectCI(ctx, repo, window)
+	if calls != 1 || states[0].Status != "complete" || states[1].Status != "unavailable" ||
+		states[1].Reason.Code != "GITHUB_CI_REQUEST_LIMIT" || domain.HTTPAttemptsRemaining(ctx, domain.HTTPOSV) != 40 {
+		t.Fatalf("GitHub budget reset or leaked into OSV: calls=%d states=%+v", calls, states)
 	}
 }

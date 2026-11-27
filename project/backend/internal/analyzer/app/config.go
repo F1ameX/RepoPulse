@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
 )
 
 type Config struct {
@@ -36,14 +38,14 @@ func loadConfig(lookup func(string) (string, bool)) (Config, error) {
 	if err != nil || duration <= 0 {
 		return Config{}, errors.New("ANALYZER_DATABASE_TIMEOUT must be a positive duration")
 	}
-	cfg := Config{DatabaseURL: url, DatabaseTimeout: duration, PollInterval: time.Second, AnalysisTimeout: 320 * time.Second, GitTimeout: 60 * time.Second, GitMaxBytes: 100 << 20, GitMaxPaths: 50000, GitMaxCommits: 10000}
+	cfg := Config{DatabaseURL: url, DatabaseTimeout: duration, PollInterval: time.Second, AnalysisTimeout: domain.JobTimeLimit, GitTimeout: 60 * time.Second, GitMaxBytes: 100 << 20, GitMaxPaths: 50000, GitMaxCommits: 10000}
 	for _, option := range []struct {
 		key    string
 		target *time.Duration
 		max    time.Duration
 	}{
 		{"ANALYZER_POLL_INTERVAL", &cfg.PollInterval, time.Minute},
-		{"ANALYZER_TIMEOUT", &cfg.AnalysisTimeout, 320 * time.Second},
+		{"ANALYZER_TIMEOUT", &cfg.AnalysisTimeout, domain.JobTimeLimit},
 		{"ANALYZER_GIT_TIMEOUT", &cfg.GitTimeout, 60 * time.Second},
 	} {
 		if value, ok := lookup(option.key); ok {

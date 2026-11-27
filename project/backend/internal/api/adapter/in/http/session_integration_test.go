@@ -72,7 +72,7 @@ func TestGuestHTTPGRPCValidationFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	sessions := session.NewService(authclient.NewClient(conn, time.Second))
 	source := &publicSource{}
 	handler := NewHandler(repository.NewValidator(source, time.Second), sessions, Options{Sessions: sessions, CookieSecure: true, PublicOrigin: "https://repopulse.example"})

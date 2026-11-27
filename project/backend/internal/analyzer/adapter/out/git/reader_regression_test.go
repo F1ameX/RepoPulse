@@ -47,7 +47,11 @@ func TestLimitedMergeHistoryDoesNotInventNonMainCommits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close Git session: %v", err)
+		}
+	}()
 	data := session.Data()
 	if len(data.Commits) != limits.Commits || !hasReason(data, "GIT_COMMIT_LIMIT") {
 		t.Fatal("fixture did not reach the history limit")
@@ -126,7 +130,11 @@ esac
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer session.Close()
+			defer func() {
+				if err := session.Close(); err != nil {
+					t.Errorf("close Git session: %v", err)
+				}
+			}()
 			if _, err := os.Stat(marker); err != nil {
 				t.Fatal("Git timeout expired before the local command under test")
 			}

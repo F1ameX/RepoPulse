@@ -16,6 +16,7 @@ var commitPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 // LookupForAnalysis confirms public identity and pins the default branch HEAD.
 // It does not execute repository code or claim a complete collection snapshot.
 func (c *Client) LookupForAnalysis(ctx context.Context, address domain.RepositoryURL) (domain.RepositoryMetadata, error) {
+	ctx = domain.WithHTTPInputBudget(ctx)
 	confirmed, err := c.Lookup(ctx, address)
 	if err != nil {
 		return domain.RepositoryMetadata{}, err

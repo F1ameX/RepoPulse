@@ -14,23 +14,21 @@ import (
 )
 
 const (
-	ciAttempts = 20
+	ciAttempts = domain.GitHubHTTPLimit
 	ciPageSize = 100
-	ciObjects  = 1000
 )
 
 type ciBudget struct {
 	client    *Client
 	remaining int
-	objects   int
-	rateLimit bool
+	blocked   string
 }
 
 // CollectCI shares its budget across branch rules, run pages and older attempts.
 // A source failure is returned as a source state so other data remains usable.
 func (c *Client) CollectCI(ctx context.Context, repository domain.RepositoryMetadata, window domain.Window) (domain.GitHubCI, []domain.SourceState) {
 	ctx = domain.WithHTTPInputBudget(ctx)
-	timeout := 300 * time.Second
+	timeout := domain.CoreTimeLimit
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout = min(timeout, max(0, time.Until(deadline)-5*time.Second)/2)
 	}
@@ -45,11 +43,13 @@ func (c *Client) CollectCI(ctx context.Context, repository domain.RepositoryMeta
 		}
 	}
 	// Reserve time and requests for Actions even if branch rules are lengthy.
+	remaining := domain.HTTPAttemptsRemaining(ctx, domain.HTTPGitHub)
+	rulesAttempts := max(0, remaining-1)
 	rulesCtx, cancelRules := context.WithTimeout(ctx, timeout/2)
-	rulesBudget := ciBudget{client: c, remaining: ciAttempts - 1}
+	rulesBudget := ciBudget{client: c, remaining: rulesAttempts}
 	rules := rulesBudget.collectRules(rulesCtx, root, repository, &ci)
 	cancelRules()
-	budget := ciBudget{client: c, remaining: 1 + rulesBudget.remaining, objects: rulesBudget.objects, rateLimit: rulesBudget.rateLimit}
+	budget := ciBudget{client: c, remaining: remaining - rulesAttempts + rulesBudget.remaining, blocked: rulesBudget.blocked}
 	actions := budget.collectActions(ctx, root, repository, window, &ci)
 	return ci, []domain.SourceState{actions, rules}
 }
@@ -62,15 +62,15 @@ type ciResponse struct {
 }
 
 func (b *ciBudget) get(ctx context.Context, path string) (ciResponse, string) {
-	for attempt := 0; ; attempt++ {
+	for attempt := 1; ; attempt++ {
 		switch {
 		case ctx.Err() != nil:
 			return ciResponse{}, "GITHUB_CI_TIMEOUT"
-		case b.rateLimit:
-			return ciResponse{}, "GITHUB_CI_RATE_LIMITED"
+		case b.blocked != "":
+			return ciResponse{}, b.blocked
 		case b.remaining == 0:
 			return ciResponse{}, "GITHUB_CI_REQUEST_LIMIT"
-		case b.objects >= ciObjects:
+		case domain.GitHubObjectsExhausted(ctx):
 			return ciResponse{}, "GITHUB_CI_OBJECT_LIMIT"
 		case domain.HTTPInputExhausted(ctx):
 			return ciResponse{}, "GITHUB_CI_INPUT_LIMIT"
@@ -81,18 +81,21 @@ func (b *ciBudget) get(ctx context.Context, path string) (ciResponse, string) {
 		delay := time.Second
 		code := ""
 		switch {
+		case errors.Is(err, domain.ErrHTTPAttemptLimit):
+			return response, "GITHUB_CI_REQUEST_LIMIT"
+		case errors.Is(err, domain.ErrHTTPInputLimit):
+			return response, "GITHUB_CI_INPUT_LIMIT"
+		case errors.Is(err, domain.ErrHTTPResponseLimit):
+			return response, "GITHUB_CI_RESPONSE_LIMIT"
 		case status == http.StatusTooManyRequests || status == http.StatusForbidden && rateLimited(headers, body):
 			code, delay = "GITHUB_CI_RATE_LIMITED", rateLimitDelay(headers)
 		case status >= 500:
 			code = "GITHUB_CI_UPSTREAM_FAILED"
 			if headers.Get("Retry-After") != "" {
 				delay = max(delay, rateLimitDelay(headers))
+				code = "GITHUB_CI_RETRY_DEFERRED"
 			}
-		case errors.Is(err, domain.ErrHTTPInputLimit):
-			return response, "GITHUB_CI_INPUT_LIMIT"
-		case errors.Is(err, domain.ErrHTTPResponseLimit):
-			return response, "GITHUB_CI_RESPONSE_LIMIT"
-		case errors.Is(err, domain.ErrUpstreamTimeout):
+		case errors.Is(err, domain.ErrUpstreamTimeout), errors.Is(err, context.DeadlineExceeded):
 			code = "GITHUB_CI_TIMEOUT"
 		case err != nil:
 			code = "GITHUB_CI_INTERRUPTED"
@@ -103,10 +106,16 @@ func (b *ciBudget) get(ctx context.Context, path string) (ciResponse, string) {
 		default:
 			return response, "GITHUB_CI_HTTP_ERROR"
 		}
-		if deadline, ok := ctx.Deadline(); attempt == 1 || b.remaining == 0 || ok && time.Until(deadline) <= delay {
-			b.rateLimit = code == "GITHUB_CI_RATE_LIMITED"
-			if attempt == 0 && b.remaining == 0 && !b.rateLimit {
+		available := domain.HTTPAttemptAvailable(ctx, domain.HTTPGitHub)
+		if attempt == domain.HTTPMaxTries || b.remaining == 0 || available != nil || !domain.HTTPRetryFits(ctx, delay) {
+			if code == "GITHUB_CI_RATE_LIMITED" || code == "GITHUB_CI_RETRY_DEFERRED" {
+				b.blocked = code
+			}
+			if attempt < domain.HTTPMaxTries && b.blocked == "" && (b.remaining == 0 || errors.Is(available, domain.ErrHTTPAttemptLimit)) {
 				return response, "GITHUB_CI_REQUEST_LIMIT"
+			}
+			if errors.Is(available, domain.ErrHTTPInputLimit) {
+				return response, "GITHUB_CI_INPUT_LIMIT"
 			}
 			return response, code
 		}

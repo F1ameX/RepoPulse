@@ -25,7 +25,7 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
 	logger.From(ctx).InfoContext(ctx, "Report gRPC ready", "address", listener.Addr().String())

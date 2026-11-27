@@ -94,7 +94,7 @@ type publisher struct {
 
 func (p *publisher) Complete(_ context.Context, _ string, data domain.SnapshotData, _ domain.ReportData) (domain.Result, error) {
 	p.calls++
-	if !p.session.closed {
+	if p.session != nil && !p.session.closed {
 		panic("publishing before Git cleanup")
 	}
 	if p.err != nil {
@@ -260,6 +260,39 @@ func TestWorkerPreservesStructuredOpenLimitWithoutLeakingError(t *testing.T) {
 			if q.analysis.Status != "failed" || q.analysis.Error == nil || q.analysis.Error.Code != tc.code || published.calls != 0 ||
 				q.analysis.Error.Message != tc.message {
 				t.Fatalf("unsafe or incorrect failure: %+v", q.analysis)
+			}
+		})
+	}
+}
+
+func TestWorkerKeepsIndependentOutputWhenGitCannotOpen(t *testing.T) {
+	for _, usable := range []bool{true, false} {
+		t.Run(fmt.Sprint(usable), func(t *testing.T) {
+			process := processorFunc(func(_ context.Context, _ domain.Analysis, git GitSession, _ func(string) error) (Output, error) {
+				data := git.Data()
+				if len(data.Refs) != 0 || len(data.Sources) != 4 || data.Sources[1].Status != "unavailable" ||
+					data.Sources[1].Reason.Code != "GIT_OPEN_UNAVAILABLE" {
+					t.Fatalf("missing safe Git refusal: %+v", data)
+				}
+				if !usable {
+					return Output{}, nil
+				}
+				output := usefulOutput()
+				output.Snapshot.Sources = []domain.SourceState{{Source: "github", Scope: domain.ActionsScope, Status: "partial"}}
+				return output, nil
+			})
+			runner, queue, git, publisher := setup(process, time.Second)
+			git.err, publisher.session = errors.New("private path"), nil
+			if worked, err := runner.RunOnce(t.Context()); !worked || err != nil {
+				t.Fatalf("worked=%v err=%v", worked, err)
+			}
+			if usable {
+				if queue.analysis.Status != "completed" || publisher.calls != 1 || len(publisher.output.Sources) != 5 {
+					t.Fatalf("good external data was not published: %+v", queue.analysis)
+				}
+			} else if queue.analysis.Status != "failed" || publisher.calls != 0 || queue.analysis.Error == nil ||
+				queue.analysis.Error.Code != "ANALYSIS_FAILED" || queue.analysis.Error.Message != "Не удалось получить данные для анализа" {
+				t.Fatalf("total refusal did not produce FR-05: %+v", queue.analysis)
 			}
 		})
 	}

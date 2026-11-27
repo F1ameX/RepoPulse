@@ -60,7 +60,8 @@ func CollectOSV(ctx context.Context, client OSVQuerier, collections []Collection
 	queryCtx := ctx
 	if deadline, ok := ctx.Deadline(); ok {
 		var cancel context.CancelFunc
-		queryCtx, cancel = context.WithDeadline(ctx, deadline.Add(-5*time.Second))
+		remaining := max(0, time.Until(deadline)-calculationReserve)
+		queryCtx, cancel = context.WithTimeout(ctx, remaining)
 		defer cancel()
 	}
 	results := client.Query(queryCtx, queries)
@@ -69,7 +70,8 @@ func CollectOSV(ctx context.Context, client OSVQuerier, collections []Collection
 	}
 	var collected Collection
 	var latest time.Time
-	count := 0
+	count, excluded := 0, 0
+	excludedReason := ""
 	code := ""
 	for i, result := range results {
 		if result.Query != queries[i] || (len(result.Pages) == 0 && result.ReasonCode == "") {
@@ -79,6 +81,14 @@ func CollectOSV(ctx context.Context, client OSVQuerier, collections []Collection
 			count++
 		} else if code == "" {
 			code = result.ReasonCode
+		}
+		if result.Excluded > 0 {
+			excluded += result.Excluded
+			if excludedReason == "" {
+				excludedReason = result.ExcludedReason
+			} else if excludedReason != result.ExcludedReason {
+				excludedReason = "OSV_INVALID_AND_CONFLICTING_RECORDS"
+			}
 		}
 		for _, page := range result.Pages {
 			if page.ObtainedAt.After(latest) {
@@ -100,6 +110,9 @@ func CollectOSV(ctx context.Context, client OSVQuerier, collections []Collection
 		source.ObtainedAt = &latest
 	}
 	source.Sample.Collected = &count // dependencies whose query reached the last page
+	if excluded > 0 {
+		source.Sample.Excluded, source.Sample.ExcludedReason = &excluded, &excludedReason
+	}
 	if code == "" && (incomplete || !hasDependencies) {
 		code = "OSV_DEPENDENCY_COVERAGE_INCOMPLETE"
 		if dependencyReason != nil {

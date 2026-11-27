@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/ci"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/dependencies"
@@ -39,6 +40,7 @@ func NewProcessorWithSources(engine *scoring.Engine, collector CICollector, osv 
 }
 
 func (p *Processor) Process(ctx context.Context, a domain.Analysis, session worker.GitSession, advance func(string) error) (worker.Output, error) {
+	ctx = domain.WithHTTPInputBudget(ctx)
 	if err := ctx.Err(); err != nil {
 		return worker.Output{}, err
 	}
@@ -74,10 +76,21 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	}
 	var osvCollection snapshot.Collection
 	if p.osv != nil {
-		osvCollection, err = snapshot.CollectOSV(ctx, p.osv, []snapshot.Collection{dependencyCollection})
+		osvCtx := ctx
+		cancel := func() {}
+		if deadline, ok := ctx.Deadline(); ok && len(git.Commits) > 0 {
+			// Leave time for the independent history scan if OSV stalls.
+			osvCtx, cancel = context.WithTimeout(ctx, max(0, time.Until(deadline))/2)
+		}
+		osvCollection, err = snapshot.CollectOSV(osvCtx, p.osv, []snapshot.Collection{dependencyCollection})
+		cancel()
 		if err != nil {
 			return worker.Output{}, err
 		}
+	}
+	secretCollection, err := (snapshot.SecretScanCollector{Scanner: secrets.Collector{}}).Collect(ctx, a, session)
+	if err != nil {
+		return worker.Output{}, err
 	}
 	if err := advance("calculating"); err != nil {
 		return worker.Output{}, err
@@ -122,7 +135,6 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	for _, input := range p.engine.TreeInputs(git, tree) {
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
 	}
-	secretCollection := secrets.Collect(ctx, a, session)
 	data, err := snapshot.Build(a, git, collection, dependencyCollection, osvCollection, ci.Inputs(a, git, tree, ciData), sast, secretCollection)
 	if err != nil {
 		return worker.Output{}, err

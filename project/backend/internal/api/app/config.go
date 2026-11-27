@@ -100,7 +100,7 @@ func loadConfig(lookup func(string) (string, bool)) (Config, error) {
 		return Config{}, fmt.Errorf("AUTH_REQUEST_TIMEOUT must leave time within HTTP_WRITE_TIMEOUT for two Auth calls or an Auth call followed by GITHUB_CHECK_TIMEOUT")
 	}
 	if cfg.AuthRequestTimeout+cfg.ReportRequestTimeout >= cfg.WriteTimeout {
-		return Config{}, fmt.Errorf("Auth and Report timeouts must fit within HTTP_WRITE_TIMEOUT")
+		return Config{}, fmt.Errorf("combined Auth and Report timeouts must fit within HTTP_WRITE_TIMEOUT")
 	}
 	return cfg, nil
 }

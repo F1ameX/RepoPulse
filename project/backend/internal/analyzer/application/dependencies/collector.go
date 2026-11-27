@@ -15,6 +15,8 @@ const MaxDependencies = 20
 
 type Collector struct{}
 
+type blobFailure interface{ ReasonCode() string }
+
 type result struct {
 	deps    []domain.Dependency
 	reasons []domain.Reason
@@ -103,7 +105,11 @@ func (Collector) Collect(ctx context.Context, _ domain.Analysis, session worker.
 			return snapshot.Collection{}, ctxErr
 		}
 		if err != nil {
-			profiles[profile].issue("MANIFEST_READ_FAILED", "Не удалось прочитать "+file.Path)
+			code := "MANIFEST_READ_FAILED"
+			if failure, ok := err.(blobFailure); ok && (failure.ReasonCode() == "GIT_BLOB_LIMIT" || failure.ReasonCode() == "GIT_TIME_LIMIT") {
+				code = failure.ReasonCode()
+			}
+			profiles[profile].issue(code, "Не удалось прочитать "+file.Path)
 			failed[file.Path] = true
 			continue
 		}
@@ -151,11 +157,14 @@ func (Collector) Collect(ctx context.Context, _ domain.Analysis, session worker.
 		state.Sample.Collected = &count
 		if len(r.reasons) > 0 {
 			state.Status = "partial"
+			if count == 0 && (obtained == nil || obtained.Status == "unavailable") {
+				state.Status = "unavailable"
+			}
 			sort.Slice(r.reasons, func(i, j int) bool { return r.reasons[i].Code < r.reasons[j].Code })
 			state.Reason = &r.reasons[0]
 			// Separate scopes preserve every stable reason without storing parser diagnostics.
 			for _, r := range r.reasons[1:] {
-				collection.Sources = append(collection.Sources, domain.SourceState{Source: "git", Scope: state.Scope + "/" + r.Code, Status: "partial", Reason: &r, ObtainedAt: state.ObtainedAt})
+				collection.Sources = append(collection.Sources, domain.SourceState{Source: "git", Scope: state.Scope + "/" + r.Code, Status: state.Status, Reason: &r, ObtainedAt: state.ObtainedAt})
 			}
 		} else if !present[profile] {
 			state.Status = "not_applicable"
@@ -179,8 +188,11 @@ func (Collector) Collect(ctx context.Context, _ domain.Analysis, session worker.
 		aggregate.ObtainedAt = obtained.ObtainedAt
 	}
 	for _, state := range collection.Sources {
-		if state.Status == "partial" {
+		if state.Status == "partial" || state.Status == "unavailable" {
 			aggregate.Status = "partial"
+			if total == 0 && (obtained == nil || obtained.Status == "unavailable") {
+				aggregate.Status = "unavailable"
+			}
 			r := reason("DEPENDENCY_PROFILE_INCOMPLETE", "Один или несколько профилей зависимостей собраны неполностью")
 			aggregate.Reason = &r
 			break

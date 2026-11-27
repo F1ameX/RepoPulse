@@ -35,7 +35,7 @@ func SASTInput(ctx context.Context, session worker.GitSession, tree domain.Sourc
 				otherCI = true
 			}
 			dir, name := path.Split(file.Path)
-			if dir != ".github/workflows/" || !(strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")) {
+			if dir != ".github/workflows/" || (!strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml")) {
 				continue
 			}
 			total++

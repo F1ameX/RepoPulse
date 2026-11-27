@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
 )
 
 // Native Git only talks to this private loopback endpoint. The fixed HTTPS
@@ -56,7 +58,7 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 	}
 	attemptTimeout := t.attemptTimeout
 	if attemptTimeout == 0 {
-		attemptTimeout = 15 * time.Second
+		attemptTimeout = domain.HTTPAttemptTime
 	}
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.requestMu.Lock()
@@ -68,18 +70,17 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 			return
 		}
 		t.mu.Lock()
-		t.attempts++
-		attemptLimit := t.attempts > 20
+		attemptLimit := t.attempts >= domain.GitHubHTTPLimit
 		exhausted := t.received >= t.maximum
 		t.mu.Unlock()
 		if attemptLimit {
 			t.failed("GIT_HTTP_LIMIT")
-			http.Error(w, "Git budget exceeded", 502)
+			http.Error(w, "Git budget exceeded", http.StatusBadGateway)
 			return
 		}
 		if exhausted {
 			t.failed("GIT_SIZE_LIMIT")
-			http.Error(w, "Git budget exceeded", 502)
+			http.Error(w, "Git budget exceeded", http.StatusBadGateway)
 			return
 		}
 		body := http.MaxBytesReader(w, r.Body, 8<<20)
@@ -92,12 +93,12 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 		request, err := http.NewRequestWithContext(attempt, r.Method, url, body)
 		if err != nil {
 			t.failed("GIT_FETCH_FAILED")
-			http.Error(w, "Git unavailable", 502)
+			http.Error(w, "Git unavailable", http.StatusBadGateway)
 			return
 		}
 		if r.ContentLength > 8<<20 {
 			t.failed("GIT_REQUEST_LIMIT")
-			http.Error(w, "Git budget exceeded", 502)
+			http.Error(w, "Git budget exceeded", http.StatusBadGateway)
 			return
 		}
 		request.ContentLength = r.ContentLength
@@ -107,6 +108,18 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 				request.Header.Set(name, value)
 			}
 		}
+		if err := domain.TakeHTTPAttempt(attempt, domain.HTTPGitHub); err != nil {
+			if errors.Is(err, domain.ErrHTTPAttemptLimit) || errors.Is(err, domain.ErrHTTPInputLimit) {
+				t.failed("GIT_HTTP_LIMIT")
+			} else {
+				t.failed("GIT_TIME_LIMIT")
+			}
+			http.Error(w, "Git unavailable", http.StatusBadGateway)
+			return
+		}
+		t.mu.Lock()
+		t.attempts++
+		t.mu.Unlock()
 		response, err := t.client.Do(request)
 		if err != nil {
 			if errors.Is(attempt.Err(), context.DeadlineExceeded) {
@@ -114,13 +127,13 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 			} else {
 				t.failed("GIT_FETCH_FAILED")
 			}
-			http.Error(w, "Git unavailable", 502)
+			http.Error(w, "Git unavailable", http.StatusBadGateway)
 			return
 		}
-		defer response.Body.Close()
+		defer func() { _ = response.Body.Close() }()
 		if response.StatusCode != 200 {
 			t.failed("GIT_FETCH_FAILED")
-			http.Error(w, "Git unavailable", 502)
+			http.Error(w, "Git unavailable", http.StatusBadGateway)
 			return
 		}
 		t.mu.Lock()
@@ -128,7 +141,7 @@ func (t *transport) serve(ctx context.Context) (string, func(), error) {
 		t.mu.Unlock()
 		if response.ContentLength > remaining {
 			t.failed("GIT_SIZE_LIMIT")
-			http.Error(w, "Git budget exceeded", 502)
+			http.Error(w, "Git budget exceeded", http.StatusBadGateway)
 			return
 		}
 		w.Header().Set("Content-Type", response.Header.Get("Content-Type"))

@@ -53,7 +53,7 @@ func (p *Postgres) AcceptSubmission(ctx context.Context, a domain.Analysis) (dom
 	if err != nil {
 		return domain.Analysis{}, fmt.Errorf("begin submission acceptance: %w", err)
 	}
-	defer tx.Rollback(context.WithoutCancel(ctx))
+	defer rollback(ctx, tx)
 	var state, ownerID, requestID string
 	var analysisID *string
 	err = tx.QueryRow(ctx, `SELECT state,owner_id::text,request_id::text,analysis_id::text

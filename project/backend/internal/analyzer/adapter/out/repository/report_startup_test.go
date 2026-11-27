@@ -46,7 +46,7 @@ func TestReportProcessStartsAgainstMigratedStorageAndStops(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	health := grpc_health_v1.NewHealthClient(conn)
 	deadline := time.Now().Add(5 * time.Second)
 	for {

@@ -21,7 +21,9 @@ type OSVPage struct {
 }
 
 type OSVResult struct {
-	Query      OSVQuery
-	Pages      []OSVPage
-	ReasonCode string // empty only when all pages of this query were collected
+	Query          OSVQuery
+	Pages          []OSVPage
+	ReasonCode     string // empty only when all pages of this query were collected
+	Excluded       int
+	ExcludedReason string
 }

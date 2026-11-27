@@ -1,6 +1,7 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -14,6 +15,48 @@ import (
 
 type requiredCheck struct {
 	Context string `json:"context"`
+}
+
+type ruleKey struct{ id, kind string }
+
+func readRuleKey(raw []byte) ruleKey {
+	var item struct {
+		ID   json.Number `json:"ruleset_id"`
+		Type string      `json:"type"`
+	}
+	if json.Unmarshal(raw, &item) != nil || !validID(item.ID.String()) || strings.TrimSpace(item.Type) == "" {
+		return ruleKey{}
+	}
+	return ruleKey{item.ID.String(), item.Type}
+}
+
+// Compare rule contents before reducing them to a count. Two definitions of
+// the same rule can require different checks even when the counts match.
+func ruleParameters(raw []byte) ([]byte, bool) {
+	var item struct{ Parameters any }
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&item) != nil {
+		return nil, false
+	}
+	if params, ok := item.Parameters.(map[string]any); ok {
+		for _, key := range []string{"required_status_checks", "workflows"} {
+			if list, ok := params[key].([]any); ok {
+				entries := make([]json.RawMessage, 0, len(list))
+				for _, value := range list {
+					encoded, err := json.Marshal(value)
+					if err != nil {
+						return nil, false
+					}
+					entries = append(entries, encoded)
+				}
+				sort.Slice(entries, func(i, j int) bool { return bytes.Compare(entries[i], entries[j]) < 0 })
+				params[key] = entries
+			}
+		}
+	}
+	normalized, err := json.Marshal(item.Parameters)
+	return normalized, err == nil
 }
 
 func countChecks(checks []requiredCheck) (int, bool) {
@@ -63,6 +106,7 @@ func decodeRule(raw []byte, at time.Time) (domain.BranchRule, bool) {
 }
 
 func (b *ciBudget) collectRules(ctx context.Context, root string, repository domain.RepositoryMetadata, ci *domain.GitHubCI) domain.SourceState {
+	ctx = domain.WithHTTPInputBudget(ctx)
 	if repository.DefaultBranch == nil {
 		return ciSource(domain.BranchRulesScope, "GITHUB_CI_BRANCH_UNAVAILABLE", time.Time{}, 0, 0, 0)
 	}
@@ -74,9 +118,13 @@ func (b *ciBudget) collectRules(ctx context.Context, root string, repository dom
 		ci.ClassicObtainedAt = &classicAt
 	}
 	path := root + "/rules/branches/" + branch
-	type key struct{ id, kind string }
-	rules := map[key]domain.BranchRule{}
-	conflicts := map[key]bool{}
+	type row struct {
+		rule   domain.BranchRule
+		params []byte
+	}
+	rules := map[ruleKey]row{}
+	rejected := map[ruleKey]bool{}
+	conflicts := 0
 	invalid := 0
 	for page := 1; ; page++ {
 		response, failed := b.get(ctx, pagePath(path, nil, page))
@@ -94,35 +142,41 @@ func (b *ciBudget) collectRules(ctx context.Context, root string, repository dom
 			break
 		}
 		at = response.obtainedAt
+		overflow := false
 		for _, raw := range items {
-			rule, valid := decodeRule(raw, at)
-			if !valid {
-				invalid++
+			k := readRuleKey(raw)
+			if k.id != "" && !domain.RecordGitHubObject(ctx, path+"/"+k.id+"/"+k.kind) {
+				overflow = true
+				break
+			}
+			if rejected[k] {
 				continue
 			}
-			k := key{rule.RulesetID, rule.Type}
-			if conflicts[k] {
+			rule, valid := decodeRule(raw, at)
+			params, paramsValid := ruleParameters(raw)
+			if !valid || !paramsValid {
+				invalid++
+				if k.id != "" {
+					delete(rules, k)
+					rejected[k] = true
+				}
 				continue
 			}
 			previous, exists := rules[k]
-			if exists && previous.RequiredChecks != rule.RequiredChecks {
+			if exists && !bytes.Equal(previous.params, params) {
 				delete(rules, k)
-				conflicts[k] = true
+				rejected[k] = true
+				conflicts++
 				continue
 			}
-			if !exists {
-				if b.objects == ciObjects {
-					break
-				}
-				b.objects++
-			}
-			rules[k] = rule
+			rules[k] = row{rule, params}
 		}
 		next, valid := nextCIPage(response.headers, path, repository.GitHubID, page)
-		if b.objects == ciObjects || page == domain.HTTPPageLimit {
+		objectLimited := overflow || next && domain.GitHubObjectsExhausted(ctx)
+		if objectLimited || page == domain.HTTPPageLimit {
 			if code == "" {
 				code = "GITHUB_CI_PAGE_LIMIT"
-				if b.objects == ciObjects {
+				if objectLimited {
 					code = "GITHUB_CI_OBJECT_LIMIT"
 				}
 			}
@@ -136,7 +190,7 @@ func (b *ciBudget) collectRules(ctx context.Context, root string, repository dom
 		}
 	}
 	for _, rule := range rules {
-		ci.Rules = append(ci.Rules, rule)
+		ci.Rules = append(ci.Rules, rule.rule)
 	}
 	sort.Slice(ci.Rules, func(i, j int) bool {
 		a, b := ci.Rules[i], ci.Rules[j]
@@ -146,7 +200,7 @@ func (b *ciBudget) collectRules(ctx context.Context, root string, repository dom
 	if classic != nil {
 		count++
 	}
-	return ciSource(domain.BranchRulesScope, code, at, count, invalid, len(conflicts))
+	return ciSource(domain.BranchRulesScope, code, at, count, invalid, conflicts)
 }
 
 func (b *ciBudget) classicChecks(ctx context.Context, path, branch string) (*int, time.Time, string) {
@@ -161,7 +215,9 @@ func (b *ciBudget) classicChecks(ctx context.Context, path, branch string) (*int
 	if json.Unmarshal(response.body, &info) != nil || info.Name != branch || info.Protected == nil {
 		return nil, time.Time{}, "GITHUB_CI_INVALID_RESPONSE"
 	}
-	b.objects++ // The branch metadata is a separate GitHub object.
+	if !domain.RecordGitHubObject(ctx, path) {
+		return nil, time.Time{}, "GITHUB_CI_OBJECT_LIMIT"
+	}
 	if !*info.Protected {
 		zero := 0
 		return &zero, response.obtainedAt, ""
@@ -201,6 +257,8 @@ func (b *ciBudget) classicChecks(ctx context.Context, path, branch string) (*int
 		contexts[check.Context] = true
 	}
 	count := len(contexts)
-	b.objects++
+	if !domain.RecordGitHubObject(ctx, path+"/protection/required_status_checks") {
+		return nil, observed, "GITHUB_CI_OBJECT_LIMIT"
+	}
 	return &count, response.obtainedAt, ""
 }

@@ -100,10 +100,7 @@ func toFinding(v models.Finding) *wire.Finding {
 	r.Description = v.Description
 	r.Severity = v.Severity
 	r.PossibleConsequence = v.PossibleConsequence
-	r.EvidenceIds = []string{}
-	for _, item := range v.EvidenceIDs {
-		r.EvidenceIds = append(r.EvidenceIds, item)
-	}
+	r.EvidenceIds = append([]string{}, v.EvidenceIDs...)
 	r.Vulnerabilities = []*common.Vulnerability{}
 	for _, item := range v.Vulnerabilities {
 		r.Vulnerabilities = append(r.Vulnerabilities, toVulnerability(item))

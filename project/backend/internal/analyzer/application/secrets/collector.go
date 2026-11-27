@@ -37,6 +37,12 @@ func MatchTypes(data []byte) []string {
 	return kinds
 }
 
+type Collector struct{}
+
+func (Collector) Collect(ctx context.Context, a domain.Analysis, session worker.GitSession) (snapshot.Collection, error) {
+	return Collect(ctx, a, session), nil
+}
+
 func Collect(ctx context.Context, a domain.Analysis, session worker.GitSession) snapshot.Collection {
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()

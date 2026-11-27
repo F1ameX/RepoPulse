@@ -161,7 +161,7 @@ func (s *Session) fetchWorkflowBlobs(ctx context.Context, remote string, files [
 	for _, file := range files {
 		name, ok := strings.CutPrefix(file.Path, ".github/workflows/")
 		if !ok || strings.Contains(name, "/") ||
-			!(strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")) ||
+			(!strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml")) ||
 			(file.Mode != "100644" && file.Mode != "100755") || !hash(file.ObjectSHA) {
 			continue
 		}

@@ -3,7 +3,36 @@ package osv
 import (
 	"math"
 	"strings"
+
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
 )
+
+type advisoryDetails struct {
+	ID               string          `json:"id"`
+	Severity         []severityScore `json:"severity"`
+	DatabaseSpecific struct {
+		Severity string `json:"severity"`
+	} `json:"database_specific"`
+	Affected []struct {
+		Package struct {
+			Ecosystem string `json:"ecosystem"`
+			Name      string `json:"name"`
+		} `json:"package"`
+		Severity []severityScore `json:"severity"`
+	} `json:"affected"`
+}
+
+func (a advisoryDetails) level(query domain.OSVQuery) string {
+	level := advisorySeverity(a.DatabaseSpecific.Severity, a.Severity)
+	for _, affected := range a.Affected {
+		if affected.Package.Ecosystem == query.Ecosystem && affected.Package.Name == query.Name {
+			if candidate := advisorySeverity("", affected.Severity); severityRank(candidate) > severityRank(level) {
+				level = candidate
+			}
+		}
+	}
+	return level
+}
 
 type severityScore struct {
 	Type  string `json:"type"`

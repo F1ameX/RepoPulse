@@ -24,7 +24,7 @@ func NewHandler(validator RepositoryValidator, resolver ContextResolver, options
 	mux := http.NewServeMux()
 	route := func(path, method string, handler http.HandlerFunc) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != method && !(method == http.MethodGet && r.Method == http.MethodHead) {
+			if r.Method != method && (method != http.MethodGet || r.Method != http.MethodHead) {
 				allow := method
 				if method == http.MethodGet {
 					allow += ", HEAD"
