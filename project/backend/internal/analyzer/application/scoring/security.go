@@ -39,7 +39,24 @@ func (e *Engine) securityMetric(input domain.MetricInput, spec metricConfig, vul
 		m.Rule = "Полный скан: точный формат → 0, подозрительный шаблон → 50, совпадений нет → 100"
 		if input.Status == "complete" {
 			var value *float64
-			if input.Unit != "secret_scan" || json.Unmarshal(raw, &value) != nil || value == nil || (*value != 0 && *value != 50 && *value != 100) {
+			if input.Unit != "secret_scan" || json.Unmarshal(raw, &value) != nil || value == nil {
+				return domain.Metric{}, invalid("secret scan result")
+			}
+			if input.Sample.Numerator != nil || input.Sample.Denominator != nil {
+				exact, total := input.Sample.Numerator, input.Sample.Denominator
+				if exact == nil || total == nil || *exact < 0 || *total < *exact || *value != float64(*total) {
+					return domain.Metric{}, invalid("secret counts")
+				}
+				score := 100.0
+				if *total > 0 {
+					score = 50
+				}
+				if *exact > 0 {
+					score = 0
+				}
+				value = &score
+			} else if *value != 0 && *value != 50 && *value != 100 {
+				// Earlier stored snapshots carry the scanner classification directly.
 				return domain.Metric{}, invalid("secret scan result")
 			}
 			m.NormalizedScore = value

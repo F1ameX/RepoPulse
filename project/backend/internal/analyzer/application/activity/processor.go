@@ -10,6 +10,7 @@ import (
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/ci"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/dependencies"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/scoring"
+	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/secrets"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/snapshot"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/application/worker"
 	"github.com/F1ameX/RepoPulse/project/backend/internal/analyzer/domain"
@@ -121,7 +122,8 @@ func (p *Processor) Process(ctx context.Context, a domain.Analysis, session work
 	for _, input := range p.engine.TreeInputs(git, tree) {
 		collection.Inputs = append(collection.Inputs, snapshot.Input{Value: input, Sources: []snapshot.Source{treeKey}})
 	}
-	data, err := snapshot.Build(a, git, collection, dependencyCollection, osvCollection, ci.Inputs(a, git, tree, ciData), sast)
+	secretCollection := secrets.Collect(ctx, a, session)
+	data, err := snapshot.Build(a, git, collection, dependencyCollection, osvCollection, ci.Inputs(a, git, tree, ciData), sast, secretCollection)
 	if err != nil {
 		return worker.Output{}, err
 	}
