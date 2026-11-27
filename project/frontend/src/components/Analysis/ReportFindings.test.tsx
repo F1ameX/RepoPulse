@@ -122,7 +122,7 @@ it.each(['complete', 'partial', 'unavailable', 'not_applicable'] as const)(
     const messages = {
       complete: 'По выполненным проверкам проблемы не обнаружены',
       partial:
-        'По доступным результатам проблемы не обнаружены, но часть проверок неполная или неприменима; отсутствие проблем не подтверждено.',
+        'По доступным результатам проблемы не обнаружены, но часть проверок неполная или недоступна; отсутствие проблем не подтверждено.',
       unavailable: 'Недостаточно данных для выявления проблем',
       not_applicable: 'Применимые проверки отсутствуют',
     };
@@ -413,7 +413,7 @@ it('FR-13/FR-22: renders OSV identity, unknown severity, Risk and declared Maven
   expect(screen.getByText(/фактический граф сборки не подтверждён/)).toBeTruthy();
 });
 
-it('FR-13/FR-22: secret findings never render title, description, consequence or evidence description', () => {
+it('FR-11/FR-13/FR-22: secret finding uses saved safe text and never renders secret evidence text', () => {
   const data = report();
   const secretMetric = data.categories.find(({ id }) => id === 'security')!.metrics.find(
     ({ input }) => input.id === 'SEC_SECRETS',
@@ -441,8 +441,8 @@ it('FR-13/FR-22: secret findings never render title, description, consequence or
     rule_id: 'SEC_SECRETS',
     category: 'security',
     title: 'DO_NOT_RENDER_SECRET_TITLE',
-    description: 'DO_NOT_RENDER_SECRET_DESCRIPTION',
-    possible_consequence: 'DO_NOT_RENDER_SECRET_CONSEQUENCE',
+    description: 'Каталог: обнаружен потенциально чувствительный реквизит.',
+    possible_consequence: 'При подтверждении значения возможна компрометация доступа.',
     severity: 'high',
     evidence_ids: ['secret-evidence'],
     vulnerabilities: [],
@@ -451,6 +451,14 @@ it('FR-13/FR-22: secret findings never render title, description, consequence or
   render(<ReportFindings report={data} />);
 
   expect(screen.getByText('Потенциальный секрет')).toBeTruthy();
+  expect(screen.getByText('Каталог: обнаружен потенциально чувствительный реквизит.')).toBeTruthy();
+  expect(
+    screen.getByText(
+      (_, element) =>
+        element?.tagName === 'P' &&
+        element.textContent?.includes('При подтверждении значения возможна компрометация доступа.') === true,
+    ),
+  ).toBeTruthy();
   expect(screen.getByText('suspicious_assignment')).toBeTruthy();
   expect(screen.getByText('config/app.yml')).toBeTruthy();
   expect(screen.getByText('abc123')).toBeTruthy();
@@ -458,7 +466,7 @@ it('FR-13/FR-22: secret findings never render title, description, consequence or
 });
 
 
-it('FR-13: one not-applicable security metric prevents a blanket no-issues conclusion', () => {
+it('FR-11: not-applicable metric does not make otherwise complete checks partial', () => {
   const data = report();
   data.findings = [];
   data.recommendations = [];
@@ -480,8 +488,7 @@ it('FR-13: one not-applicable security metric prevents a blanket no-issues concl
 
   expect(
     within(screen.getByRole('region', { name: 'Проблемы' })).getByText(
-      /часть проверок неполная или неприменима; отсутствие проблем не подтверждено/i,
+      'По выполненным проверкам проблемы не обнаружены',
     ),
   ).toBeTruthy();
-  expect(screen.queryByText('По выполненным проверкам проблемы не обнаружены')).toBeNull();
 });

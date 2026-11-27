@@ -200,7 +200,7 @@ export function ReportFindings({
   const incomplete = ['partial', 'unavailable'].includes(scope);
   const limitations = (
     <p className={styles.hint}>
-      Часть проверок неполная, недоступна или неприменима.{' '}
+      Часть проверок неполная или недоступна.{' '}
       <ReportLink target="report-limitations">Ограничения анализа</ReportLink>
     </p>
   );
@@ -226,7 +226,7 @@ export function ReportFindings({
     if (scope === 'partial') {
       return (
         <p>
-          По доступным результатам проблемы не обнаружены, но часть проверок неполная или неприменима;
+          По доступным результатам проблемы не обнаружены, но часть проверок неполная или недоступна;
           отсутствие проблем не подтверждено.
         </p>
       );
@@ -258,24 +258,17 @@ export function ReportFindings({
                 {finding.rule_id === 'SEC_SECRETS' && (
                   <p>Действительность реквизитов не проверялась</p>
                 )}
-                {finding.rule_id === 'SEC_SECRETS' ? (
-                  <>
-                    <p>Найдено совпадение с шаблоном секрета</p>
-                    <p>
-                      <strong>Возможное последствие</strong> — Возможен доступ к защищённым ресурсам
-                    </p>
+                <>
+                  <p>{finding.description}</p>
+                  <p>
+                    <strong>Возможное последствие</strong> — {finding.possible_consequence}
+                  </p>
+                  {finding.rule_id === 'SEC_SECRETS' && (
                     <p className={styles.hint}>
                       Значение и исходная строка не отображаются.
                     </p>
-                  </>
-                ) : (
-                  <>
-                    <p>{finding.description}</p>
-                    <p>
-                      <strong>Возможное последствие</strong> — {finding.possible_consequence}
-                    </p>
-                  </>
-                )}
+                  )}
+                </>
                 <FindingEvidence finding={finding} report={report} />
                 <div className={listStyles.links}>
                   {recommendations

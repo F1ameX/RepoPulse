@@ -164,8 +164,9 @@ export function findingsScope(
     )
   )
     return 'unavailable';
-  // A not-applicable metric is not evidence that the corresponding check found no issues.
-  // Keep the empty findings state cautious unless every metric is complete.
-  if (metrics.some(({ input }) => input.status !== 'complete')) return 'partial';
+  // Not-applicable metrics are outside the applicable check scope; they do not
+  // make otherwise complete results partial.
+  if (metrics.some(({ input }) => input.status !== 'complete' && input.status !== 'not_applicable'))
+    return 'partial';
   return 'complete';
 }

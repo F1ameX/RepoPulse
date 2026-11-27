@@ -43,6 +43,27 @@ function isDeclaredVersion(versionSource: string): boolean {
   ].includes(versionSource);
 }
 
+function dependencyOrigins(dependency: Dependency) {
+  const origins = [
+    { manifest_path: dependency.manifest_path, version_source: dependency.version_source },
+    ...(Array.isArray(dependency.origins) ? dependency.origins : []),
+  ];
+  const seen = new Set<string>();
+  return origins.filter((origin) => {
+    if (
+      !origin ||
+      typeof origin.manifest_path !== 'string' ||
+      typeof origin.version_source !== 'string'
+    ) {
+      return false;
+    }
+    const key = `${origin.manifest_path}\u0000${origin.version_source}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function emptyScoreLabel(category: Category): string {
   if (
     category.metrics.length > 0 &&
@@ -212,13 +233,24 @@ export function CategoryCard({
                   <ul>
                     {items.map((item) => (
                       <li key={`${item.ecosystem}/${item.package}/${item.version}`}>
-                        {item.package}@{item.version} · манифест: {item.manifest_path} · источник
-                        версии: {VERSION_SOURCE_LABELS[item.version_source] ?? item.version_source}
-                        {isDeclaredVersion(item.version_source) && (
-                          <div className={styles.hint}>
-                            Версия объявлена в манифесте; фактический граф сборки не подтверждён.
-                          </div>
-                        )}
+                        <strong>
+                          {item.package}@{item.version}
+                        </strong>
+                        <ul>
+                          {dependencyOrigins(item).map((origin) => (
+                            <li key={`${origin.manifest_path}/${origin.version_source}`}>
+                              Манифест: {origin.manifest_path} · источник версии:{' '}
+                              {VERSION_SOURCE_LABELS[origin.version_source] ??
+                                origin.version_source}
+                              {isDeclaredVersion(origin.version_source) && (
+                                <div className={styles.hint}>
+                                  Версия объявлена в манифесте; фактический граф сборки не
+                                  подтверждён.
+                                </div>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
                       </li>
                     ))}
                   </ul>

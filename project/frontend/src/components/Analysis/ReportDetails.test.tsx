@@ -716,7 +716,10 @@ it('FR-13/FR-22: security card shows check coverage, dependency origins and N/A 
       version: '1.3.0',
       manifest_path: 'package.json',
       version_source: 'npm_lock_v3',
-      origins: [{ manifest_path: 'package-lock.json', version_source: 'npm_lock_v3' }],
+      origins: [
+        { manifest_path: 'package-lock.json', version_source: 'npm_lock_v3' },
+        { manifest_path: 'packages/web/package.json', version_source: 'npm_lock_v3' },
+      ],
     },
     {
       ecosystem: 'Maven',
@@ -750,6 +753,8 @@ it('FR-13/FR-22: security card shows check coverage, dependency origins and N/A 
   expect(screen.getByText(/Запросы OSV/)).toBeTruthy();
   expect(screen.getByText(/dependencies_maven/)).toBeTruthy();
   expect(screen.getByText(/org.example:sample@1.2.3/)).toBeTruthy();
+  expect(screen.getByText(/Манифест: package-lock\.json/)).toBeTruthy();
+  expect(screen.getByText(/Манифест: packages\/web\/package\.json/)).toBeTruthy();
   expect(
     screen.getAllByText(/Версия объявлена в манифесте; фактический граф сборки не подтверждён/)
       .length,
